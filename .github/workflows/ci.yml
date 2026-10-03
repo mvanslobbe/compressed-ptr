@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64-gcc, os: ubuntu-24.04, cxx: g++-14 }
+          - { name: linux-x64-clang, os: ubuntu-24.04, cxx: clang++-18 }
+          - { name: linux-arm64-gcc, os: ubuntu-24.04-arm, cxx: g++-14 }
+          - { name: macos-arm64-clang, os: macos-14, cxx: clang++ }
+          - { name: macos-x64-clang, os: macos-13, cxx: clang++ }
+          - { name: windows-x64-msvc, os: windows-2022, cxx: cl }
+          - { name: windows-arm64-msvc, os: windows-11-arm, cxx: cl }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Benchmarks (smoke)
+        shell: bash
+        run: |
+          dir=build; [ -d build/Release ] && dir=build/Release
+          "$dir/bench_rss" 200000
+          "$dir/bench_runtime" 100000
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++-18
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all"
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Use-after-free is reported
+        run: |
+          clang++-18 -std=c++20 -g -fsanitize=address -Iinclude examples/use_after_free.cpp -o uaf
+          ! ./uaf 2> uaf.log
+          grep -q "use-after-poison" uaf.log
