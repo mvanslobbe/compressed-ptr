@@ -13,7 +13,7 @@
 #include <map>
 #include <memory_resource>
 #include <new>
-#include <unordered_map>
+#include <thread>
 #include <vector>
 
 #include "cptr/platform.hpp"
@@ -47,6 +47,7 @@ class spin_lock {
   void lock() noexcept {
     while (locked_.exchange(true, std::memory_order_acquire)) {
       while (locked_.load(std::memory_order_relaxed)) {
+        std::this_thread::yield();
       }
     }
   }
@@ -92,6 +93,7 @@ constexpr std::array<std::uint32_t, class_count()> make_class_sizes() {
 }
 
 inline constexpr auto kClassSizes = make_class_sizes();
+static_assert(kClassSizes.back() == kMaxSmall && kMaxSmall % 4096 == 0);
 
 }  // namespace detail
 
@@ -125,37 +127,46 @@ class cage {
   // Reserve the cage. Called lazily by allocate(); call it early to fail
   // fast. Returns false if the address space could not be reserved.
   static bool init() noexcept {
-    if (base_) {
+    if (ready_.load(std::memory_order_acquire)) {
       return true;
     }
-    detail::lock_guard g(state().lock);
-    if (base_) {
+    state_type* st;
+    try {
+      st = &state();
+    } catch (...) {
+      return false;
+    }
+    detail::lock_guard g(st->lock);
+    if (ready_.load(std::memory_order_relaxed)) {
       return true;
     }
     void* p = detail::reserve_aligned(size, size);
     if (!p) {
       return false;
     }
-    state().bump = span_size;
-    state().commit_end = span_size;
+    st->bump = span_size;
+    st->commit_end = span_size;
     base_ = reinterpret_cast<std::uintptr_t>(p);
+    ready_.store(true, std::memory_order_release);
     return true;
   }
 
+  // Zero until init() succeeds. Any thread that obtained a pointer into the
+  // cage is ordered after init(), so reading the base needs no atomics.
   static std::uintptr_t base() noexcept { return base_; }
 
   static bool contains(const void* p) noexcept {
-    return reinterpret_cast<std::uintptr_t>(p) - base_ < size;
+    return base_ != 0 && reinterpret_cast<std::uintptr_t>(p) - base_ < size;
   }
 
   static std::uint32_t compress(const void* p) noexcept {
     if (!p) {
       return 0;
     }
-    assert(contains(p) && "pointer is outside the cage");
+    CPTR_ASSERT(contains(p), "pointer is outside the cage");
     std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
-    assert((offset & (granularity - 1)) == 0 &&
-           "pointer is not aligned to the cage granularity");
+    CPTR_ASSERT((offset & (granularity - 1)) == 0,
+                "pointer is not aligned to the cage granularity");
     return static_cast<std::uint32_t>(offset >> Shift);
   }
 
@@ -180,10 +191,12 @@ class cage {
     throw std::bad_alloc();
   }
 
+  // As allocate(), but returns nullptr on failure.
   static void* try_allocate(std::size_t bytes,
                             std::size_t align = alignof(
                                 std::max_align_t)) noexcept {
-    if (!base_ && !init()) {
+    CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
+    if (!init()) {
       return nullptr;
     }
     if (bytes == 0) {
@@ -206,20 +219,21 @@ class cage {
     if (!p) {
       return;
     }
-    assert(contains(p));
-    detail::lock_guard g(state().lock);
+    CPTR_ASSERT(contains(p), "pointer was not allocated from this cage");
+    state_type& st = state();
+    detail::lock_guard g(st.lock);
     std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
     std::uint32_t span = static_cast<std::uint32_t>(offset / span_size);
-    std::uint8_t cls = state().span_class[span];
+    std::uint8_t cls = st.span_class[span];
     if (cls < detail::kClassSizes.size()) {
-      auto& free_list = state().free_lists[cls];
-      std::memcpy(p, &free_list, sizeof(free_list));
-      free_list = static_cast<std::uint32_t>(offset >> Shift);
-      state().allocated -= detail::kClassSizes[cls];
+      std::memcpy(p, &st.free_lists[cls], sizeof(std::uint32_t));
+      st.free_lists[cls] = static_cast<std::uint32_t>(offset >> Shift);
+      st.allocated -= detail::kClassSizes[cls];
       CPTR_POISON(p, detail::kClassSizes[cls]);
       return;
     }
-    assert(cls == kLargeSpan);
+    CPTR_ASSERT(cls == kLargeSpan && offset % span_size == 0,
+                "pointer is not the start of a live allocation");
     free_large(span);
   }
 
@@ -228,34 +242,54 @@ class cage {
   }
 
   // Bytes handed out and not yet freed, rounded up to the size class.
-  static std::size_t allocated_bytes() noexcept { return state().allocated; }
-  // Bytes of the cage backed by committed memory.
-  static std::size_t committed_bytes() noexcept { return state().committed; }
+  static std::size_t allocated_bytes() noexcept {
+    if (!ready_.load(std::memory_order_acquire)) {
+      return 0;
+    }
+    detail::lock_guard g(state().lock);
+    return state().allocated;
+  }
 
+  // Bytes of the cage backed by committed memory.
+  static std::size_t committed_bytes() noexcept {
+    if (!ready_.load(std::memory_order_acquire)) {
+      return 0;
+    }
+    detail::lock_guard g(state().lock);
+    return state().committed;
+  }
+
+  // A std::pmr::memory_resource that allocates from this cage.
   static std::pmr::memory_resource* resource() noexcept {
-    static resource_type r;
-    return &r;
+    // Never destroyed, so containers with static storage duration can still
+    // free into it during program exit.
+    static resource_type* r = new resource_type;
+    return r;
   }
 
  private:
-  static constexpr std::uint8_t kFreeSpan = 0xFF;
+  static constexpr std::uint8_t kUnusedSpan = 0xFF;  // above the bump pointer
   static constexpr std::uint8_t kLargeSpan = 0xFE;
+  static constexpr std::uint8_t kFreeSpan = 0xFD;  // in a decommitted run
   static constexpr std::size_t kCommitStep = 1024 * 1024;
 
   struct state_type {
     detail::spin_lock lock;
     std::size_t bump = 0;        // next unused offset
     std::size_t commit_end = 0;  // end of the committed bump region
-    std::size_t committed = 0;  // bytes currently committed
+    std::size_t committed = 0;   // bytes currently committed
     std::size_t allocated = 0;
     // Free lists hold compressed offsets, linked through the blocks.
     std::array<std::uint32_t, detail::kClassSizes.size()> free_lists{};
     std::array<std::size_t, detail::kClassSizes.size()> slab_cursor{};
     std::array<std::size_t, detail::kClassSizes.size()> slab_end{};
     std::vector<std::uint8_t> span_class =
-        std::vector<std::uint8_t>(span_count, kFreeSpan);
-    std::unordered_map<std::uint32_t, std::uint32_t> large_spans;
-    std::multimap<std::uint32_t, std::uint32_t> free_runs;  // count -> first
+        std::vector<std::uint8_t>(span_count, kUnusedSpan);
+    // For a large allocation or a free run: its length in spans, stored at
+    // its first and last span so that neighbours can be merged.
+    std::vector<std::uint32_t> run_length =
+        std::vector<std::uint32_t>(span_count, 0);
+    std::multimap<std::uint32_t, std::uint32_t> free_runs;  // length -> first
   };
 
   class resource_type final : public std::pmr::memory_resource {
@@ -270,82 +304,120 @@ class cage {
     }
   };
 
-  static state_type& state() noexcept {
-    static state_type s;
-    return s;
+  // Never destroyed, for the same reason as resource().
+  static state_type& state() {
+    static state_type* s = new state_type;
+    return *s;
   }
 
   static int size_class(std::size_t bytes, std::size_t align) noexcept {
     if (bytes <= 128 && align <= 8) {
       return static_cast<int>((bytes + 7) / 8 - 1);
     }
+    if (bytes <= 256 && align <= 16) {
+      if (bytes <= 128) {
+        return static_cast<int>((bytes + 15) / 16 * 2 - 1);
+      }
+      return static_cast<int>(16 + (bytes - 129) / 16);
+    }
     if (bytes > detail::kMaxSmall || align > 4096) {
       return -1;
     }
-    for (std::size_t i = 0; i < detail::kClassSizes.size(); i++) {
-      std::uint32_t s = detail::kClassSizes[i];
-      if (s >= bytes && s % align == 0) {
-        return static_cast<int>(i);
-      }
+    // The largest class is a multiple of every alignment up to 4096, so
+    // this always stops.
+    std::size_t i = 0;
+    while (detail::kClassSizes[i] < bytes || detail::kClassSizes[i] % align) {
+      i++;
     }
-    return -1;
+    return static_cast<int>(i);
   }
 
-  // Take |count| fresh spans from the bump region, committing as needed.
+  static void set_run(std::uint32_t first, std::uint32_t count,
+                      std::uint8_t kind) noexcept {
+    state_type& st = state();
+    std::memset(&st.span_class[first], kind, count);
+    st.run_length[first] = count;
+    st.run_length[first + count - 1] = count;
+  }
+
+  static void forget_free_run(std::uint32_t first,
+                              std::uint32_t count) noexcept {
+    auto& runs = state().free_runs;
+    auto [lo, hi] = runs.equal_range(count);
+    for (auto it = lo; it != hi; ++it) {
+      if (it->second == first) {
+        runs.erase(it);
+        return;
+      }
+    }
+  }
+
+  // Record a free run. If the index cannot grow, the run is leaked: its
+  // memory is already decommitted, only the address space is lost.
+  static void remember_free_run(std::uint32_t first,
+                                std::uint32_t count) noexcept {
+    set_run(first, count, kFreeSpan);
+    try {
+      state().free_runs.emplace(count, first);
+    } catch (...) {
+    }
+  }
+
+  // Take |count| spans, reusing a free run if one is big enough, and commit
+  // them. Returns 0 on failure.
   static std::uint32_t take_spans(std::uint32_t count) noexcept {
-    auto& s = state();
-    auto run = s.free_runs.lower_bound(count);
-    if (run != s.free_runs.end()) {
+    state_type& st = state();
+    auto run = st.free_runs.lower_bound(count);
+    if (run != st.free_runs.end()) {
       std::uint32_t first = run->second;
       std::uint32_t have = run->first;
-      s.free_runs.erase(run);
-      if (have > count) {
-        s.free_runs.emplace(have - count, first + count);
-      }
       void* p = reinterpret_cast<void*>(base_ + std::uintptr_t(first) *
                                                     span_size);
       if (!detail::commit(p, std::size_t(count) * span_size)) {
         return 0;
       }
-      s.committed += std::size_t(count) * span_size;
+      st.free_runs.erase(run);
+      if (have > count) {
+        remember_free_run(first + count, have - count);
+      }
+      st.committed += std::size_t(count) * span_size;
       return first;
     }
     std::size_t bytes = std::size_t(count) * span_size;
-    if (s.bump + bytes > size) {
+    if (st.bump + bytes > size) {
       return 0;
     }
-    std::size_t start = s.bump;
+    std::size_t start = st.bump;
     std::size_t needed = start + bytes;
-    std::size_t committed_end = s.commit_end;
-    if (needed > committed_end) {
-      std::size_t grow = needed - committed_end;
+    if (needed > st.commit_end) {
+      std::size_t grow = needed - st.commit_end;
       grow = (grow + kCommitStep - 1) / kCommitStep * kCommitStep;
-      if (committed_end + grow > size) {
-        grow = size - committed_end;
+      if (st.commit_end + grow > size) {
+        grow = size - st.commit_end;
       }
-      if (!detail::commit(reinterpret_cast<void*>(base_ + committed_end),
+      if (!detail::commit(reinterpret_cast<void*>(base_ + st.commit_end),
                           grow)) {
         return 0;
       }
-      s.committed += grow;
-      s.commit_end += grow;
+      st.committed += grow;
+      st.commit_end += grow;
     }
-    s.bump = needed;
+    st.bump = needed;
     return static_cast<std::uint32_t>(start / span_size);
   }
 
   static void* allocate_small(int cls) noexcept {
-    auto& s = state();
-    std::uint32_t& head = s.free_lists[cls];
+    state_type& st = state();
+    std::uint32_t& head = st.free_lists[cls];
     std::uint32_t block_size = detail::kClassSizes[cls];
     if (head) {
       void* p = decompress_nonnull(head);
       CPTR_UNPOISON(p, block_size);
       std::memcpy(&head, p, sizeof(head));
-      s.allocated += block_size;
+      st.allocated += block_size;
       return p;
     }
-    if (s.slab_cursor[cls] + block_size > s.slab_end[cls]) {
+    if (st.slab_cursor[cls] + block_size > st.slab_end[cls]) {
       // One slab is a whole number of spans holding at least 16 blocks.
       std::uint32_t spans = static_cast<std::uint32_t>(
           (std::size_t(block_size) * 16 + span_size - 1) / span_size);
@@ -353,54 +425,61 @@ class cage {
       if (!first) {
         return nullptr;
       }
-      for (std::uint32_t i = 0; i < spans; i++) {
-        s.span_class[first + i] = static_cast<std::uint8_t>(cls);
-      }
-      s.slab_cursor[cls] = std::size_t(first) * span_size;
-      s.slab_end[cls] = s.slab_cursor[cls] + std::size_t(spans) * span_size;
-      CPTR_POISON(reinterpret_cast<void*>(base_ + s.slab_cursor[cls]),
+      std::memset(&st.span_class[first], cls, spans);
+      st.slab_cursor[cls] = std::size_t(first) * span_size;
+      st.slab_end[cls] = st.slab_cursor[cls] + std::size_t(spans) * span_size;
+      CPTR_POISON(reinterpret_cast<void*>(base_ + st.slab_cursor[cls]),
                   std::size_t(spans) * span_size);
     }
-    void* p = reinterpret_cast<void*>(base_ + s.slab_cursor[cls]);
+    void* p = reinterpret_cast<void*>(base_ + st.slab_cursor[cls]);
     CPTR_UNPOISON(p, block_size);
-    s.slab_cursor[cls] += block_size;
-    s.allocated += block_size;
+    st.slab_cursor[cls] += block_size;
+    st.allocated += block_size;
     return p;
   }
 
   static void* allocate_large(std::size_t bytes, std::size_t align) noexcept {
-    if (align > span_size || bytes > size) {
+    if (align > span_size || bytes > size - span_size) {
       return nullptr;
     }
-    auto& s = state();
     std::uint32_t spans =
         static_cast<std::uint32_t>((bytes + span_size - 1) / span_size);
     std::uint32_t first = take_spans(spans);
     if (!first) {
       return nullptr;
     }
-    s.span_class[first] = kLargeSpan;
-    s.large_spans[first] = spans;
-    s.allocated += std::size_t(spans) * span_size;
+    set_run(first, spans, kLargeSpan);
+    state().allocated += std::size_t(spans) * span_size;
     return reinterpret_cast<void*>(base_ + std::uintptr_t(first) * span_size);
   }
 
   static void free_large(std::uint32_t first) noexcept {
-    auto& s = state();
-    auto it = s.large_spans.find(first);
-    assert(it != s.large_spans.end());
-    std::uint32_t spans = it->second;
-    s.large_spans.erase(it);
-    s.span_class[first] = kFreeSpan;
-    s.allocated -= std::size_t(spans) * span_size;
-    s.committed -= std::size_t(spans) * span_size;
+    state_type& st = state();
+    std::uint32_t count = st.run_length[first];
+    st.allocated -= std::size_t(count) * span_size;
+    st.committed -= std::size_t(count) * span_size;
     detail::decommit(
         reinterpret_cast<void*>(base_ + std::uintptr_t(first) * span_size),
-        std::size_t(spans) * span_size);
-    s.free_runs.emplace(spans, first);
+        std::size_t(count) * span_size);
+    // Merge with free neighbours, so that a later large allocation can use
+    // the combined run.
+    if (first > 1 && st.span_class[first - 1] == kFreeSpan) {
+      std::uint32_t left = st.run_length[first - 1];
+      forget_free_run(first - left, left);
+      first -= left;
+      count += left;
+    }
+    std::uint32_t after = first + count;
+    if (after < span_count && st.span_class[after] == kFreeSpan) {
+      std::uint32_t right = st.run_length[after];
+      forget_free_run(after, right);
+      count += right;
+    }
+    remember_free_run(first, count);
   }
 
   inline static std::uintptr_t base_ = 0;
+  inline static std::atomic<bool> ready_{false};
 };
 
 // The default cage: 4 GiB, byte granularity.

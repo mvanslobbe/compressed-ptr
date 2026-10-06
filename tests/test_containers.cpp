@@ -140,3 +140,117 @@ TEST(map_operator_index_and_copy) {
   CHECK(copy.begin()->first == "a");
   CHECK(copy.find("b")->second == 3);
 }
+
+// Destroyed after main() returns, after the cage's own statics would have
+// been if they were ordinary function-local statics.
+static cptr::list<int> g_list_destroyed_at_exit;
+
+TEST(static_container_outlives_main) {
+  for (int i = 0; i < 1000; i++) {
+    g_list_destroyed_at_exit.push_back(i);
+  }
+  CHECK(g_list_destroyed_at_exit.size() == 1000);
+}
+
+namespace {
+struct throws_on {
+  static inline int countdown = -1;
+  int value;
+  explicit throws_on(int v) : value(v) {
+    if (countdown >= 0 && countdown-- == 0) {
+      throw std::runtime_error("constructor failed");
+    }
+  }
+};
+}  // namespace
+
+TEST(throwing_constructors_do_not_leak) {
+  using C = cptr::default_cage;
+  std::size_t before = C::allocated_bytes();
+  bool threw = false;
+  throws_on::countdown = 0;
+  try {
+    (void)cptr::make<throws_on>(1);
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  CHECK(threw);
+  CHECK(C::allocated_bytes() == before);
+
+  {
+    cptr::list<throws_on> l;
+    l.emplace_back(1);
+    throws_on::countdown = 0;
+    threw = false;
+    try {
+      l.emplace_back(2);
+    } catch (const std::runtime_error&) {
+      threw = true;
+    }
+    CHECK(threw);
+    CHECK(l.size() == 1 && l.front().value == 1);
+
+    cptr::ordered_map<int, throws_on> m;
+    m.try_emplace(1, 1);
+    throws_on::countdown = 0;
+    threw = false;
+    try {
+      m.try_emplace(2, 2);
+    } catch (const std::runtime_error&) {
+      threw = true;
+    }
+    CHECK(threw);
+    CHECK(m.size() == 1 && !m.contains(2));
+  }
+  throws_on::countdown = -1;
+  CHECK(C::allocated_bytes() == before);
+}
+
+TEST(const_access_and_postfix_iteration) {
+  cptr::list<int> l;
+  l.push_back(1);
+  l.push_back(2);
+  l.push_front(0);
+  const auto& cl = l;
+  int sum = 0;
+  for (auto it = cl.begin(); it != cl.end(); it++) {
+    sum += *it;
+  }
+  CHECK(sum == 3);
+  auto last = cl.end();
+  last--;
+  CHECK(*last == 2);
+  cptr::list<int>::const_iterator converted = l.begin();
+  CHECK(*converted == 0);
+  CHECK(l.back() == 2);
+  l.pop_back();
+  l.pop_front();
+  CHECK(l.size() == 1 && l.front() == 1);
+  cptr::list<int> other;
+  other = l;
+  CHECK(other.size() == 1);
+
+  cptr::ordered_map<int, int> m;
+  for (int i = 0; i < 10; i++) {
+    m.insert({i, i * i});
+  }
+  const auto& cm = m;
+  CHECK(cm.find(3)->second == 9);
+  CHECK(cm.find(42) == cm.end());
+  CHECK(!cm.empty());
+  auto it = cm.end();
+  it--;
+  CHECK(it->first == 9);
+  auto prev = it--;
+  CHECK(prev->first == 9 && it->first == 8);
+  auto next = it++;
+  CHECK(next->first == 8 && it->first == 9);
+  cptr::ordered_map<int, int>::const_iterator ci = m.begin();
+  CHECK(ci->first == 0);
+  CHECK(m.lower_bound(100) == m.end());
+  CHECK(m.erase(100) == 0);
+  cptr::ordered_map<int, int> moved = std::move(m);
+  CHECK(m.empty() && moved.size() == 10);
+  m = moved;
+  CHECK(m.size() == 10);
+}

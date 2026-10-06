@@ -2,8 +2,16 @@
 // Virtual memory primitives: reserve address space, commit and decommit it.
 #pragma once
 
+#include <atomic>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
+
+// Checks for misuse: active when NDEBUG is not defined. Define CPTR_ASSERT
+// before including any cage header to route failures elsewhere.
+#ifndef CPTR_ASSERT
+#  define CPTR_ASSERT(cond, msg) assert((cond) && msg)
+#endif
 
 #if defined(_WIN32)
 #  ifndef NOMINMAX
@@ -19,16 +27,6 @@
 #endif
 
 namespace cptr::detail {
-
-inline std::size_t page_size() noexcept {
-#if defined(_WIN32)
-  SYSTEM_INFO info;
-  GetSystemInfo(&info);
-  return info.dwPageSize;
-#else
-  return static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
-#endif
-}
 
 // Reserve |size| bytes of inaccessible address space aligned to |align|.
 // Returns nullptr on failure.
@@ -76,7 +74,18 @@ inline void* reserve_aligned(std::size_t size, std::size_t align) noexcept {
 #endif
 }
 
+#ifdef CPTR_FAULT_INJECTION
+// Tests set this to make the next N commits fail.
+inline std::atomic<int> commit_failures_to_inject{0};
+#endif
+
 inline bool commit(void* p, std::size_t size) noexcept {
+#ifdef CPTR_FAULT_INJECTION
+  if (commit_failures_to_inject.load() > 0) {
+    commit_failures_to_inject--;
+    return false;
+  }
+#endif
 #if defined(_WIN32)
   return VirtualAlloc(p, size, MEM_COMMIT, PAGE_READWRITE) == p;
 #else
@@ -94,15 +103,6 @@ inline void decommit(void* p, std::size_t size) noexcept {
   flags |= MAP_NORESERVE;
 #  endif
   mmap(p, size, PROT_NONE, flags, -1, 0);
-#endif
-}
-
-inline void release(void* p, std::size_t size) noexcept {
-#if defined(_WIN32)
-  (void)size;
-  VirtualFree(p, 0, MEM_RELEASE);
-#else
-  munmap(p, size);
 #endif
 }
 

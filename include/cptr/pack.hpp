@@ -85,9 +85,10 @@ class tagged_ptr {
   }
   std::uint32_t tag() const noexcept { return bits_ & kTagMask; }
   void set(T* p, std::uint32_t tag) noexcept {
-    assert(tag <= kTagMask);
+    CPTR_ASSERT(tag <= kTagMask, "tag does not fit in the tag bits");
     std::uint32_t bits = Cage::compress(p);
-    assert((bits & kTagMask) == 0 && "pointer is not aligned enough for tags");
+    CPTR_ASSERT((bits & kTagMask) == 0,
+                "pointer is not aligned enough for tags");
     bits_ = bits | tag;
   }
 

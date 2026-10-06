@@ -90,7 +90,7 @@ class nonnull_ptr {
   using cage_type = Cage;
 
   nonnull_ptr(T* p) noexcept : bits_(Cage::compress(p)) {
-    assert(p && "nonnull_ptr must not be null");
+    CPTR_ASSERT(p, "nonnull_ptr must not be null");
   }
   nonnull_ptr(std::nullptr_t) = delete;
 
@@ -135,8 +135,14 @@ ptr<T, Cage> make(Args&&... args) {
 template <class T, class Cage>
 void destroy(ptr<T, Cage> p) noexcept {
   if (T* raw = p.get()) {
+    // With multiple inheritance a base pointer can point into the middle of
+    // the block, so free the most-derived object's address.
+    void* block = raw;
+    if constexpr (std::is_polymorphic_v<T>) {
+      block = dynamic_cast<void*>(raw);
+    }
     raw->~T();
-    Cage::deallocate(raw);
+    Cage::deallocate(block);
   }
 }
 
@@ -145,6 +151,13 @@ void destroy(ptr<T, Cage> p) noexcept {
 template <class T, class Cage>
 struct std::hash<cptr::ptr<T, Cage>> {
   std::size_t operator()(cptr::ptr<T, Cage> p) const noexcept {
+    return std::hash<std::uint32_t>()(p.bits());
+  }
+};
+
+template <class T, class Cage>
+struct std::hash<cptr::nonnull_ptr<T, Cage>> {
+  std::size_t operator()(cptr::nonnull_ptr<T, Cage> p) const noexcept {
     return std::hash<std::uint32_t>()(p.bits());
   }
 };

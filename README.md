@@ -160,6 +160,20 @@ ctest --test-dir build              # unit tests + examples
 ./build/bench_runtime [elements]    # time
 ```
 
+Coverage (clang and llvm-cov; HTML report in `build-coverage/`):
+
+```sh
+scripts/coverage.sh            # LLVM_SUFFIX=-18 for versioned tool names
+```
+
+The tests cover 95% of the header lines, 99% of the functions and 90% of
+the branches. A second test executable overrides `CPTR_ASSERT` to check
+misuse detection, injects commit failures with `CPTR_FAULT_INJECTION`, and
+runs out of address space under `RLIMIT_AS`. The remaining gaps are
+assertion branches that cannot be taken safely (such as freeing a pointer
+from outside the cage), the compile-time size-class table, and out-of-memory
+inside the allocator's own bookkeeping.
+
 To use the library from another CMake project:
 
 ```cmake
@@ -167,9 +181,10 @@ add_subdirectory(compressed-ptr)   # or FetchContent, or find_package(compressed
 target_link_libraries(app PRIVATE compressed_ptr::compressed_ptr)
 ```
 
-Supported platforms: Linux, macOS and Windows on x86-64 and arm64, with
-GCC 11+, Clang 16+ and MSVC 2022. CI runs the tests on all of them, plus
-AddressSanitizer and UBSan on Linux.
+Target platforms: Linux, macOS and Windows on x86-64 and arm64, with
+GCC 11+, Clang 16+ and MSVC 2022. The CI workflow covers all of them, plus
+AddressSanitizer and UBSan on Linux. So far it has been verified on Linux
+x86-64 with GCC 15 and Clang 22.
 
 ## Rules and limitations
 
@@ -180,11 +195,17 @@ AddressSanitizer and UBSan on Linux.
   type.** Fancy-pointer support in standard libraries is patchy. Use the
   bundled containers, or put std containers' storage in the cage with
   `cptr::allocator` and refer to their elements with `cptr::ptr`.
-* **The allocator takes a global spin lock.** It is thread-safe but not
+* **The allocator takes one lock per cage.** It is thread-safe but not
   built for heavy multi-threaded allocation. Freed small blocks are reused
-  but their pages are not returned to the OS; large blocks are.
+  but their pages are not returned to the OS. Large blocks are decommitted
+  on free, and adjacent free runs are merged.
+* **The cage's bookkeeping is never destroyed,** so containers with static
+  storage duration can still free into it during program exit.
 * **The cage size is fixed when the cage is reserved.** The default is
   4 GiB. Allocation fails with `std::bad_alloc` when the cage is full.
+* **Misuse checks** use `CPTR_ASSERT(cond, msg)`, which defaults to
+  `assert`. Define it before including a cage header to log or throw
+  instead.
 * **AddressSanitizer** understands the cage: freed blocks are poisoned.
   LeakSanitizer does not see cage memory.
 

@@ -11,6 +11,8 @@
 namespace {
 struct small_cage : cptr::cage<small_cage, 24> {};
 struct wide_cage : cptr::cage<wide_cage, 35, 3> {};
+struct decommit_cage : cptr::cage<decommit_cage, 30> {};
+struct coalesce_cage : cptr::cage<coalesce_cage, 30> {};
 }  // namespace
 
 TEST(reserve_is_aligned) {
@@ -59,7 +61,7 @@ TEST(freed_blocks_are_reused) {
 }
 
 TEST(large_blocks_return_memory) {
-  using C = cptr::default_cage;
+  using C = decommit_cage;
   std::size_t before = C::committed_bytes();
   void* p = C::allocate(8 << 20);
   CHECK(C::committed_bytes() >= before + (8 << 20) - C::span_size);
@@ -175,4 +177,154 @@ TEST(concurrent_allocation) {
     th.join();
   }
   CHECK(errors == 0);
+}
+
+TEST(sixteen_byte_alignment_uses_tight_classes) {
+  using C = cptr::default_cage;
+  std::size_t before = C::allocated_bytes();
+  void* a = C::allocate(48, 16);
+  void* b = C::allocate(200, 16);
+  void* c = C::allocate(64, 64);
+  CHECK(reinterpret_cast<std::uintptr_t>(a) % 16 == 0);
+  CHECK(reinterpret_cast<std::uintptr_t>(b) % 16 == 0);
+  CHECK(reinterpret_cast<std::uintptr_t>(c) % 64 == 0);
+  CHECK(C::allocated_bytes() - before == 48 + 208 + 64);
+  C::deallocate(a);
+  C::deallocate(b);
+  C::deallocate(c);
+}
+
+TEST(free_large_runs_coalesce) {
+  using C = coalesce_cage;
+  constexpr std::size_t mib = 1 << 20;
+  char* a = static_cast<char*>(C::allocate(mib));
+  char* b = static_cast<char*>(C::allocate(mib));
+  char* c = static_cast<char*>(C::allocate(mib));
+  void* guard = C::allocate(mib);
+  CHECK(b == a + mib && c == b + mib);
+  C::deallocate(a);
+  C::deallocate(c);
+  C::deallocate(b);
+  // The three runs merged, so a 3 MiB block fits where they were.
+  void* big = C::allocate(3 * mib);
+  CHECK(big == a);
+  C::deallocate(big);
+  C::deallocate(guard);
+}
+
+namespace {
+struct left_base {
+  virtual ~left_base() = default;
+  long l = 1;
+};
+struct right_base {
+  virtual ~right_base() = default;
+  long r = 2;
+};
+struct both : left_base, right_base {};
+}  // namespace
+
+TEST(destroy_through_secondary_base) {
+  using C = cptr::default_cage;
+  std::size_t before = C::allocated_bytes();
+  cptr::ptr<both> full = cptr::make<both>();
+  cptr::ptr<right_base> base = full;
+  CHECK(static_cast<void*>(base.get()) != static_cast<void*>(full.get()));
+  cptr::destroy(base);
+  CHECK(C::allocated_bytes() == before);
+  void* again = C::allocate(sizeof(both), alignof(both));
+  CHECK(again == static_cast<void*>(full.get()));
+  C::deallocate(again);
+}
+
+namespace {
+struct untouched_cage : cptr::cage<untouched_cage, 24> {};
+struct tiny_cage : cptr::cage<tiny_cage, 24> {};
+}  // namespace
+
+TEST(statistics_before_first_use) {
+  CHECK(untouched_cage::base() == 0);
+  CHECK(untouched_cage::allocated_bytes() == 0);
+  CHECK(untouched_cage::committed_bytes() == 0);
+  int local = 0;
+  CHECK(!untouched_cage::contains(&local));
+}
+
+TEST(zero_byte_and_null_requests) {
+  using C = cptr::default_cage;
+  void* a = C::allocate(0);
+  void* b = C::allocate(0);
+  CHECK(a && b && a != b);
+  C::deallocate(a);
+  C::deallocate(b);
+  C::deallocate(nullptr);
+  cptr::destroy(cptr::ptr<int>());
+}
+
+TEST(alignment_below_granularity_is_raised) {
+  if (!wide_cage::init()) {
+    return;
+  }
+  void* p = wide_cage::allocate(3, 1);
+  CHECK(reinterpret_cast<std::uintptr_t>(p) % wide_cage::granularity == 0);
+  wide_cage::deallocate(p);
+}
+
+TEST(pmr_resource_equality) {
+  auto* r = cptr::default_cage::resource();
+  CHECK(r->is_equal(*r));
+  CHECK(!r->is_equal(*std::pmr::new_delete_resource()));
+  CHECK(r != small_cage::resource());
+}
+
+TEST(allocator_rejects_overflowing_counts) {
+  bool threw = false;
+  try {
+    (void)cptr::allocator<long>().allocate(std::size_t(-1) / 2);
+  } catch (const std::bad_array_new_length&) {
+    threw = true;
+  }
+  CHECK(threw);
+  cptr::allocator<int> ints;
+  cptr::allocator<long> longs(ints);
+  CHECK(ints == longs);
+}
+
+TEST(impossible_requests_fail) {
+  using C = tiny_cage;
+  CHECK(C::try_allocate(16, 2 * C::span_size) == nullptr);
+  CHECK(C::try_allocate(C::size) == nullptr);
+  CHECK(C::try_allocate(C::size - C::span_size + 1) == nullptr);
+}
+
+TEST(filling_a_cage_span_by_span) {
+  using C = tiny_cage;
+  std::vector<void*> blocks;
+  // Spans larger than the largest size class each take one whole span; the
+  // final commit step is clipped at the end of the cage.
+  while (void* p = C::try_allocate(C::span_size)) {
+    blocks.push_back(p);
+  }
+  CHECK(blocks.size() == C::span_count - 1);
+  CHECK(C::committed_bytes() == C::size - C::span_size);
+  // No room for a new slab either.
+  CHECK(C::try_allocate(16, 8) == nullptr);
+  for (void* p : blocks) {
+    C::deallocate(p);
+  }
+  CHECK(C::committed_bytes() == 0);
+  // Everything merged back into one run.
+  void* all = C::try_allocate(C::size - C::span_size);
+  CHECK(all != nullptr);
+  C::deallocate(all);
+}
+
+TEST(size_class_table) {
+  // Normally evaluated at compile time; run it again so its logic is tested.
+  auto sizes = cptr::detail::make_class_sizes();
+  CHECK(sizes == cptr::detail::kClassSizes);
+  CHECK(sizes.size() == cptr::detail::class_count());
+  for (std::size_t i = 1; i < sizes.size(); i++) {
+    CHECK(sizes[i] > sizes[i - 1]);
+  }
 }

@@ -174,6 +174,12 @@ class ordered_map {
     return {{fresh, this}, true};
   }
 
+  // Like std::map::try_emplace: V is only constructed if the key is new.
+  template <class... Args>
+  std::pair<iterator, bool> try_emplace(const K& key, Args&&... args) {
+    return emplace(key, std::forward<Args>(args)...);
+  }
+
   std::pair<iterator, bool> insert(const value_type& kv) {
     return emplace(kv.first, kv.second);
   }
@@ -358,7 +364,11 @@ class ordered_map {
   node* root_ = nullptr;
   std::size_t size_ = 0;
   std::uint32_t seed_ = 0x9E3779B9u;
+#if defined(_MSC_VER) && !defined(__clang__)
+  [[msvc::no_unique_address]] Compare comp_{};
+#else
   [[no_unique_address]] Compare comp_{};
+#endif
 };
 
 }  // namespace cptr

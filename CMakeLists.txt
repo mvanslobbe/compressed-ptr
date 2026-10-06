@@ -29,6 +29,11 @@ if(COMPRESSED_PTR_BUILD_TESTS)
     tests/test_containers.cpp)
   target_link_libraries(compressed_ptr_tests PRIVATE compressed_ptr Threads::Threads)
   add_test(NAME compressed_ptr_tests COMMAND compressed_ptr_tests)
+  add_executable(compressed_ptr_failure_tests tests/test_main.cpp
+    tests/test_failures.cpp)
+  target_link_libraries(compressed_ptr_failure_tests PRIVATE compressed_ptr
+    Threads::Threads)
+  add_test(NAME compressed_ptr_failure_tests COMMAND compressed_ptr_failure_tests)
 endif()
 
 if(COMPRESSED_PTR_BUILD_BENCHMARKS)
@@ -57,7 +62,12 @@ install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(TARGETS compressed_ptr EXPORT compressed_ptr-targets)
 install(EXPORT compressed_ptr-targets NAMESPACE compressed_ptr::
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/compressed_ptr)
+include(CMakePackageConfigHelpers)
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr-config.cmake
   "include(\${CMAKE_CURRENT_LIST_DIR}/compressed_ptr-targets.cmake)\n")
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr-config-version.cmake
+  COMPATIBILITY SameMinorVersion ARCH_INDEPENDENT)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr-config.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr-config-version.cmake
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/compressed_ptr)
