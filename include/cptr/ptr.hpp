@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -27,20 +28,49 @@ class ptr {
   using difference_type = std::ptrdiff_t;
   template <class U>
   using rebind = ptr<U, Cage>;
+  // An allocator's pointer type must be a random access iterator.
+  using value_type = std::remove_cv_t<T>;
+  using pointer = T*;
+  using reference = std::add_lvalue_reference_t<T>;
+  using iterator_category = std::random_access_iterator_tag;
 
   constexpr ptr() noexcept = default;
   constexpr ptr(std::nullptr_t) noexcept {}
+  // Accepts a literal 0 or NULL, which older code uses for null pointers.
+  template <class I>
+    requires std::is_integral_v<I>
+  ptr([[maybe_unused]] I zero) noexcept {
+    CPTR_ASSERT(zero == 0, "only zero converts to a pointer");
+  }
   ptr(T* p) noexcept : bits_(Cage::compress(p)) {}
   template <class U>
     requires std::is_convertible_v<U*, T*>
   ptr(const ptr<U, Cage>& other) noexcept
       : bits_(Cage::compress(static_cast<T*>(other.get()))) {}
+  // Explicit casts that static_cast allows, such as base to derived or
+  // void* to T*.
+  template <class U>
+    requires(!std::is_convertible_v<U*, T*> &&
+             requires(U* u) { static_cast<T*>(u); })
+  explicit ptr(U* p) noexcept : bits_(Cage::compress(static_cast<T*>(p))) {}
+  template <class U>
+    requires(!std::is_convertible_v<U*, T*> &&
+             requires(U* u) { static_cast<T*>(u); })
+  explicit ptr(const ptr<U, Cage>& other) noexcept
+      : ptr(static_cast<T*>(other.get())) {}
 
   ptr& operator=(T* p) noexcept {
     bits_ = Cage::compress(p);
     return *this;
   }
   ptr& operator=(std::nullptr_t) noexcept {
+    bits_ = 0;
+    return *this;
+  }
+  template <class I>
+    requires std::is_integral_v<I>
+  ptr& operator=([[maybe_unused]] I zero) noexcept {
+    CPTR_ASSERT(zero == 0, "only zero converts to a pointer");
     bits_ = 0;
     return *this;
   }
@@ -54,6 +84,69 @@ class ptr {
     return *get();
   }
   explicit operator bool() const noexcept { return bits_ != 0; }
+
+  // Pointer arithmetic, so ptr can serve as an allocator's pointer type for
+  // containers that index into blocks of nodes. Offsets scale by sizeof(T),
+  // so for a shifted cage sizeof(T) must be a multiple of the granularity.
+  template <class U = T>
+    requires(!std::is_void_v<U>)
+  U& operator[](std::ptrdiff_t i) const noexcept {
+    return get()[i];
+  }
+  ptr& operator+=(std::ptrdiff_t n) noexcept
+    requires(!std::is_void_v<T>)
+  {
+    return *this = get() + n;
+  }
+  ptr& operator-=(std::ptrdiff_t n) noexcept
+    requires(!std::is_void_v<T>)
+  {
+    return *this = get() - n;
+  }
+  ptr& operator++() noexcept
+    requires(!std::is_void_v<T>)
+  {
+    return *this += 1;
+  }
+  ptr& operator--() noexcept
+    requires(!std::is_void_v<T>)
+  {
+    return *this -= 1;
+  }
+  ptr operator++(int) noexcept
+    requires(!std::is_void_v<T>)
+  {
+    ptr old = *this;
+    ++*this;
+    return old;
+  }
+  ptr operator--(int) noexcept
+    requires(!std::is_void_v<T>)
+  {
+    ptr old = *this;
+    --*this;
+    return old;
+  }
+  friend ptr operator+(ptr p, std::ptrdiff_t n) noexcept
+    requires(!std::is_void_v<T>)
+  {
+    return p += n;
+  }
+  friend ptr operator+(std::ptrdiff_t n, ptr p) noexcept
+    requires(!std::is_void_v<T>)
+  {
+    return p += n;
+  }
+  friend ptr operator-(ptr p, std::ptrdiff_t n) noexcept
+    requires(!std::is_void_v<T>)
+  {
+    return p -= n;
+  }
+  friend std::ptrdiff_t operator-(ptr a, ptr b) noexcept
+    requires(!std::is_void_v<T>)
+  {
+    return a.get() - b.get();
+  }
 
   // For std::pointer_traits, so ptr can serve as an allocator's pointer type.
   template <class U = T>
@@ -73,6 +166,12 @@ class ptr {
   friend bool operator==(ptr a, ptr b) noexcept { return a.bits_ == b.bits_; }
   friend bool operator==(ptr a, std::nullptr_t) noexcept { return !a.bits_; }
   friend bool operator==(ptr a, T* b) noexcept { return a.get() == b; }
+  template <class I>
+    requires std::is_integral_v<I>
+  friend bool operator==(ptr a, [[maybe_unused]] I zero) noexcept {
+    CPTR_ASSERT(zero == 0, "only zero compares as a pointer");
+    return !a.bits_;
+  }
   // All pointers share the cage base, so offsets order like addresses.
   friend std::strong_ordering operator<=>(ptr a, ptr b) noexcept {
     return a.bits_ <=> b.bits_;

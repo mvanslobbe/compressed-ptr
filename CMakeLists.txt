@@ -57,6 +57,21 @@ if(COMPRESSED_PTR_BUILD_EXAMPLES)
   endforeach()
 endif()
 
+set(COMPRESSED_PTR_PLF_LIST_DIR "" CACHE PATH
+  "plf_list checkout, to build the plf::list example")
+if(COMPRESSED_PTR_BUILD_EXAMPLES AND COMPRESSED_PTR_PLF_LIST_DIR)
+  add_executable(example_plf_list examples/plf_list.cpp)
+  target_include_directories(example_plf_list PRIVATE
+    ${COMPRESSED_PTR_PLF_LIST_DIR})
+  target_link_libraries(example_plf_list PRIVATE compressed_ptr)
+  if(WIN32)
+    target_link_libraries(example_plf_list PRIVATE psapi)
+  endif()
+  if(COMPRESSED_PTR_BUILD_TESTS)
+    add_test(NAME example_plf_list COMMAND example_plf_list)
+  endif()
+endif()
+
 include(GNUInstallDirs)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(TARGETS compressed_ptr EXPORT compressed_ptr-targets)

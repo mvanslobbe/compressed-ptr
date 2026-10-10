@@ -69,6 +69,7 @@ region.
 | `cptr/ptr.hpp` | `ptr<T, Cage>` (nullable, 4 B), `nonnull_ptr<T, Cage>`, `make<T>()`, `destroy()`, `std::hash` |
 | `cptr/pack.hpp` | `ptr_pair` (two pointers in 8 B), `ptr_with_payload` (pointer + 32-bit value in 8 B), `tagged_ptr` (pointer + tag bits in 4 B), `atomic_ptr` (lock-free CAS on 4 B) |
 | `cptr/allocator.hpp` | `cptr::allocator<T>`, so any std container's elements live in the cage |
+| `cptr/fancy_allocator.hpp` | `cptr::fancy_allocator<T>` with `pointer = cptr::ptr<T>`, for containers that support fancy pointers |
 | `cptr/list.hpp` | `cptr::list<T>`: doubly linked list with 4-byte links |
 | `cptr/ordered_map.hpp` | `cptr::ordered_map<K, V>`: ordered map (treap with parent links) with 4-byte links |
 | `cptr/all.hpp` | All of the above |
@@ -102,6 +103,43 @@ Each example is a short, self-contained program in [`examples/`](examples):
 | [`graph.cpp`](examples/graph.cpp) | BFS over a graph whose edges are 4 bytes and whose adjacency vectors live in the cage |
 | [`std_containers.cpp`](examples/std_containers.cpp) | `std::deque` and `std::pmr` containers in the cage, indexed by `cptr::ptr` |
 | [`use_after_free.cpp`](examples/use_after_free.cpp) | AddressSanitizer catching a dangling compressed pointer |
+
+## With plf::list (fancy pointers)
+
+Containers that take their internal pointer type from the allocator can
+switch to 4-byte links without changes to their code. `cptr::fancy_allocator`
+has `pointer = cptr::ptr<T>`, and `cptr::ptr` supports the arithmetic,
+`NULL` literals and casts such containers need. With
+[plf::list](https://github.com/mattreecebentley/plf_list):
+
+```cpp
+using compressed_list =
+    plf::list<std::uint32_t, cptr::fancy_allocator<std::uint32_t>>;
+
+// The list's end sentinel is a member of the list object and nodes link to
+// it, so the list object itself must be in the cage too.
+cptr::ptr<compressed_list> l = cptr::make<compressed_list>();
+l->push_back(1);
+```
+
+Two details:
+
+* plf::list passes the allocator's pointer to
+  `std::allocator_traits::construct` and `destroy`, which take raw pointers.
+  The example redefines plf's `PLF_CONSTRUCT` and `PLF_DESTROY` macros to
+  convert with `std::to_address` first, as the standard containers do. The
+  same change in `plf_tools.h` would make this unnecessary.
+* The list object must live in the cage (see above).
+
+4,000,000 random `uint32_t`, GCC 15 `-O2`, i7-12700H, best of 3:
+
+| | bytes/element | push_back | 10 walks | sort |
+|---|---:|---:|---:|---:|
+| `plf::list` | 24.1 | 29 ms | 67 ms | 543 ms |
+| `plf::list` with `cptr::fancy_allocator` | **12.1** | 25 ms | 57 ms | 530 ms |
+
+Build it with `-DCOMPRESSED_PTR_PLF_LIST_DIR=/path/to/plf_list`; see
+[`examples/plf_list.cpp`](examples/plf_list.cpp).
 
 ## Benchmarks
 
@@ -191,10 +229,12 @@ x86-64 with GCC 15 and Clang 22.
 * **Only cage memory can be compressed.** Compressing a stack or `malloc`
   pointer is a bug. Debug builds catch it with an assertion.
 * **64-bit only.** A 32-bit target already has 4-byte pointers.
-* **Standard containers cannot use `cptr::ptr` as their internal pointer
-  type.** Fancy-pointer support in standard libraries is patchy. Use the
-  bundled containers, or put std containers' storage in the cage with
-  `cptr::allocator` and refer to their elements with `cptr::ptr`.
+* **Standard library containers mostly ignore fancy pointers** for their
+  internal links, so `cptr::fancy_allocator` does not shrink `std::list` or
+  `std::map` nodes. Use the bundled containers or a container that honours
+  the allocator's pointer type (such as plf::list). Otherwise, put std
+  containers' storage in the cage with `cptr::allocator` and refer to their
+  elements with `cptr::ptr`.
 * **The allocator takes one lock per cage.** It is thread-safe but not
   built for heavy multi-threaded allocation. Freed small blocks are reused
   but their pages are not returned to the OS. Large blocks are decommitted
