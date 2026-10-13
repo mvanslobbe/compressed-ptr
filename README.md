@@ -1,7 +1,8 @@
 # compressed-ptr
 
-32-bit compressed pointers for 64-bit C++, in the style of V8's pointer
-compression. A header-only C++20 library.
+32-bit compressed pointers for 64-bit C++, in the style of
+[V8's pointer compression](https://v8.dev/blog/pointer-compression). A
+header-only C++20 library.
 
 ```cpp
 #include "cptr/ptr.hpp"
@@ -21,6 +22,14 @@ object graphs, often spend half their memory on pointers. Most programs
 never need more than 4 GiB for one such structure. If every node lives in
 one 4 GiB region, a pointer to a node only needs its 32-bit offset into that
 region.
+
+The idea comes from V8, Chrome's JavaScript engine. It keeps its whole heap
+in one 4 GiB "cage" and stores 32-bit offsets instead of full pointers. See
+[Pointer Compression in V8](https://v8.dev/blog/pointer-compression)
+(Igor Sheludko and Santiago Aboy Solanes, 2020). V8 builds this into its
+garbage collector and JIT. This library offers the same addressing trick
+for ordinary C++ code: plain pointers with a null value, a malloc-style
+allocator, several independent cages, and containers. No V8 code is used.
 
 ## How it works
 
@@ -204,7 +213,7 @@ Coverage (clang and llvm-cov; HTML report in `build-coverage/`):
 scripts/coverage.sh            # LLVM_SUFFIX=-18 for versioned tool names
 ```
 
-The tests cover 95% of the header lines, 99% of the functions and 90% of
+The tests cover 95% of the header lines, 99% of the functions and 88% of
 the branches. A second test executable overrides `CPTR_ASSERT` to check
 misuse detection, injects commit failures with `CPTR_FAULT_INJECTION`, and
 runs out of address space under `RLIMIT_AS`. The remaining gaps are
@@ -219,10 +228,9 @@ add_subdirectory(compressed-ptr)   # or FetchContent, or find_package(compressed
 target_link_libraries(app PRIVATE compressed_ptr::compressed_ptr)
 ```
 
-Target platforms: Linux, macOS and Windows on x86-64 and arm64, with
-GCC 11+, Clang 16+ and MSVC 2022. The CI workflow covers all of them, plus
-AddressSanitizer and UBSan on Linux. So far it has been verified on Linux
-x86-64 with GCC 15 and Clang 22.
+Supported platforms: Linux, macOS and Windows on x86-64 and arm64, with
+GCC 11+, Clang 16+ and MSVC 2022. CI runs the tests on all six, plus
+AddressSanitizer, UBSan and coverage on Linux.
 
 ## Rules and limitations
 

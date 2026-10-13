@@ -145,9 +145,11 @@ TEST(concurrent_first_use) {
 }
 
 TEST(address_space_exhausted) {
-#if defined(_WIN32) || defined(CPTR_ASAN)
-  std::printf("  (skipped: needs fork and an address-space limit)\n");
+#if defined(_WIN32) || defined(__APPLE__) || defined(CPTR_ASAN)
+  // macOS accepts RLIMIT_AS but does not enforce it.
+  std::printf("  (skipped: needs fork and an enforced address-space limit)\n");
 #else
+  std::fflush(stdout);
   pid_t pid = fork();
   if (pid == 0) {
     rlimit limit{rlim_t(1) << 30, rlim_t(1) << 30};
