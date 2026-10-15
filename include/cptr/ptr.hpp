@@ -77,31 +77,37 @@ class ptr {
 
   T* get() const noexcept { return static_cast<T*>(Cage::decompress(bits_)); }
   operator T*() const noexcept { return get(); }
-  T* operator->() const noexcept { return get(); }
+  // Dereferencing null is undefined, so these skip the null check.
+  T* operator->() const noexcept {
+    return static_cast<T*>(Cage::decompress_nonnull(bits_));
+  }
   template <class U = T>
     requires(!std::is_void_v<U>)
   U& operator*() const noexcept {
-    return *get();
+    return *static_cast<U*>(Cage::decompress_nonnull(bits_));
   }
   explicit operator bool() const noexcept { return bits_ != 0; }
 
   // Pointer arithmetic, so ptr can serve as an allocator's pointer type for
-  // containers that index into blocks of nodes. Offsets scale by sizeof(T),
-  // so for a shifted cage sizeof(T) must be a multiple of the granularity.
+  // containers that index into blocks of elements. It works on the
+  // compressed offset directly, so it is as cheap as raw pointer arithmetic.
+  // In a shifted cage, sizeof(T) must be a multiple of the granularity.
   template <class U = T>
     requires(!std::is_void_v<U>)
   U& operator[](std::ptrdiff_t i) const noexcept {
-    return get()[i];
+    return *(*this + i);
   }
   ptr& operator+=(std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
-    return *this = get() + n;
+    bits_ += static_cast<std::uint32_t>(n * step());
+    return *this;
   }
   ptr& operator-=(std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
-    return *this = get() - n;
+    bits_ -= static_cast<std::uint32_t>(n * step());
+    return *this;
   }
   ptr& operator++() noexcept
     requires(!std::is_void_v<T>)
@@ -145,7 +151,7 @@ class ptr {
   friend std::ptrdiff_t operator-(ptr a, ptr b) noexcept
     requires(!std::is_void_v<T>)
   {
-    return a.get() - b.get();
+    return (std::int64_t(a.bits_) - std::int64_t(b.bits_)) / step();
   }
 
   // For std::pointer_traits, so ptr can serve as an allocator's pointer type.
@@ -178,6 +184,14 @@ class ptr {
   }
 
  private:
+  // One element, in compressed units.
+  static constexpr std::ptrdiff_t step() noexcept {
+    static_assert(sizeof(T) % Cage::granularity == 0,
+                  "pointer arithmetic in a shifted cage needs sizeof(T) to "
+                  "be a multiple of the cage granularity");
+    return std::ptrdiff_t(sizeof(T) >> Cage::shift);
+  }
+
   std::uint32_t bits_ = 0;
 };
 

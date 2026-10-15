@@ -14,6 +14,7 @@ inline std::atomic<int> g_assert_failures{0};
 #include "check.hpp"
 
 #if !defined(_WIN32)
+#  include <csignal>
 #  include <sys/resource.h>
 #  include <sys/wait.h>
 #  include <unistd.h>
@@ -169,5 +170,31 @@ TEST(address_space_exhausted) {
   int status = 0;
   waitpid(pid, &status, 0);
   CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+#endif
+}
+
+// Dereferencing a null ptr must still fault, although operator-> and
+// operator* skip the null check: offset zero is the cage's first span,
+// which is never committed.
+TEST(null_dereference_faults) {
+#if defined(_WIN32) || defined(CPTR_ASAN)
+  std::printf("  (skipped: needs fork)\n");
+#else
+  struct node {
+    int value;
+  };
+  std::fflush(stdout);
+  pid_t pid = fork();
+  if (pid == 0) {
+    (void)cptr::default_cage::allocate(16);  // commit something
+    cptr::ptr<node> p;
+    volatile int v = p->value;
+    (void)v;
+    std::exit(0);
+  }
+  int status = 0;
+  waitpid(pid, &status, 0);
+  CHECK(WIFSIGNALED(status) &&
+        (WTERMSIG(status) == SIGSEGV || WTERMSIG(status) == SIGBUS));
 #endif
 }
