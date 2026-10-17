@@ -32,7 +32,7 @@ jobs:
         run: |
           dir=build; [ -d build/Release ] && dir=build/Release
           "$dir/bench_rss" 200000
-          "$dir/bench_runtime" 100000
+          "$dir/bench_runtime" 100000 200
 
   sanitizers:
     runs-on: ubuntu-24.04

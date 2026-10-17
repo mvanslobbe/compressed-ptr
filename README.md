@@ -167,35 +167,103 @@ The "cage, raw pointers" column uses the same code and allocator with 8-byte
 links. Compression saves 8 to 16 B per node; the header-less allocator saves
 the remaining 8 B against `malloc`.
 
-### Time: 1,000,000 elements, ns per element
+### Time: latency percentiles against a reference
 
-| | build/insert | walk | find (random) | erase/destroy |
-|---|---:|---:|---:|---:|
-| `cptr::list` compressed | 7.7 | 1.6 | — | 6.5 |
-| `cptr::list` raw | 7.9 | 1.5 | — | 6.7 |
-| `std::list` | 10.4 | 2.6 | — | 4.5 |
-| `cptr::ordered_map` compressed | 407 | 39 | **392** | 396 |
-| `cptr::ordered_map` raw | 463 | 62 | 511 | 454 |
-| `std::map` (red-black tree) | 439 | 71 | 471 | 447 |
+`bench_runtime` uses [nanobench](https://github.com/martinus/nanobench)
+(vendored in `bench/third_party`). Each benchmark runs thousands of short
+epochs of a few hundred operations on a structure that stays large for the
+whole run, and reports the 50th, 95th, 99th and 99.9th percentile of the time
+per element. Each variant is compared with a reference at the same
+percentile: Δp99 = +10% means its p99 is 10% slower than the reference's
+p99. The reference is the same container with raw 8-byte links, or a raw
+`T*`. The variants run interleaved, in bursts of 8 epochs each, so frequency
+changes and other drift affect all of them alike.
 
-Once the structure no longer fits in the cache, compressed links are faster
-than raw ones, because more nodes fit in each cache line.
+The numbers below are from `bench_runtime 4194304 10000`: 4,194,304
+elements, 10,000 epochs (8,192 for grow and shrink), pinned to one core.
+Two runs agree to within a few percent up to p99. p99.9 is the
+tenth-slowest of 10,000 samples and moves by up to ±20% between runs.
+
+**List of `uint32_t`**, 4,194,304 elements; grow and shrink in chunks of
+512, walk 4,096 per epoch:
+
+| | p50 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
+|---|---:|---:|---:|---:|---:|
+| grow: `cptr::list` raw links | 12.9 | ref | ref | ref | ref |
+| grow: `cptr::list` compressed | 11.1 | −13% | −13% | −35% | −66% |
+| grow: `std::list` | 19.1 | +49% | +43% | +39% | +86% |
+| walk: `cptr::list` raw links | 1.67 | ref | ref | ref | ref |
+| walk: `cptr::list` compressed | 1.53 | −8% | −11% | −10% | −2% |
+| walk: `std::list` | 2.02 | +21% | +24% | +22% | +4% |
+| shrink: `cptr::list` raw links | 7.03 | ref | ref | ref | ref |
+| shrink: `cptr::list` compressed | 7.00 | −0% | −0% | −2% | −2% |
+| shrink: `std::list` | 5.38 | −23% | −20% | −8% | −15% |
+
+**Map `uint32_t → uint32_t`**, 4,194,304 random keys; 512 operations per
+epoch, walk 4,096:
+
+| | p50 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
+|---|---:|---:|---:|---:|---:|
+| insert: `cptr::ordered_map` raw links | 1099 | ref | ref | ref | ref |
+| insert: `cptr::ordered_map` compressed | 1022 | −7% | −5% | −4% | −7% |
+| insert: `std::map` | 833 | −24% | −26% | −25% | −22% |
+| find: `cptr::ordered_map` raw links | 1136 | ref | ref | ref | ref |
+| find: `cptr::ordered_map` compressed | 1114 | −2% | +0% | +1% | +2% |
+| find: `std::map` | 904 | −20% | −20% | −19% | −18% |
+| walk: `cptr::ordered_map` raw links | 104 | ref | ref | ref | ref |
+| walk: `cptr::ordered_map` compressed | 101 | −3% | −2% | −3% | −4% |
+| walk: `std::map` | 104 | −0% | −0% | −0% | −1% |
+| erase: `cptr::ordered_map` raw links | 1062 | ref | ref | ref | ref |
+| erase: `cptr::ordered_map` compressed | 1055 | −1% | −0% | −1% | −4% |
+| erase: `std::map` | 881 | −17% | −22% | −24% | −27% |
+
+What this shows:
+
+- Compressed links are never measurably slower than raw links in the same
+  container (at most +2%, within noise). For the list, grow is 13% and walk
+  8% faster at the median, and shrink is equal. The list's grow tail drops most (−35% at p99, −66% at p99.9), because
+  half as much memory is committed and touched for the first time.
+- The bundled `ordered_map` is a treap. At 4 Mi keys every operation is a
+  chain of cache misses, and `std::map`'s red-black tree is about 20%
+  faster at all percentiles; the treap's random priorities give deeper
+  paths. Compression saves memory there (see above), not time.
+- `std::list` grows 49% and walks 21% slower than the cage list, but pops
+  23% faster: glibc's `free` is cheaper than the cage allocator's
+  `deallocate`.
+
+**Pointer arithmetic**, `++p` over an array of `uint32_t`, 4,096 elements
+per epoch:
+
+| | p50 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
+|---|---:|---:|---:|---:|---:|
+| 65,536 elements, raw `T*` | 0.09 | ref | ref | ref | ref |
+| 65,536 elements, `ptr` | 0.32 | +245% | +216% | +146% | +65% |
+| 4,194,304 elements, raw `T*` | 0.18 | ref | ref | ref | ref |
+| 4,194,304 elements, `ptr` | 0.32 | +76% | +33% | −36% | −86% |
+
+The raw loop is vectorised. A 32-bit offset that may wrap is not an
+induction variable the compiler can turn into a pointer, so the `ptr` loop
+stays scalar. In a hot loop over an array, convert to `T*` once with
+`get()`.
 
 ### Pointer chasing: where the decompression add costs and where it pays
 
-A random cycle through *n* nodes: link plus 4 B of payload, so nodes are
-8 B compressed and 16 B raw.
+A random cycle through *n* nodes, 1,024 steps per epoch. Link plus 4 B of
+payload, so nodes are 8 B compressed and 16 B raw:
 
-| Nodes (working set raw) | raw `T*` | `ptr` | `nonnull_ptr` |
-|---|---:|---:|---:|
-| 1 Ki (16 KiB, L1) | 1.10 ns | 1.78 ns (+62%) | 1.31 ns (+20%) |
-| 16 Ki (256 KiB, L2) | 2.97 ns | 3.23 ns (+9%) | 2.76 ns (−7%) |
-| 256 Ki (4 MiB, L3) | 11.75 ns | 9.28 ns (−21%) | 8.79 ns (−25%) |
-| 4 Mi (64 MiB, DRAM) | 76.3 ns | 50.0 ns (−34%) | 46.3 ns (−39%) |
+| Nodes (working set raw) | raw `T*` p50 | `ptr` Δp50 | Δp99 | `nonnull_ptr` Δp50 | Δp99 |
+|---|---:|---:|---:|---:|---:|
+| 1 Ki (16 KiB, L1) | 1.21 ns | +57% | +35% | +17% | +2% |
+| 16 Ki (256 KiB, L2) | 3.27 ns | +10% | +7% | −4% | −3% |
+| 256 Ki (4 MiB, L3) | 14.2 ns | −4% | −36% | −7% | −35% |
+| 4 Mi (64 MiB, DRAM) | 88.4 ns | −7% | −4% | −7% | −5% |
 
 The decompression add and the null check sit on the critical path of a
-dependent load. That only shows when everything is in L1. With 56-byte
-payloads (64 B nodes either way) the difference is within ±8%.
+dependent load. That only shows when everything is in L1 or L2;
+`nonnull_ptr`, which has no null check, costs 17% in L1 and nothing
+beyond. From L3 on, the smaller nodes win, most of all in the tail. With
+56-byte payloads (64 B nodes either way) the median differs by at most
++15% (in L1, `ptr`) and is otherwise within ±8%.
 
 ## Building
 
@@ -204,7 +272,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build              # unit tests + examples
 ./build/bench_rss                   # memory, one child process per config
-./build/bench_runtime [elements]    # time
+./build/bench_runtime [elements] [epochs] [list|map|arithmetic|chase]
 ```
 
 Coverage (clang and llvm-cov; HTML report in `build-coverage/`):
