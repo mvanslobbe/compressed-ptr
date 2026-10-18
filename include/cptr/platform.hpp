@@ -13,6 +13,42 @@
 #  define CPTR_ASSERT(cond, msg) assert((cond) && msg)
 #endif
 
+// Checks that catch pointers from outside a cage: compressing one, freeing
+// one, or building a nonnull_ptr from null. They are assertions by default.
+// Define CPTR_CHECKED to keep them in release builds too, where a failure
+// prints the message and aborts. Each costs a compare and a branch that is
+// never taken. Define CPTR_CHECK yourself to handle failures differently;
+// it must not return.
+#ifndef CPTR_CHECK
+#  if defined(CPTR_CHECKED)
+#    include <cstdio>
+#    include <cstdlib>
+#    define CPTR_CHECK(cond, msg) \
+      ((cond) ? (void)0 : ::cptr::detail::check_failed(msg))
+namespace cptr::detail {
+[[noreturn]] inline void check_failed(const char* msg) noexcept {
+  std::fprintf(stderr, "cptr: %s\n", msg);
+  std::abort();
+}
+}  // namespace cptr::detail
+#  else
+#    define CPTR_CHECK(cond, msg) CPTR_ASSERT(cond, msg)
+#  endif
+#endif
+
+// Gives a cage and its tag default visibility, so that every shared library
+// built with -fvisibility=hidden still shares one cage with the rest of the
+// process. Put it on your own cage tags too:
+//
+//   struct CPTR_VISIBLE my_cage : cptr::cage<my_cage> {};
+//
+// Windows DLLs do not merge such symbols; see the README.
+#if !defined(_WIN32) && (defined(__GNUC__) || defined(__clang__))
+#  define CPTR_VISIBLE __attribute__((visibility("default")))
+#else
+#  define CPTR_VISIBLE
+#endif
+
 #if defined(_WIN32)
 #  ifndef NOMINMAX
 #    define NOMINMAX

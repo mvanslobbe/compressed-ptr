@@ -55,6 +55,38 @@ TEST(derived_to_base_conversion) {
   cptr::destroy(d);
 }
 
+namespace {
+struct left_base {
+  long l = 1;
+};
+struct right_base {
+  long r = 2;
+};
+struct two_bases : left_base, right_base {};
+}  // namespace
+
+// cv and void conversions copy the offset; a base at a non-zero offset must
+// still be adjusted.
+TEST(conversions_keep_or_adjust_the_offset) {
+  cptr::ptr<two_bases> d = cptr::make<two_bases>();
+  cptr::ptr<const two_bases> c = d;
+  cptr::ptr<void> v = d;
+  cptr::ptr<const void> cv = c;
+  CHECK(c.bits() == d.bits());
+  CHECK(v.bits() == d.bits());
+  CHECK(cv.bits() == d.bits());
+  cptr::ptr<right_base> r = d;
+  CHECK(r.get() == static_cast<right_base*>(d.get()));
+  CHECK(r.bits() == d.bits() + sizeof(left_base));
+  CHECK(r->r == 2);
+  cptr::ptr<const right_base> cr = c;
+  CHECK(cr.bits() == r.bits());
+  cptr::ptr<two_bases> null;
+  cptr::ptr<right_base> null_base = null;
+  CHECK(null_base == nullptr);
+  cptr::destroy(d);
+}
+
 TEST(ordering_matches_addresses) {
   auto a = cptr::make<int>(1);
   auto b = cptr::make<int>(2);
@@ -247,4 +279,38 @@ TEST(ptr_is_a_random_access_iterator) {
   std::sort(block, block + 4);
   CHECK(block[0] == 0 && block[3] == 3);
   cptr::fancy_allocator<int>().deallocate(block, 4);
+}
+
+namespace {
+template <class A, class B>
+concept ternary_compiles = requires(bool c, A a, B b) { c ? a : b; };
+}  // namespace
+
+// ptr converts both ways, so mixing it with T* in ?: is ambiguous, and any
+// T* compresses silently. strict_ptr only converts to T* implicitly.
+static_assert(!ternary_compiles<cptr::ptr<int>, int*>);
+static_assert(ternary_compiles<cptr::strict_ptr<int>, int*>);
+static_assert(std::is_convertible_v<int*, cptr::ptr<int>>);
+static_assert(!std::is_convertible_v<int*, cptr::strict_ptr<int>>);
+static_assert(!std::is_assignable_v<cptr::strict_ptr<int>&, int*>);
+static_assert(std::is_convertible_v<cptr::strict_ptr<int>, int*>);
+static_assert(sizeof(cptr::strict_ptr<int>) == 4);
+
+TEST(strict_ptr_needs_explicit_compression) {
+  int* raw = static_cast<int*>(cptr::default_cage::allocate(sizeof(int)));
+  *raw = 3;
+  cptr::strict_ptr<int> s(raw);
+  CHECK(*s == 3);
+  int* other = nullptr;
+  int* picked = s ? s : other;  // ?: works: s converts to int*
+  CHECK(picked == raw);
+  cptr::ptr<int> loose = s;  // converts to and from ptr
+  cptr::strict_ptr<int> back = loose;
+  CHECK(back == s);
+  cptr::strict_ptr<int> from_make = cptr::make<int>(4);
+  CHECK(*from_make == 4);
+  s = nullptr;
+  CHECK(!s);
+  cptr::destroy(from_make);
+  cptr::default_cage::deallocate(raw);
 }

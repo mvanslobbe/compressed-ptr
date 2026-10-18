@@ -75,7 +75,7 @@ allocator, several independent cages, and containers. No V8 code is used.
 | Header | Contents |
 |---|---|
 | `cptr/cage.hpp` | `cage<Tag, SizeLog2 = 32, Shift = 0>`, `default_cage`: reserve, allocate, compress, decompress, `pmr` resource, statistics |
-| `cptr/ptr.hpp` | `ptr<T, Cage>` (nullable, 4 B), `nonnull_ptr<T, Cage>`, `make<T>()`, `destroy()`, `std::hash` |
+| `cptr/ptr.hpp` | `ptr<T, Cage>` (nullable, 4 B), `strict_ptr<T, Cage>` (compressing a `T*` is explicit), `nonnull_ptr<T, Cage>`, `make<T>()`, `destroy()`, `std::hash` |
 | `cptr/pack.hpp` | `ptr_pair` (two pointers in 8 B), `ptr_with_payload` (pointer + 32-bit value in 8 B), `tagged_ptr` (pointer + tag bits in 4 B), `atomic_ptr` (lock-free CAS on 4 B) |
 | `cptr/allocator.hpp` | `cptr::allocator<T>`, so any std container's elements live in the cage |
 | `cptr/fancy_allocator.hpp` | `cptr::fancy_allocator<T>` with `pointer = cptr::ptr<T>`, for containers that support fancy pointers |
@@ -272,7 +272,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build              # unit tests + examples
 ./build/bench_rss                   # memory, one child process per config
-./build/bench_runtime [elements] [epochs] [list|map|arithmetic|chase]
+./build/bench_runtime [elements] [epochs] [list|map|arithmetic|conversion|chase]
 ```
 
 Coverage (clang and llvm-cov; HTML report in `build-coverage/`):
@@ -303,7 +303,17 @@ AddressSanitizer, UBSan and coverage on Linux.
 ## Rules and limitations
 
 * **Only cage memory can be compressed.** Compressing a stack or `malloc`
-  pointer is a bug. Debug builds catch it with an assertion.
+  pointer is a bug. Debug builds catch it with an assertion. Define
+  `CPTR_CHECKED` to keep that check (and the checks on `deallocate` and
+  `nonnull_ptr`) in release builds, where a failure prints a message and
+  aborts. The cost is one compare and branch per compression, which did
+  not show in the list benchmark (p50 to p95 unchanged).
+* **`ptr` converts implicitly both ways** between `T*` and `ptr<T>`, so it
+  can replace a raw pointer member with few other changes. The cost is that
+  any `T*` compresses without notice, and `cond ? p : raw` with a `ptr`
+  and a `T*` is ambiguous. `strict_ptr<T>` is the same type with an
+  explicit `strict_ptr<T>(raw)` constructor and no assignment from `T*`;
+  it still converts to `T*` and to and from `ptr<T>` implicitly.
 * **64-bit only.** A 32-bit target already has 4-byte pointers.
 * **Standard library containers mostly ignore fancy pointers** for their
   internal links, so `cptr::fancy_allocator` does not shrink `std::list` or
@@ -315,6 +325,18 @@ AddressSanitizer, UBSan and coverage on Linux.
   built for heavy multi-threaded allocation. Freed small blocks are reused
   but their pages are not returned to the OS. Large blocks are decommitted
   on free, and adjacent free runs are merged.
+* **Shared libraries.** A cage's base and bookkeeping are static members
+  of a header-only template, so every shared library gets its own copy
+  unless the dynamic linker merges them. The cage templates and
+  `default_cage` are marked `CPTR_VISIBLE` (default visibility), so on
+  Linux and macOS they are merged even when libraries are built with
+  `-fvisibility=hidden`; mark your own tags the same way:
+  `struct CPTR_VISIBLE my_cage : cptr::cage<my_cage> {};`. Libraries
+  loaded with `dlopen(RTLD_LOCAL)` may still get their own copy.
+  **Windows DLLs never share one**: each DLL that uses a cage has its own,
+  so keep everything that compresses or decompresses a given cage in one
+  module. Debug builds assert when a module decompresses in a cage it never
+  initialised, which is how this usually shows.
 * **The cage's bookkeeping is never destroyed,** so containers with static
   storage duration can still free into it during program exit.
 * **The cage size is fixed when the cage is reserved.** The default is

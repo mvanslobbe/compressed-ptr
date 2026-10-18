@@ -34,6 +34,26 @@ if(COMPRESSED_PTR_BUILD_TESTS)
   target_link_libraries(compressed_ptr_failure_tests PRIVATE compressed_ptr
     Threads::Threads)
   add_test(NAME compressed_ptr_failure_tests COMMAND compressed_ptr_failure_tests)
+
+  add_executable(compressed_ptr_checked_tests tests/test_main.cpp
+    tests/test_checked.cpp)
+  target_link_libraries(compressed_ptr_checked_tests PRIVATE compressed_ptr)
+  add_test(NAME compressed_ptr_checked_tests COMMAND compressed_ptr_checked_tests)
+
+  # Two shared libraries with hidden visibility must share one cage. Windows
+  # DLLs never share one; see the README.
+  if(NOT WIN32)
+  foreach(lib a b)
+    add_library(cptr_shared_${lib} SHARED tests/shared/lib_${lib}.cpp)
+    target_link_libraries(cptr_shared_${lib} PRIVATE compressed_ptr)
+    set_target_properties(cptr_shared_${lib} PROPERTIES
+      CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+  endforeach()
+  add_executable(compressed_ptr_shared_test tests/shared/main.cpp)
+  target_link_libraries(compressed_ptr_shared_test PRIVATE compressed_ptr
+    cptr_shared_a cptr_shared_b)
+  add_test(NAME compressed_ptr_shared_test COMMAND compressed_ptr_shared_test)
+  endif()
 endif()
 
 if(COMPRESSED_PTR_BUILD_BENCHMARKS)

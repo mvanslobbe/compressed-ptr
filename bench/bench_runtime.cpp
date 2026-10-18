@@ -13,7 +13,7 @@
 // turn, so that frequency changes and other drift during the run affect all
 // of them alike.
 //
-// Usage: bench_runtime [elements] [epochs] [list|map|arithmetic|chase]
+// Usage: bench_runtime [elements] [epochs] [list|map|arithmetic|conversion|chase]
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include "third_party/nanobench.h"
 
@@ -338,6 +338,50 @@ void bench_arithmetic(std::size_t epochs) {
   }
 }
 
+// Converting to ptr<const T> and ptr<void>, against a plain copy.
+void bench_conversion(std::size_t epochs) {
+  print_header("Conversion of 4,096 `ptr<int>`, ns per conversion");
+  constexpr std::size_t kCount = 4096;
+  std::vector<cptr::ptr<int>> v;
+  for (std::size_t i = 0; i < kCount; i++) {
+    v.push_back(cptr::make<int>(int(i)));
+  }
+  auto d = measure(
+      epochs, kCount,
+      {[&] {
+         std::uint64_t sum = 0;
+         for (const auto& p : v) {
+           cptr::ptr<int> q = p;
+           sum += q.bits();
+         }
+         doNotOptimizeAway(sum);
+       },
+       [&] {
+         std::uint64_t sum = 0;
+         for (const auto& p : v) {
+           cptr::ptr<const int> q = p;
+           sum += q.bits();
+         }
+         doNotOptimizeAway(sum);
+       },
+       [&] {
+         std::uint64_t sum = 0;
+         for (const auto& p : v) {
+           cptr::ptr<void> q = p;
+           sum += q.bits();
+         }
+         doNotOptimizeAway(sum);
+       }});
+  const char* names[] = {"copy to `ptr<int>`", "to `ptr<const int>`",
+                         "to `ptr<void>`"};
+  for (std::size_t i = 0; i < 3; i++) {
+    print_row(names[i], d[i], i == 0 ? nullptr : &d[0]);
+  }
+  for (auto& p : v) {
+    cptr::destroy(p);
+  }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -388,6 +432,9 @@ int main(int argc, char** argv) {
 
   if (wanted("arithmetic")) {
     bench_arithmetic(epochs);
+  }
+  if (wanted("conversion")) {
+    bench_conversion(epochs);
   }
   if (wanted("chase")) {
     bench_chase<4>(epochs);

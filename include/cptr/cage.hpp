@@ -107,7 +107,7 @@ static_assert(kClassSizes.back() == kMaxSmall && kMaxSmall % 4096 == 0);
 //
 //   struct my_heap : cptr::cage<my_heap> {};
 template <class Tag, unsigned SizeLog2 = 32, unsigned Shift = 0>
-class cage {
+class CPTR_VISIBLE cage {
   static_assert(sizeof(void*) == 8, "cages need a 64-bit address space");
   static_assert(SizeLog2 >= 24, "a cage must be at least 16 MiB");
   static_assert(SizeLog2 <= 32 + Shift,
@@ -163,21 +163,23 @@ class cage {
     if (!p) {
       return 0;
     }
-    CPTR_ASSERT(contains(p), "pointer is outside the cage");
+    CPTR_CHECK(contains(p), "pointer is outside the cage");
     std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
-    CPTR_ASSERT((offset & (granularity - 1)) == 0,
-                "pointer is not aligned to the cage granularity");
+    CPTR_CHECK((offset & (granularity - 1)) == 0,
+               "pointer is not aligned to the cage granularity");
     return static_cast<std::uint32_t>(offset >> Shift);
   }
 
   // Zero maps back to nullptr. Compilers turn this into a conditional move,
   // which keeps the null check off the critical path of a pointer chase.
   static void* decompress(std::uint32_t bits) noexcept {
+    CPTR_ASSERT(bits == 0 || base_ != 0, kUninitialised);
     std::uintptr_t full = base_ + (std::uintptr_t(bits) << Shift);
     return reinterpret_cast<void*>(bits ? full : std::uintptr_t(0));
   }
 
   static void* decompress_nonnull(std::uint32_t bits) noexcept {
+    CPTR_ASSERT(base_ != 0, kUninitialised);
     return reinterpret_cast<void*>(base_ + (std::uintptr_t(bits) << Shift));
   }
 
@@ -219,7 +221,7 @@ class cage {
     if (!p) {
       return;
     }
-    CPTR_ASSERT(contains(p), "pointer was not allocated from this cage");
+    CPTR_CHECK(contains(p), "pointer was not allocated from this cage");
     state_type& st = state();
     detail::lock_guard g(st.lock);
     std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
@@ -478,11 +480,15 @@ class cage {
     remember_free_run(first, count);
   }
 
+  static constexpr const char* kUninitialised =
+      "decompressing in a cage that was never initialised in this module; "
+      "is this a separate copy of the cage, such as in another Windows DLL?";
+
   inline static std::uintptr_t base_ = 0;
   inline static std::atomic<bool> ready_{false};
 };
 
 // The default cage: 4 GiB, byte granularity.
-struct default_cage : cage<default_cage> {};
+struct CPTR_VISIBLE default_cage : cage<default_cage> {};
 
 }  // namespace cptr

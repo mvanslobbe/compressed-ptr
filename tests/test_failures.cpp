@@ -27,6 +27,7 @@ struct fresh_large : cptr::cage<fresh_large, 24> {};
 struct reuse : cptr::cage<reuse, 24> {};
 struct racy : cptr::cage<racy, 24> {};
 struct unreservable : cptr::cage<unreservable> {};
+struct never_initialised : cptr::cage<never_initialised, 24> {};
 struct alignas(4) four {
   int v;
 };
@@ -197,4 +198,18 @@ TEST(null_dereference_faults) {
   CHECK(WIFSIGNALED(status) &&
         (WTERMSIG(status) == SIGSEGV || WTERMSIG(status) == SIGBUS));
 #endif
+}
+
+// A cage used in a module that never initialised it, as happens when a
+// Windows DLL has its own copy of the cage, is caught in debug builds.
+TEST(assert_decompress_in_uninitialised_cage) {
+  CHECK(asserts_from([] {
+          (void)never_initialised::decompress(64);
+        }) == 1);
+  CHECK(asserts_from([] {
+          (void)never_initialised::decompress_nonnull(64);
+        }) == 1);
+  CHECK(asserts_from([] {
+          (void)never_initialised::decompress(0);
+        }) == 0);
 }
