@@ -314,3 +314,49 @@ TEST(strict_ptr_needs_explicit_compression) {
   cptr::destroy(from_make);
   cptr::default_cage::deallocate(raw);
 }
+
+// atomic_ptr offers the std::atomic<T*> interface that applies to it.
+static_assert(cptr::atomic_ptr<int>::is_always_lock_free);
+static_assert(requires(cptr::atomic_ptr<int>& a, int*& e, int* d) {
+  a.compare_exchange_weak(e, d, std::memory_order_acq_rel,
+                          std::memory_order_acquire);
+  a.compare_exchange_strong(e, d, std::memory_order_acq_rel,
+                            std::memory_order_acquire);
+  a.wait(d);
+  a.notify_one();
+  a.notify_all();
+  { a.is_lock_free() } -> std::same_as<bool>;
+  { static_cast<int*>(a) } -> std::same_as<int*>;
+  { a = d } -> std::same_as<int*>;
+});
+
+TEST(atomic_ptr_std_interface) {
+  auto* a = static_cast<int*>(cptr::default_cage::allocate(sizeof(int)));
+  auto* b = static_cast<int*>(cptr::default_cage::allocate(sizeof(int)));
+  cptr::atomic_ptr<int> p(a);
+  CHECK(p.is_lock_free());
+  int* expected = b;
+  CHECK(!p.compare_exchange_strong(expected, b, std::memory_order_acq_rel,
+                                   std::memory_order_acquire));
+  CHECK(expected == a);
+  CHECK(p.compare_exchange_strong(expected, b, std::memory_order_acq_rel,
+                                  std::memory_order_acquire));
+  expected = b;
+  while (!p.compare_exchange_weak(expected, a, std::memory_order_release,
+                                  std::memory_order_relaxed)) {
+  }
+  CHECK(static_cast<int*>(p) == a);
+  CHECK((p = b) == b);
+  CHECK(p.load() == b);
+
+  // wait() returns once another thread has changed the value and notified.
+  std::thread waker([&] {
+    p.store(a, std::memory_order_release);
+    p.notify_all();
+  });
+  p.wait(b, std::memory_order_acquire);
+  CHECK(p.load() == a);
+  waker.join();
+  cptr::default_cage::deallocate(a);
+  cptr::default_cage::deallocate(b);
+}

@@ -301,12 +301,13 @@ TEST(filling_a_cage_span_by_span) {
   using C = tiny_cage;
   std::vector<void*> blocks;
   // Spans larger than the largest size class each take one whole span; the
-  // final commit step is clipped at the end of the cage.
+  // final commit step is clipped at the last usable span. The first and last
+  // spans are never handed out.
   while (void* p = C::try_allocate(C::span_size)) {
     blocks.push_back(p);
   }
-  CHECK(blocks.size() == C::span_count - 1);
-  CHECK(C::committed_bytes() == C::size - C::span_size);
+  CHECK(blocks.size() == C::span_count - 2);
+  CHECK(C::committed_bytes() == C::usable_end - C::span_size);
   // No room for a new slab either.
   CHECK(C::try_allocate(16, 8) == nullptr);
   for (void* p : blocks) {
@@ -314,8 +315,9 @@ TEST(filling_a_cage_span_by_span) {
   }
   CHECK(C::committed_bytes() == 0);
   // Everything merged back into one run.
-  void* all = C::try_allocate(C::size - C::span_size);
+  void* all = C::try_allocate(C::usable_end - C::span_size);
   CHECK(all != nullptr);
+  CHECK(C::try_allocate(C::span_size) == nullptr);
   C::deallocate(all);
 }
 

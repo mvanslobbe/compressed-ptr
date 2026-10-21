@@ -120,9 +120,12 @@ class CPTR_VISIBLE cage {
   static constexpr unsigned shift = Shift;
   // Every compressible pointer must be aligned to this.
   static constexpr std::size_t granularity = std::size_t(1) << Shift;
-  // The first span is never handed out, so offset zero stays nullptr.
+  // The first span is never handed out, so offset zero stays nullptr. The
+  // last is not either, so that one past the end of any block is inside the
+  // cage and compresses; for a 4 GiB cage the end itself would wrap to 0.
   static constexpr std::size_t span_size = 64 * 1024;
   static constexpr std::size_t span_count = size / span_size;
+  static constexpr std::size_t usable_end = size - span_size;
 
   // Reserve the cage. Called lazily by allocate(); call it early to fail
   // fast. Returns false if the address space could not be reserved.
@@ -386,7 +389,7 @@ class CPTR_VISIBLE cage {
       return first;
     }
     std::size_t bytes = std::size_t(count) * span_size;
-    if (st.bump + bytes > size) {
+    if (st.bump + bytes > usable_end) {
       return 0;
     }
     std::size_t start = st.bump;
@@ -394,8 +397,8 @@ class CPTR_VISIBLE cage {
     if (needed > st.commit_end) {
       std::size_t grow = needed - st.commit_end;
       grow = (grow + kCommitStep - 1) / kCommitStep * kCommitStep;
-      if (st.commit_end + grow > size) {
-        grow = size - st.commit_end;
+      if (st.commit_end + grow > usable_end) {
+        grow = usable_end - st.commit_end;
       }
       if (!detail::commit(reinterpret_cast<void*>(base_ + st.commit_end),
                           grow)) {

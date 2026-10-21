@@ -100,39 +100,88 @@ class tagged_ptr {
 template <class T, class Cage = default_cage>
 class atomic_ptr {
  public:
+  static constexpr bool is_always_lock_free =
+      std::atomic<std::uint32_t>::is_always_lock_free;
+
   atomic_ptr() noexcept = default;
   explicit atomic_ptr(T* p) noexcept : bits_(Cage::compress(p)) {}
+  atomic_ptr(const atomic_ptr&) = delete;
+  atomic_ptr& operator=(const atomic_ptr&) = delete;
+
+  bool is_lock_free() const noexcept { return bits_.is_lock_free(); }
 
   T* load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
-    return static_cast<T*>(Cage::decompress(bits_.load(order)));
+    return unpack(bits_.load(order));
   }
+  operator T*() const noexcept { return load(); }
   void store(T* p,
              std::memory_order order = std::memory_order_seq_cst) noexcept {
     bits_.store(Cage::compress(p), order);
   }
+  T* operator=(T* p) noexcept {
+    store(p);
+    return p;
+  }
   T* exchange(T* p,
               std::memory_order order = std::memory_order_seq_cst) noexcept {
-    return static_cast<T*>(
-        Cage::decompress(bits_.exchange(Cage::compress(p), order)));
+    return unpack(bits_.exchange(Cage::compress(p), order));
+  }
+
+  bool compare_exchange_weak(T*& expected, T* desired,
+                             std::memory_order success,
+                             std::memory_order failure) noexcept {
+    std::uint32_t e = Cage::compress(expected);
+    bool ok = bits_.compare_exchange_weak(e, Cage::compress(desired), success,
+                                          failure);
+    expected = unpack(e);
+    return ok;
   }
   bool compare_exchange_weak(
       T*& expected, T* desired,
       std::memory_order order = std::memory_order_seq_cst) noexcept {
+    return compare_exchange_weak(expected, desired, order,
+                                 failure_order(order));
+  }
+  bool compare_exchange_strong(T*& expected, T* desired,
+                               std::memory_order success,
+                               std::memory_order failure) noexcept {
     std::uint32_t e = Cage::compress(expected);
-    bool ok = bits_.compare_exchange_weak(e, Cage::compress(desired), order);
-    expected = static_cast<T*>(Cage::decompress(e));
+    bool ok = bits_.compare_exchange_strong(e, Cage::compress(desired),
+                                            success, failure);
+    expected = unpack(e);
     return ok;
   }
   bool compare_exchange_strong(
       T*& expected, T* desired,
       std::memory_order order = std::memory_order_seq_cst) noexcept {
-    std::uint32_t e = Cage::compress(expected);
-    bool ok = bits_.compare_exchange_strong(e, Cage::compress(desired), order);
-    expected = static_cast<T*>(Cage::decompress(e));
-    return ok;
+    return compare_exchange_strong(expected, desired, order,
+                                   failure_order(order));
   }
 
+  // Blocks until the value is no longer |old| (and a notify call wakes it).
+  void wait(T* old, std::memory_order order =
+                        std::memory_order_seq_cst) const noexcept {
+    bits_.wait(Cage::compress(old), order);
+  }
+  void notify_one() noexcept { bits_.notify_one(); }
+  void notify_all() noexcept { bits_.notify_all(); }
+
  private:
+  static T* unpack(std::uint32_t bits) noexcept {
+    return static_cast<T*>(Cage::decompress(bits));
+  }
+  // The failure order std::atomic derives from a single order.
+  static constexpr std::memory_order failure_order(
+      std::memory_order order) noexcept {
+    if (order == std::memory_order_acq_rel) {
+      return std::memory_order_acquire;
+    }
+    if (order == std::memory_order_release) {
+      return std::memory_order_relaxed;
+    }
+    return order;
+  }
+
   std::atomic<std::uint32_t> bits_{0};
 };
 

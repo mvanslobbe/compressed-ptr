@@ -28,6 +28,8 @@ struct reuse : cptr::cage<reuse, 24> {};
 struct racy : cptr::cage<racy, 24> {};
 struct unreservable : cptr::cage<unreservable> {};
 struct never_initialised : cptr::cage<never_initialised, 24> {};
+struct filled : cptr::cage<filled, 24> {};
+struct filled_wide : cptr::cage<filled_wide, 32> {};
 struct alignas(4) four {
   int v;
 };
@@ -212,4 +214,32 @@ TEST(assert_decompress_in_uninitialised_cage) {
   CHECK(asserts_from([] {
           (void)never_initialised::decompress(0);
         }) == 0);
+}
+
+// One past the end of a block is a valid pointer and must compress and
+// round-trip, even for the block that reaches furthest into the cage. For a
+// 4 GiB cage the offset of the cage's end, 2^32, would wrap to 0, which is
+// nullptr.
+template <class Cage>
+void check_end_of_largest_block() {
+  std::size_t bytes = Cage::size - Cage::span_size;
+  char* p = nullptr;
+  while (bytes >= Cage::span_size &&
+         (p = static_cast<char*>(Cage::try_allocate(bytes))) == nullptr) {
+    bytes -= Cage::span_size;
+  }
+  CHECK(p != nullptr);
+  char* end = p + bytes;
+  CHECK(asserts_from([] {}) == 0);
+  int before = g_assert_failures;
+  std::uint32_t bits = Cage::compress(end);
+  CHECK(g_assert_failures == before);
+  CHECK(bits != 0);
+  CHECK(Cage::decompress(bits) == end);
+  Cage::deallocate(p);
+}
+
+TEST(end_of_last_block_compresses) {
+  check_end_of_largest_block<filled>();
+  check_end_of_largest_block<filled_wide>();
 }
