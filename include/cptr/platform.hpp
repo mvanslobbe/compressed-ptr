@@ -58,6 +58,7 @@ namespace cptr::detail {
 #  endif
 #  include <windows.h>
 #else
+#  include <pthread.h>
 #  include <sys/mman.h>
 #  include <unistd.h>
 #endif
@@ -139,6 +140,21 @@ inline void decommit(void* p, std::size_t size) noexcept {
   flags |= MAP_NORESERVE;
 #  endif
   mmap(p, size, PROT_NONE, flags, -1, 0);
+#endif
+}
+
+// Give the pages of a committed range back to the OS. On Linux and macOS
+// the range stays mapped and reads as zeros afterwards; unlike decommit()
+// this does not split the mapping, so it is much cheaper for small ranges.
+// The caller must commit() the range again before reusing it, which is
+// needed on Windows, where this decommits.
+inline void purge(void* p, std::size_t size) noexcept {
+#if defined(_WIN32)
+  VirtualFree(p, size, MEM_DECOMMIT);
+#elif defined(__APPLE__)
+  madvise(p, size, MADV_FREE_REUSABLE);
+#else
+  madvise(p, size, MADV_DONTNEED);
 #endif
 }
 

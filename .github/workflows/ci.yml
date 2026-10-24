@@ -52,6 +52,28 @@ jobs:
           ! ./uaf 2> uaf.log
           grep -q "use-after-poison" uaf.log
 
+  thread-sanitizer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # TSan in clang 18 cannot handle the runner's default ASLR entropy.
+      - name: Reduce ASLR entropy
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_CXX_FLAGS="-fsanitize=thread"
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        env:
+          TSAN_OPTIONS: halt_on_error=1
+        run: ctest --test-dir build --output-on-failure
+      - name: Multi-threaded benchmark
+        env:
+          TSAN_OPTIONS: halt_on_error=1
+        run: ./build/bench_runtime 16384 64 threads
+
   coverage:
     runs-on: ubuntu-24.04
     steps:

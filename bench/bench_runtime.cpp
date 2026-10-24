@@ -13,17 +13,20 @@
 // turn, so that frequency changes and other drift during the run affect all
 // of them alike.
 //
-// Usage: bench_runtime [elements] [epochs] [list|map|arithmetic|conversion|chase]
+// Usage: bench_runtime [elements] [epochs] [list|map|arithmetic|conversion|allocator|threads|chase]
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include "third_party/nanobench.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <list>
 #include <map>
+#include <thread>
 #include <vector>
 
 #include "common.hpp"
@@ -338,6 +341,126 @@ void bench_arithmetic(std::size_t epochs) {
   }
 }
 
+// Allocator churn: a heap of 65,536 live blocks of 16 to 256 bytes; each
+// operation frees a random block and allocates a new one in its place.
+struct churn {
+  void* (*alloc)(std::size_t);
+  void (*release)(void*);
+  std::vector<void*> live;
+  std::vector<std::uint32_t> slots;
+  std::vector<std::uint16_t> sizes;
+  std::size_t pos = 0;
+
+  churn(void* (*a)(std::size_t), void (*r)(void*),
+        std::uint32_t live_blocks = 1 << 16, std::uint64_t seed = 5)
+      : alloc(a), release(r) {
+    const std::uint32_t kLive = live_blocks;
+    slots = bench::random_permutation(kLive, seed);
+    auto order = bench::random_permutation(kLive, seed + 1);
+    for (std::uint32_t i = 0; i < kLive; i++) {
+      sizes.push_back(std::uint16_t(16 + order[i] % 241));
+      live.push_back(alloc(sizes.back()));
+    }
+  }
+  ~churn() {
+    for (void* p : live) {
+      release(p);
+    }
+  }
+  churn(const churn&) = delete;
+  churn& operator=(const churn&) = delete;
+
+  void operator()() {
+    for (std::size_t i = 0; i < kChunk; i++) {
+      std::uint32_t slot = slots[pos];
+      release(live[slot]);
+      live[slot] = alloc(sizes[pos]);
+      pos = pos + 1 == slots.size() ? 0 : pos + 1;
+    }
+  }
+};
+
+void bench_allocator(std::size_t epochs) {
+  print_header("Allocator: free a random block of 65,536 and allocate 16 to "
+               "256 bytes, ns per free and allocate");
+  churn m([](std::size_t n) { return std::malloc(n); },
+          [](void* p) { std::free(p); });
+  churn c([](std::size_t n) { return cptr::default_cage::allocate(n); },
+          [](void* p) { cptr::default_cage::deallocate(p); });
+  auto d = measure(epochs, kChunk, {[&] { m(); }, [&] { c(); }});
+  print_row("`malloc` / `free`", d[0], nullptr);
+  print_row("cage `allocate` / `deallocate`", d[1], &d[0]);
+}
+
+// The same churn on 1 to 8 threads at once, each with its own heap of
+// 16,384 blocks. Each thread measures its own epochs; the percentiles are
+// over all threads' epochs. malloc and the cage alternate in four rounds.
+// nanobench keeps global state and cannot run on several threads at once,
+// so each epoch is timed with std::chrono::steady_clock, the clock
+// nanobench uses.
+void bench_threads(std::size_t epochs) {
+  print_header("Allocator churn on several threads, ns per free and "
+               "allocate on each thread");
+  using alloc_fn = void* (*)(std::size_t);
+  using free_fn = void (*)(void*);
+  struct variant {
+    alloc_fn alloc;
+    free_fn release;
+  };
+  const variant variants[] = {
+      {[](std::size_t n) { return std::malloc(n); },
+       [](void* p) { std::free(p); }},
+      {[](std::size_t n) { return cptr::default_cage::allocate(n); },
+       [](void* p) { cptr::default_cage::deallocate(p); }}};
+  for (unsigned threads : {1u, 2u, 4u, 8u}) {
+    distribution d[2];
+    constexpr int kRounds = 4;
+    std::size_t per_thread = std::max<std::size_t>(
+        epochs / kRounds / kBurst * kBurst, kBurst);
+    for (int round = 0; round < kRounds; round++) {
+      for (int v = 0; v < 2; v++) {
+        std::vector<distribution> results(threads);
+        std::atomic<unsigned> ready{0};
+        std::vector<std::thread> pool;
+        for (unsigned t = 0; t < threads; t++) {
+          pool.emplace_back([&, t] {
+            churn heap(variants[v].alloc, variants[v].release, 1 << 14,
+                       std::uint64_t(t) + 7);
+            ready++;
+            while (ready.load() < threads) {
+            }
+            distribution& out = results[t];
+            out.ns.reserve(per_thread);
+            for (std::size_t e = 0; e < per_thread; e++) {
+              auto start = std::chrono::steady_clock::now();
+              heap();
+              auto stop = std::chrono::steady_clock::now();
+              out.ns.push_back(
+                  std::chrono::duration<double, std::nano>(stop - start)
+                      .count() /
+                  double(kChunk));
+            }
+          });
+        }
+        for (auto& th : pool) {
+          th.join();
+        }
+        for (auto& r : results) {
+          d[v].ns.insert(d[v].ns.end(), r.ns.begin(), r.ns.end());
+        }
+      }
+    }
+    for (auto& x : d) {
+      std::sort(x.ns.begin(), x.ns.end());
+    }
+    char name[64];
+    std::snprintf(name, sizeof name, "%u threads, `malloc` / `free`", threads);
+    print_row(name, d[0], nullptr);
+    std::snprintf(name, sizeof name, "%u threads, cage", threads);
+    print_row(name, d[1], &d[0]);
+  }
+}
+
 // Converting to ptr<const T> and ptr<void>, against a plain copy.
 void bench_conversion(std::size_t epochs) {
   print_header("Conversion of 4,096 `ptr<int>`, ns per conversion");
@@ -435,6 +558,12 @@ int main(int argc, char** argv) {
   }
   if (wanted("conversion")) {
     bench_conversion(epochs);
+  }
+  if (wanted("allocator")) {
+    bench_allocator(epochs);
+  }
+  if (wanted("threads")) {
+    bench_threads(epochs);
   }
   if (wanted("chase")) {
     bench_chase<4>(epochs);

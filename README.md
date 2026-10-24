@@ -272,7 +272,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build              # unit tests + examples
 ./build/bench_rss                   # memory, one child process per config
-./build/bench_runtime [elements] [epochs] [list|map|arithmetic|conversion|chase]
+./build/bench_runtime [elements] [epochs] [list|map|arithmetic|conversion|allocator|threads|chase]
 ```
 
 Coverage (clang and llvm-cov; HTML report in `build-coverage/`):
@@ -298,7 +298,7 @@ target_link_libraries(app PRIVATE compressed_ptr::compressed_ptr)
 
 Supported platforms: Linux, macOS and Windows on x86-64 and arm64, with
 GCC 11+, Clang 16+ and MSVC 2022. CI runs the tests on all six, plus
-AddressSanitizer, UBSan and coverage on Linux.
+AddressSanitizer, UBSan, ThreadSanitizer and coverage on Linux.
 
 ## Rules and limitations
 
@@ -321,10 +321,16 @@ AddressSanitizer, UBSan and coverage on Linux.
   the allocator's pointer type (such as plf::list). Otherwise, put std
   containers' storage in the cage with `cptr::allocator` and refer to their
   elements with `cptr::ptr`.
-* **The allocator takes one lock per cage.** It is thread-safe but not
-  built for heavy multi-threaded allocation. Freed small blocks are reused
-  but their pages are not returned to the OS. Large blocks are decommitted
-  on free, and adjacent free runs are merged.
+* **Allocator.** Small blocks (up to 32 KiB) come from size-class slabs.
+  Each thread keeps a small cache of free blocks per size class, so most
+  allocations and frees take no lock; the cage-wide lock is taken once per
+  batch of blocks and for large allocations. Slabs whose blocks are all
+  free are kept for reuse for a quarter of a second (at most 64 MiB of
+  them), then their pages are given back to the OS. `cage::trim()` does
+  that at once and also returns the calling thread's cached blocks;
+  other threads' cached blocks go back when they exit. Large blocks are
+  decommitted on free, and adjacent free runs are merged. `fork()` is
+  safe: the child can allocate even if another thread held the lock.
 * **Shared libraries.** A cage's base and bookkeeping are static members
   of a header-only template, so every shared library gets its own copy
   unless the dynamic linker merges them. The cage templates and

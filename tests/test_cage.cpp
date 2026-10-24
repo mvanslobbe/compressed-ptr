@@ -13,6 +13,7 @@ struct small_cage : cptr::cage<small_cage, 24> {};
 struct wide_cage : cptr::cage<wide_cage, 35, 3> {};
 struct decommit_cage : cptr::cage<decommit_cage, 30> {};
 struct coalesce_cage : cptr::cage<coalesce_cage, 30> {};
+struct churn_cage : cptr::cage<churn_cage, 30> {};
 }  // namespace
 
 TEST(reserve_is_aligned) {
@@ -329,4 +330,60 @@ TEST(size_class_table) {
   for (std::size_t i = 1; i < sizes.size(); i++) {
     CHECK(sizes[i] > sizes[i - 1]);
   }
+}
+
+// Freeing every small block gives the slabs' memory back to the OS: at
+// once with trim(), and otherwise once the empty slabs have been unused for
+// a quarter of a second. The cage can be filled again afterwards.
+namespace {
+template <class C>
+std::size_t fill_and_free(std::vector<void*>& blocks) {
+  for (int i = 0; i < 200000; i++) {
+    blocks.push_back(C::allocate(std::size_t(16 + (i % 15) * 16)));
+  }
+  std::size_t peak = C::committed_bytes();
+  CHECK(peak >= std::size_t(200000) * 16);
+  // Free in an order unrelated to allocation order.
+  for (std::size_t i = 0; i < blocks.size(); i += 2) {
+    C::deallocate(blocks[i]);
+  }
+  for (std::size_t i = 1; i < blocks.size(); i += 2) {
+    C::deallocate(blocks[i]);
+  }
+  blocks.clear();
+  CHECK(C::allocated_bytes() == 0);
+  return peak;
+}
+}  // namespace
+
+TEST(freed_small_blocks_are_decommitted) {
+  using C = churn_cage;
+  std::vector<void*> blocks;
+  // At most one slab for each of the 15 size classes used may stay
+  // committed; each is a single span. The bump region also commits up to
+  // 1 MiB ahead.
+  constexpr std::size_t kKept = 15 * C::span_size + (1 << 20);
+  for (int round = 0; round < 2; round++) {
+    std::size_t peak = fill_and_free<C>(blocks);
+    std::size_t kept = C::committed_bytes();
+    C::trim();
+    std::printf("  round %d: committed %zu KiB at peak, %zu KiB after free, "
+                "%zu KiB after trim\n",
+                round, peak / 1024, kept / 1024, C::committed_bytes() / 1024);
+    CHECK(C::committed_bytes() <= kKept);
+  }
+  // Without trim(): after the retention time, the next slab that becomes
+  // empty purges the others.
+  (void)fill_and_free<C>(blocks);
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  for (int i = 0; i < 20000; i++) {
+    blocks.push_back(C::allocate(16));
+  }
+  for (void* p : blocks) {
+    C::deallocate(p);
+  }
+  blocks.clear();
+  std::printf("  after 300 ms: committed %zu KiB\n",
+              C::committed_bytes() / 1024);
+  CHECK(C::committed_bytes() <= kKept + 8 * C::span_size);
 }

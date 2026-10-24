@@ -29,6 +29,7 @@ struct racy : cptr::cage<racy, 24> {};
 struct unreservable : cptr::cage<unreservable> {};
 struct never_initialised : cptr::cage<never_initialised, 24> {};
 struct filled : cptr::cage<filled, 24> {};
+struct forked : cptr::cage<forked, 28> {};
 struct filled_wide : cptr::cage<filled_wide, 32> {};
 struct alignas(4) four {
   int v;
@@ -179,8 +180,16 @@ TEST(address_space_exhausted) {
 // Dereferencing a null ptr must still fault, although operator-> and
 // operator* skip the null check: offset zero is the cage's first span,
 // which is never committed.
+#if defined(__SANITIZE_THREAD__)
+#  define CPTR_TEST_TSAN 1
+#elif defined(__has_feature)
+#  if __has_feature(thread_sanitizer)
+#    define CPTR_TEST_TSAN 1
+#  endif
+#endif
+
 TEST(null_dereference_faults) {
-#if defined(_WIN32) || defined(CPTR_ASAN)
+#if defined(_WIN32) || defined(CPTR_ASAN) || defined(CPTR_TEST_TSAN)
   std::printf("  (skipped: needs fork)\n");
 #else
   struct node {
@@ -242,4 +251,54 @@ void check_end_of_largest_block() {
 TEST(end_of_last_block_compresses) {
   check_end_of_largest_block<filled>();
   check_end_of_largest_block<filled_wide>();
+}
+
+// fork() while another thread holds the allocator lock must not leave the
+// child unable to allocate. Each child gets two seconds; a deadlocked one is
+// killed by SIGALRM.
+TEST(fork_while_allocating) {
+#if defined(_WIN32) || defined(CPTR_ASAN)
+  std::printf("  (skipped: needs fork)\n");
+#else
+  std::atomic<bool> stop{false};
+  (void)forked::allocate(16);
+  std::thread churn([&] {
+    std::vector<void*> blocks;
+    while (!stop.load(std::memory_order_relaxed)) {
+      for (int i = 0; i < 64; i++) {
+        blocks.push_back(forked::allocate(std::size_t(16 + i * 8)));
+      }
+      for (void* p : blocks) {
+        forked::deallocate(p);
+      }
+      blocks.clear();
+    }
+  });
+  int stuck = 0, crashed = 0;
+  for (int i = 0; i < 300; i++) {
+    std::fflush(stdout);
+    pid_t pid = fork();
+    if (pid == 0) {
+      alarm(2);
+      void* p = forked::allocate(48);
+      forked::deallocate(p);
+      _exit(0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    if (WIFSIGNALED(status) && WTERMSIG(status) == SIGALRM) {
+      stuck++;
+    } else if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+      crashed++;
+    }
+  }
+  stop = true;
+  churn.join();
+  if (stuck || crashed) {
+    std::printf("  %d of 300 children deadlocked, %d crashed\n", stuck,
+                crashed);
+  }
+  CHECK(stuck == 0);
+  CHECK(crashed == 0);
+#endif
 }
