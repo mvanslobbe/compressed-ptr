@@ -10,14 +10,14 @@ inline std::atomic<int> g_assert_failures{0};
 #include <thread>
 #include <vector>
 
-#include "cptr/all.hpp"
 #include "check.hpp"
+#include "cptr/all.hpp"
 
 #if !defined(_WIN32)
-#  include <csignal>
 #  include <sys/resource.h>
 #  include <sys/wait.h>
 #  include <unistd.h>
+#  include <csignal>
 #endif
 
 namespace {
@@ -214,15 +214,10 @@ TEST(null_dereference_faults) {
 // A cage used in a module that never initialised it, as happens when a
 // Windows DLL has its own copy of the cage, is caught in debug builds.
 TEST(assert_decompress_in_uninitialised_cage) {
-  CHECK(asserts_from([] {
-          (void)never_initialised::decompress(64);
-        }) == 1);
-  CHECK(asserts_from([] {
-          (void)never_initialised::decompress_nonnull(64);
-        }) == 1);
-  CHECK(asserts_from([] {
-          (void)never_initialised::decompress(0);
-        }) == 0);
+  CHECK(asserts_from([] { (void)never_initialised::decompress(64); }) == 1);
+  CHECK(asserts_from([] { (void)never_initialised::decompress_nonnull(64); }) ==
+        1);
+  CHECK(asserts_from([] { (void)never_initialised::decompress(0); }) == 0);
 }
 
 // One past the end of a block is a valid pointer and must compress and

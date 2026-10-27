@@ -22,8 +22,9 @@ int main() {
   std::printf("\n");
 
   using raw = cptr::list<std::uint32_t, cptr::default_cage, false>;
-  std::printf("node size: compressed %zu B, raw pointers %zu B, std::list "
-              "~%zu B + malloc header\n",
-              cptr::list<std::uint32_t>::node_size, raw::node_size,
-              2 * sizeof(void*) + sizeof(std::uint32_t));
+  std::printf(
+      "node size: compressed %zu B, raw pointers %zu B, std::list "
+      "~%zu B + malloc header\n",
+      cptr::list<std::uint32_t>::node_size, raw::node_size,
+      2 * sizeof(void*) + sizeof(std::uint32_t));
 }

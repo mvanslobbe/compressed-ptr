@@ -5,8 +5,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "cptr/all.hpp"
 #include "check.hpp"
+#include "cptr/all.hpp"
 
 namespace {
 struct base {
@@ -270,8 +270,8 @@ TEST(fancy_allocator_through_allocator_traits) {
 
 TEST(ptr_is_a_random_access_iterator) {
   static_assert(std::random_access_iterator<cptr::ptr<int>>);
-  static_assert(std::is_same_v<std::iterator_traits<cptr::ptr<int>>::reference,
-                               int&>);
+  static_assert(
+      std::is_same_v<std::iterator_traits<cptr::ptr<int>>::reference, int&>);
   cptr::ptr<int> block = cptr::fancy_allocator<int>().allocate(4);
   for (int i = 0; i < 4; i++) {
     block[i] = 3 - i;

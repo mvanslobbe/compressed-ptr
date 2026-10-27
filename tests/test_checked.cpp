@@ -8,13 +8,13 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "cptr/all.hpp"
 #include "check.hpp"
+#include "cptr/all.hpp"
 
 #if !defined(_WIN32)
-#  include <csignal>
 #  include <sys/wait.h>
 #  include <unistd.h>
+#  include <csignal>
 #endif
 
 namespace {

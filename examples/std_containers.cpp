@@ -33,8 +33,7 @@ int main() {
   std::pmr::string text("strings can live in the cage as well",
                         cptr::default_cage::resource());
   std::printf("%s (%s)\n", text.c_str(),
-              cptr::default_cage::contains(text.data()) ? "inside"
-                                                        : "outside");
+              cptr::default_cage::contains(text.data()) ? "inside" : "outside");
   std::printf("cage: %zu bytes allocated, %zu committed\n",
               cptr::default_cage::allocated_bytes(),
               cptr::default_cage::committed_bytes());

@@ -3,8 +3,8 @@
 #include <random>
 #include <string>
 
-#include "cptr/all.hpp"
 #include "check.hpp"
+#include "cptr/all.hpp"
 
 template <bool Compressed>
 static void list_matches_std() {
@@ -123,9 +123,9 @@ TEST(map_raw_matches_std_map) { map_matches_std<false>(); }
 
 TEST(map_nodes_are_smaller) {
   using compressed = cptr::ordered_map<std::uint32_t, std::uint32_t>;
-  using raw = cptr::ordered_map<std::uint32_t, std::uint32_t,
-                                std::less<std::uint32_t>, cptr::default_cage,
-                                false>;
+  using raw =
+      cptr::ordered_map<std::uint32_t, std::uint32_t, std::less<std::uint32_t>,
+                        cptr::default_cage, false>;
   CHECK(compressed::node_size == 24);
   CHECK(raw::node_size == 40);
 }

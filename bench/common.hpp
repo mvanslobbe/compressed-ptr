@@ -10,13 +10,13 @@
 #  ifndef NOMINMAX
 #    define NOMINMAX
 #  endif
-#  include <windows.h>
 #  include <psapi.h>
+#  include <windows.h>
 #elif defined(__APPLE__)
 #  include <mach/mach.h>
 #else
-#  include <cstdio>
 #  include <unistd.h>
+#  include <cstdio>
 #endif
 
 namespace bench {

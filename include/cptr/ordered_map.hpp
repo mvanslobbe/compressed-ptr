@@ -112,9 +112,7 @@ class ordered_map {
   bool empty() const noexcept { return size_ == 0; }
   size_type size() const noexcept { return size_; }
 
-  iterator find(const K& key) noexcept {
-    return {find_node(key), this};
-  }
+  iterator find(const K& key) noexcept { return {find_node(key), this}; }
   const_iterator find(const K& key) const noexcept {
     return {find_node(key), this};
   }

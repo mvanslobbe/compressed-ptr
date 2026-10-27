@@ -1,0 +1,7 @@
+BasedOnStyle: Google
+Standard: c++20
+DerivePointerAlignment: false
+PointerAlignment: Left
+IndentPPDirectives: AfterHash
+PPIndentWidth: 2
+IncludeBlocks: Preserve

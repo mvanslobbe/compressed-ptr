@@ -48,15 +48,13 @@ class ptr_with_payload {
  public:
   ptr_with_payload() noexcept = default;
   ptr_with_payload(T* p, std::uint32_t payload) noexcept
-      : bits_(std::uint64_t(Cage::compress(p)) |
-              std::uint64_t(payload) << 32) {}
+      : bits_(std::uint64_t(Cage::compress(p)) | std::uint64_t(payload) << 32) {
+  }
 
   T* get() const noexcept {
     return static_cast<T*>(Cage::decompress(std::uint32_t(bits_)));
   }
-  std::uint32_t payload() const noexcept {
-    return std::uint32_t(bits_ >> 32);
-  }
+  std::uint32_t payload() const noexcept { return std::uint32_t(bits_ >> 32); }
   void set(T* p) noexcept {
     bits_ = (bits_ & ~std::uint64_t(UINT32_MAX)) | Cage::compress(p);
   }
@@ -146,8 +144,8 @@ class atomic_ptr {
                                std::memory_order success,
                                std::memory_order failure) noexcept {
     std::uint32_t e = Cage::compress(expected);
-    bool ok = bits_.compare_exchange_strong(e, Cage::compress(desired),
-                                            success, failure);
+    bool ok = bits_.compare_exchange_strong(e, Cage::compress(desired), success,
+                                            failure);
     expected = unpack(e);
     return ok;
   }

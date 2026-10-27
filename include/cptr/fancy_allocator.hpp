@@ -36,7 +36,9 @@ class fancy_allocator {
     }
     return pointer(static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T))));
   }
-  void deallocate(pointer p, std::size_t) noexcept { Cage::deallocate(p.get()); }
+  void deallocate(pointer p, std::size_t) noexcept {
+    Cage::deallocate(p.get());
+  }
 
   // std::allocator_traits::construct takes a raw pointer; containers written
   // for fancy pointers pass the allocator's pointer type instead.

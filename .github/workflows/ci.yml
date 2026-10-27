@@ -52,6 +52,55 @@ jobs:
           ! ./uaf 2> uaf.log
           grep -q "use-after-poison" uaf.log
 
+  benchmark:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCOMPRESSED_PTR_BUILD_TESTS=OFF
+          cmake --build build --target bench_runtime bench_rss
+      - name: Run
+        run: |
+          ./build/bench_runtime 262144 2000 | tee bench.md
+          ./build/bench_rss 200000 | tee rss.txt
+          { echo '## Benchmarks'; cat bench.md; echo; echo '```'; cat rss.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check for regressions
+        run: python3 scripts/check_bench.py bench.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks
+          path: |
+            bench.md
+            rss.txt
+
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update -q
+          sudo apt-get install -y -q clang-format-22
+      - name: Check formatting
+        run: >
+          git ls-files '*.hpp' '*.cpp' ':!bench/third_party'
+          | xargs clang-format-22 --dry-run --Werror
+
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and use with find_package
+        shell: bash
+        run: scripts/test_install.sh
+
   thread-sanitizer:
     runs-on: ubuntu-24.04
     steps:

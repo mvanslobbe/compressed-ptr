@@ -8,9 +8,9 @@
 #include <atomic>
 #include <bit>
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <chrono>
 #include <cstring>
 #include <deque>
 #include <map>
@@ -208,9 +208,8 @@ class CPTR_VISIBLE cage {
   }
 
   // As allocate(), but returns nullptr on failure.
-  static void* try_allocate(std::size_t bytes,
-                            std::size_t align = alignof(
-                                std::max_align_t)) noexcept {
+  static void* try_allocate(std::size_t bytes, std::size_t align = alignof(
+                                                   std::max_align_t)) noexcept {
     CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
     if (!init()) {
       return nullptr;
@@ -474,8 +473,8 @@ class CPTR_VISIBLE cage {
     std::uint32_t slab = st.current[cls];
     if (slab && !st.slabs[slab].free_head) {
       std::size_t room = (st.slab_end[cls] - st.slab_cursor[cls]) / block_size;
-      std::uint32_t take = static_cast<std::uint32_t>(
-          room < want - n ? room : want - n);
+      std::uint32_t take =
+          static_cast<std::uint32_t>(room < want - n ? room : want - n);
       std::uint32_t bits =
           static_cast<std::uint32_t>(st.slab_cursor[cls] >> Shift);
       for (std::uint32_t i = 0; i < take; i++) {
@@ -496,9 +495,9 @@ class CPTR_VISIBLE cage {
     // order, so that consecutive allocations are adjacent going forwards.
     std::reverse(tc.blocks[cls].begin(), tc.blocks[cls].begin() + n);
     st.allocated += std::size_t(n) * block_size;
-    tc.cached.store(tc.cached.load(std::memory_order_relaxed) +
-                        std::size_t(n) * block_size,
-                    std::memory_order_relaxed);
+    tc.cached.store(
+        tc.cached.load(std::memory_order_relaxed) + std::size_t(n) * block_size,
+        std::memory_order_relaxed);
     return n > 0;
   }
 
@@ -519,12 +518,11 @@ class CPTR_VISIBLE cage {
       st.allocated -= std::size_t(k) * block_size;
     }
     std::uint32_t& n = tc.count[cls];
-    std::memmove(blocks.data(), blocks.data() + k,
-                 sizeof(blocks[0]) * (n - k));
+    std::memmove(blocks.data(), blocks.data() + k, sizeof(blocks[0]) * (n - k));
     n -= k;
-    tc.cached.store(tc.cached.load(std::memory_order_relaxed) -
-                        std::size_t(k) * block_size,
-                    std::memory_order_relaxed);
+    tc.cached.store(
+        tc.cached.load(std::memory_order_relaxed) - std::size_t(k) * block_size,
+        std::memory_order_relaxed);
   }
 
 #if !defined(_WIN32)
@@ -655,8 +653,8 @@ class CPTR_VISIBLE cage {
     if (run != st.free_runs.end()) {
       std::uint32_t first = run->second;
       std::uint32_t have = run->first;
-      void* p = reinterpret_cast<void*>(base_ + std::uintptr_t(first) *
-                                                    span_size);
+      void* p =
+          reinterpret_cast<void*>(base_ + std::uintptr_t(first) * span_size);
       if (!detail::commit(p, std::size_t(count) * span_size)) {
         return 0;
       }

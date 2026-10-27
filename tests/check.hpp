@@ -40,15 +40,14 @@ inline int run_all() {
 
 #define CHECK_CAT2(a, b) a##b
 #define CHECK_CAT(a, b) CHECK_CAT2(a, b)
-#define TEST(name)                                           \
-  static void name();                                        \
+#define TEST(name)                                            \
+  static void name();                                         \
   static check::registrar CHECK_CAT(reg_, name)(#name, name); \
   static void name()
-#define CHECK(cond)                                                    \
-  do {                                                                 \
-    if (!(cond)) {                                                     \
-      std::printf("  %s:%d: CHECK(%s) failed\n", __FILE__, __LINE__, \
-                  #cond);                                              \
-      check::failures++;                                               \
-    }                                                                  \
+#define CHECK(cond)                                                          \
+  do {                                                                       \
+    if (!(cond)) {                                                           \
+      std::printf("  %s:%d: CHECK(%s) failed\n", __FILE__, __LINE__, #cond); \
+      check::failures++;                                                     \
+    }                                                                        \
   } while (0)

@@ -275,6 +275,32 @@ ctest --test-dir build              # unit tests + examples
 ./build/bench_runtime [elements] [epochs] [list|map|arithmetic|conversion|allocator|threads|chase]
 ```
 
+To use an installed copy, `cmake --install build`, then in your project:
+
+```cmake
+find_package(compressed_ptr 0.1 CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE compressed_ptr::compressed_ptr)
+```
+
+CI runs the benchmarks on every push, shows the tables in the run summary
+and keeps them as an artifact. `scripts/check_bench.py` fails the run if a
+median delta between variants measured side by side regresses past a
+limit (for example compressed against raw links, or the cage against
+`malloc` on two threads); absolute times on shared runners are too noisy
+to gate on.
+
+`scripts/test_install.sh` checks that round trip, and CI runs it on Linux,
+macOS and Windows. `cptr/version.hpp` defines `CPTR_VERSION`.
+Sources are formatted with clang-format 22 (`.clang-format`); CI checks it.
+
+The allocator fuzzer needs clang:
+
+```sh
+cmake -S . -B build-fuzz -DCMAKE_CXX_COMPILER=clang++ -DCOMPRESSED_PTR_BUILD_FUZZERS=ON
+cmake --build build-fuzz --target fuzz_allocator
+./build-fuzz/fuzz_allocator -max_total_time=60
+```
+
 Coverage (clang and llvm-cov; HTML report in `build-coverage/`):
 
 ```sh

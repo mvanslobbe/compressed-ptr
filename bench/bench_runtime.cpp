@@ -13,7 +13,8 @@
 // turn, so that frequency changes and other drift during the run affect all
 // of them alike.
 //
-// Usage: bench_runtime [elements] [epochs] [list|map|arithmetic|conversion|allocator|threads|chase]
+// Usage: bench_runtime [elements] [epochs]
+// [list|map|arithmetic|conversion|allocator|threads|chase]
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include "third_party/nanobench.h"
 
@@ -202,8 +203,8 @@ struct map_variant final : container_variant {
 
 // Runs every phase on |variants| (reference first) and prints the table.
 void bench_containers(const char* const* names,
-                      std::vector<container_variant*> variants,
-                      std::uint32_t n, std::size_t epochs, bool has_find) {
+                      std::vector<container_variant*> variants, std::uint32_t n,
+                      std::size_t epochs, bool has_find) {
   struct phase {
     const char* name;
     void (container_variant::*fn)();
@@ -320,8 +321,9 @@ struct array_walk {
 };
 
 void bench_arithmetic(std::size_t epochs) {
-  print_header("Pointer arithmetic: `++p` over an array of `uint32_t`, ns per "
-               "element");
+  print_header(
+      "Pointer arithmetic: `++p` over an array of `uint32_t`, ns per "
+      "element");
   for (std::uint32_t n : {1u << 16, 1u << 22}) {
     auto* raw = static_cast<std::uint32_t*>(
         cptr::default_cage::allocate(sizeof(std::uint32_t) * n, 64));
@@ -381,8 +383,9 @@ struct churn {
 };
 
 void bench_allocator(std::size_t epochs) {
-  print_header("Allocator: free a random block of 65,536 and allocate 16 to "
-               "256 bytes, ns per free and allocate");
+  print_header(
+      "Allocator: free a random block of 65,536 and allocate 16 to "
+      "256 bytes, ns per free and allocate");
   churn m([](std::size_t n) { return std::malloc(n); },
           [](void* p) { std::free(p); });
   churn c([](std::size_t n) { return cptr::default_cage::allocate(n); },
@@ -399,8 +402,9 @@ void bench_allocator(std::size_t epochs) {
 // so each epoch is timed with std::chrono::steady_clock, the clock
 // nanobench uses.
 void bench_threads(std::size_t epochs) {
-  print_header("Allocator churn on several threads, ns per free and "
-               "allocate on each thread");
+  print_header(
+      "Allocator churn on several threads, ns per free and "
+      "allocate on each thread");
   using alloc_fn = void* (*)(std::size_t);
   using free_fn = void (*)(void*);
   struct variant {
@@ -415,8 +419,8 @@ void bench_threads(std::size_t epochs) {
   for (unsigned threads : {1u, 2u, 4u, 8u}) {
     distribution d[2];
     constexpr int kRounds = 4;
-    std::size_t per_thread = std::max<std::size_t>(
-        epochs / kRounds / kBurst * kBurst, kBurst);
+    std::size_t per_thread =
+        std::max<std::size_t>(epochs / kRounds / kBurst * kBurst, kBurst);
     for (int round = 0; round < kRounds; round++) {
       for (int v = 0; v < 2; v++) {
         std::vector<distribution> results(threads);
@@ -469,32 +473,31 @@ void bench_conversion(std::size_t epochs) {
   for (std::size_t i = 0; i < kCount; i++) {
     v.push_back(cptr::make<int>(int(i)));
   }
-  auto d = measure(
-      epochs, kCount,
-      {[&] {
-         std::uint64_t sum = 0;
-         for (const auto& p : v) {
-           cptr::ptr<int> q = p;
-           sum += q.bits();
-         }
-         doNotOptimizeAway(sum);
-       },
-       [&] {
-         std::uint64_t sum = 0;
-         for (const auto& p : v) {
-           cptr::ptr<const int> q = p;
-           sum += q.bits();
-         }
-         doNotOptimizeAway(sum);
-       },
-       [&] {
-         std::uint64_t sum = 0;
-         for (const auto& p : v) {
-           cptr::ptr<void> q = p;
-           sum += q.bits();
-         }
-         doNotOptimizeAway(sum);
-       }});
+  auto d = measure(epochs, kCount,
+                   {[&] {
+                      std::uint64_t sum = 0;
+                      for (const auto& p : v) {
+                        cptr::ptr<int> q = p;
+                        sum += q.bits();
+                      }
+                      doNotOptimizeAway(sum);
+                    },
+                    [&] {
+                      std::uint64_t sum = 0;
+                      for (const auto& p : v) {
+                        cptr::ptr<const int> q = p;
+                        sum += q.bits();
+                      }
+                      doNotOptimizeAway(sum);
+                    },
+                    [&] {
+                      std::uint64_t sum = 0;
+                      for (const auto& p : v) {
+                        cptr::ptr<void> q = p;
+                        sum += q.bits();
+                      }
+                      doNotOptimizeAway(sum);
+                    }});
   const char* names[] = {"copy to `ptr<int>`", "to `ptr<const int>`",
                          "to `ptr<void>`"};
   for (std::size_t i = 0; i < 3; i++) {
@@ -541,12 +544,12 @@ int main(int argc, char** argv) {
     print_header(title);
     auto keys = bench::random_permutation(n, 1);
     auto lookups = bench::random_permutation(n, 2);
-    map_variant<cptr::ordered_map<std::uint32_t, std::uint32_t,
-                                  std::less<std::uint32_t>, cptr::default_cage,
-                                  false>>
+    map_variant<
+        cptr::ordered_map<std::uint32_t, std::uint32_t,
+                          std::less<std::uint32_t>, cptr::default_cage, false>>
         r(keys, lookups);
     map_variant<cptr::ordered_map<std::uint32_t, std::uint32_t>> c(keys,
-                                                                    lookups);
+                                                                   lookups);
     map_variant<std::map<std::uint32_t, std::uint32_t>> s(keys, lookups);
     const char* names[] = {"`cptr::ordered_map` raw links",
                            "`cptr::ordered_map` compressed", "`std::map`"};

@@ -193,8 +193,7 @@ class basic_ptr {
     return !a.bits_;
   }
   // All pointers share the cage base, so offsets order like addresses.
-  friend std::strong_ordering operator<=>(basic_ptr a,
-                                          basic_ptr b) noexcept {
+  friend std::strong_ordering operator<=>(basic_ptr a, basic_ptr b) noexcept {
     return a.bits_ <=> b.bits_;
   }
 

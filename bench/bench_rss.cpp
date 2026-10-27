@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "cptr/all.hpp"
 #include "common.hpp"
+#include "cptr/all.hpp"
 
 namespace {
 
@@ -69,9 +69,9 @@ struct config {
 };
 
 using map_c = cptr::ordered_map<std::uint32_t, std::uint32_t>;
-using map_r = cptr::ordered_map<std::uint32_t, std::uint32_t,
-                                std::less<std::uint32_t>, cptr::default_cage,
-                                false>;
+using map_r =
+    cptr::ordered_map<std::uint32_t, std::uint32_t, std::less<std::uint32_t>,
+                      cptr::default_cage, false>;
 const config kConfigs[] = {
     {"list/cage-compressed", fill_list<cptr::list<std::uint32_t>>},
     {"list/cage-raw",
@@ -106,8 +106,8 @@ int main(int argc, char** argv) {
   }
   std::printf("resident memory growth for %u elements\n", n);
   for (const config& c : kConfigs) {
-    std::string cmd = std::string("\"") + argv[0] + "\" " + c.name + " " +
-                      std::to_string(n);
+    std::string cmd =
+        std::string("\"") + argv[0] + "\" " + c.name + " " + std::to_string(n);
 #if defined(_WIN32)
     cmd = "\"" + cmd + "\"";
 #endif

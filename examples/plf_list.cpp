@@ -20,7 +20,7 @@
 #define PLF_CONSTRUCT(the_allocator, allocator_instance, location, ...) \
   std::allocator_traits<the_allocator>::construct(                      \
       allocator_instance, std::to_address(location), __VA_ARGS__)
-#define PLF_DESTROY(the_allocator, allocator_instance, location) \
+#define PLF_DESTROY(the_allocator, allocator_instance, location)    \
   std::allocator_traits<the_allocator>::destroy(allocator_instance, \
                                                 std::to_address(location))
 
@@ -32,7 +32,8 @@
 
 #include "../bench/common.hpp"
 
-using compressed_list = plf::list<std::uint32_t, cptr::fancy_allocator<std::uint32_t>>;
+using compressed_list =
+    plf::list<std::uint32_t, cptr::fancy_allocator<std::uint32_t>>;
 using plain_list = plf::list<std::uint32_t>;
 
 template <class List>
@@ -65,8 +66,9 @@ void run(List& l, std::uint32_t n, const char* name) {
       "%-26s %6.1f bytes/elem  push_back %5.1f ms  walk x10 %6.1f ms  "
       "sort %6.1f ms  %s size after remove_if %zu (sum %llu)\n",
       name, double(after - before) / n, ms(t1 - t0).count(),
-      ms(t2 - t1).count(), ms(t3 - t2).count(), sorted ? "sorted," : "NOT SORTED,",
-      l.size(), static_cast<unsigned long long>(sum));
+      ms(t2 - t1).count(), ms(t3 - t2).count(),
+      sorted ? "sorted," : "NOT SORTED,", l.size(),
+      static_cast<unsigned long long>(sum));
 }
 
 int main(int argc, char** argv) {

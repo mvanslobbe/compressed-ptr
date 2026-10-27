@@ -5,8 +5,8 @@
 #include <thread>
 #include <vector>
 
-#include "cptr/all.hpp"
 #include "check.hpp"
+#include "cptr/all.hpp"
 
 namespace {
 struct small_cage : cptr::cage<small_cage, 24> {};
@@ -29,8 +29,8 @@ TEST(null_round_trips) {
 TEST(allocations_are_inside_and_round_trip) {
   using C = cptr::default_cage;
   std::vector<void*> blocks;
-  for (std::size_t size : {1, 7, 8, 24, 100, 128, 129, 300, 5000, 40000,
-                           1 << 20}) {
+  for (std::size_t size :
+       {1, 7, 8, 24, 100, 128, 129, 300, 5000, 40000, 1 << 20}) {
     void* p = C::allocate(size, 8);
     CHECK(C::contains(p));
     CHECK(C::compress(p) != 0);
@@ -367,9 +367,10 @@ TEST(freed_small_blocks_are_decommitted) {
     std::size_t peak = fill_and_free<C>(blocks);
     std::size_t kept = C::committed_bytes();
     C::trim();
-    std::printf("  round %d: committed %zu KiB at peak, %zu KiB after free, "
-                "%zu KiB after trim\n",
-                round, peak / 1024, kept / 1024, C::committed_bytes() / 1024);
+    std::printf(
+        "  round %d: committed %zu KiB at peak, %zu KiB after free, "
+        "%zu KiB after trim\n",
+        round, peak / 1024, kept / 1024, C::committed_bytes() / 1024);
     CHECK(C::committed_bytes() <= kKept);
   }
   // Without trim(): after the retention time, the next slab that becomes

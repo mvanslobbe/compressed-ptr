@@ -7,8 +7,21 @@ target_include_directories(compressed_ptr INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(compressed_ptr INTERFACE cxx_std_20)
+find_package(Threads REQUIRED)
+target_link_libraries(compressed_ptr INTERFACE Threads::Threads)
+
+# The header carries the version too; keep the two in step.
+file(STRINGS include/cptr/version.hpp _cptr_version_line
+  REGEX "^#define CPTR_VERSION \"")
+string(REGEX REPLACE ".*\"(.*)\".*" "\\1" _cptr_header_version
+  "${_cptr_version_line}")
+if(NOT _cptr_header_version STREQUAL PROJECT_VERSION)
+  message(FATAL_ERROR "include/cptr/version.hpp says ${_cptr_header_version}, "
+    "project() says ${PROJECT_VERSION}")
+endif()
 
 option(COMPRESSED_PTR_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
+option(COMPRESSED_PTR_BUILD_FUZZERS "Build the libFuzzer targets (clang)" OFF)
 option(COMPRESSED_PTR_BUILD_BENCHMARKS "Build the benchmarks" ${PROJECT_IS_TOP_LEVEL})
 option(COMPRESSED_PTR_BUILD_EXAMPLES "Build the examples" ${PROJECT_IS_TOP_LEVEL})
 
@@ -19,8 +32,6 @@ if(PROJECT_IS_TOP_LEVEL)
     add_compile_options(-Wall -Wextra -Wpedantic)
   endif()
 endif()
-
-find_package(Threads REQUIRED)
 
 if(COMPRESSED_PTR_BUILD_TESTS)
   enable_testing()
@@ -99,6 +110,8 @@ install(EXPORT compressed_ptr-targets NAMESPACE compressed_ptr::
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/compressed_ptr)
 include(CMakePackageConfigHelpers)
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr-config.cmake
+  "include(CMakeFindDependencyMacro)\n"
+  "find_dependency(Threads)\n"
   "include(\${CMAKE_CURRENT_LIST_DIR}/compressed_ptr-targets.cmake)\n")
 write_basic_package_version_file(
   ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr-config-version.cmake
@@ -106,3 +119,12 @@ write_basic_package_version_file(
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr-config.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr-config-version.cmake
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/compressed_ptr)
+
+if(COMPRESSED_PTR_BUILD_FUZZERS)
+  add_executable(fuzz_allocator fuzz/fuzz_allocator.cpp)
+  target_link_libraries(fuzz_allocator PRIVATE compressed_ptr)
+  target_compile_options(fuzz_allocator PRIVATE
+    -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all)
+  target_link_options(fuzz_allocator PRIVATE
+    -fsanitize=fuzzer,address,undefined)
+endif()
