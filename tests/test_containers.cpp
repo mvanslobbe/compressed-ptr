@@ -8,7 +8,7 @@
 
 template <bool Compressed>
 static void list_matches_std() {
-  cptr::list<int, cptr::default_cage, Compressed> mine;
+  cptr::detail::basic_list<int, cptr::default_cage, Compressed> mine;
   std::list<int> ref;
   std::mt19937 rng(1);
   for (int i = 0; i < 20000; i++) {
@@ -58,7 +58,8 @@ TEST(list_raw_matches_std_list) { list_matches_std<false>(); }
 
 TEST(list_nodes_are_smaller) {
   using compressed = cptr::list<std::uint32_t>;
-  using raw = cptr::list<std::uint32_t, cptr::default_cage, false>;
+  using raw =
+      cptr::detail::basic_list<std::uint32_t, cptr::default_cage, false>;
   CHECK(compressed::node_size == 12);
   CHECK(raw::node_size == 24);
 }
@@ -76,7 +77,8 @@ TEST(list_copy_move_and_strings) {
 
 template <bool Compressed>
 static void map_matches_std() {
-  cptr::ordered_map<int, int, std::less<int>, cptr::default_cage, Compressed>
+  cptr::detail::basic_ordered_map<int, int, std::less<int>, cptr::default_cage,
+                                  Compressed>
       mine;
   std::map<int, int> ref;
   std::mt19937 rng(2);
@@ -123,9 +125,9 @@ TEST(map_raw_matches_std_map) { map_matches_std<false>(); }
 
 TEST(map_nodes_are_smaller) {
   using compressed = cptr::ordered_map<std::uint32_t, std::uint32_t>;
-  using raw =
-      cptr::ordered_map<std::uint32_t, std::uint32_t, std::less<std::uint32_t>,
-                        cptr::default_cage, false>;
+  using raw = cptr::detail::basic_ordered_map<std::uint32_t, std::uint32_t,
+                                              std::less<std::uint32_t>,
+                                              cptr::default_cage, false>;
   CHECK(compressed::node_size == 24);
   CHECK(raw::node_size == 40);
 }

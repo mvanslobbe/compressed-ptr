@@ -79,13 +79,17 @@ allocator, several independent cages, and containers. No V8 code is used.
 | `cptr/pack.hpp` | `ptr_pair` (two pointers in 8 B), `ptr_with_payload` (pointer + 32-bit value in 8 B), `tagged_ptr` (pointer + tag bits in 4 B), `atomic_ptr` (lock-free CAS on 4 B) |
 | `cptr/allocator.hpp` | `cptr::allocator<T>`, so any std container's elements live in the cage |
 | `cptr/fancy_allocator.hpp` | `cptr::fancy_allocator<T>` with `pointer = cptr::ptr<T>`, for containers that support fancy pointers |
-| `cptr/list.hpp` | `cptr::list<T>`: doubly linked list with 4-byte links |
-| `cptr/ordered_map.hpp` | `cptr::ordered_map<K, V>`: ordered map (treap with parent links) with 4-byte links |
+| `cptr/list.hpp` | `cptr::list<T>`: doubly linked list with 4-byte links and the `std::list` interface |
+| `cptr/ordered_map.hpp` | `cptr::ordered_map<K, V>`: ordered map (red-black tree) with 4-byte links and the `std::map` interface, without node handles |
 | `cptr/all.hpp` | All of the above |
 
-`list` and `ordered_map` take a `Compressed` template argument. With `false`
-they use raw pointers but the same code and allocator. The benchmarks use
-this to separate the effect of compression from the effect of the allocator.
+Both containers keep a sentinel node in the cage, so an iterator is one
+8-byte pointer and `end()` stays valid as elements come and go. They are
+aliases of `cptr::detail::basic_list` and `cptr::detail::basic_ordered_map`,
+whose last template argument, `Compressed = false`, gives raw links with the
+same code and allocator. The benchmarks use those to separate the effect of
+compression from the effect of the allocator; they are not part of the
+public interface.
 
 The packing helpers often matter more than `ptr` itself. A lone 4-byte field
 next to an 8-byte one is padded back to 8 bytes. Gains come from putting two
@@ -189,46 +193,49 @@ tenth-slowest of 10,000 samples and moves by up to ±20% between runs.
 
 | | p50 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
 |---|---:|---:|---:|---:|---:|
-| grow: `cptr::list` raw links | 12.9 | ref | ref | ref | ref |
-| grow: `cptr::list` compressed | 11.1 | −13% | −13% | −35% | −66% |
-| grow: `std::list` | 19.1 | +49% | +43% | +39% | +86% |
-| walk: `cptr::list` raw links | 1.67 | ref | ref | ref | ref |
-| walk: `cptr::list` compressed | 1.53 | −8% | −11% | −10% | −2% |
-| walk: `std::list` | 2.02 | +21% | +24% | +22% | +4% |
-| shrink: `cptr::list` raw links | 7.03 | ref | ref | ref | ref |
-| shrink: `cptr::list` compressed | 7.00 | −0% | −0% | −2% | −2% |
-| shrink: `std::list` | 5.38 | −23% | −20% | −8% | −15% |
+| grow: `cptr::list` raw links | 10.4 | ref | ref | ref | ref |
+| grow: `cptr::list` compressed | 8.71 | −16% | −14% | −21% | −83% |
+| grow: `std::list` | 19.1 | +84% | +71% | +139% | +3% |
+| walk: `cptr::list` raw links | 1.68 | ref | ref | ref | ref |
+| walk: `cptr::list` compressed | 1.53 | −9% | −12% | −11% | −3% |
+| walk: `std::list` | 2.04 | +22% | +23% | +23% | −6% |
+| shrink: `cptr::list` raw links | 7.56 | ref | ref | ref | ref |
+| shrink: `cptr::list` compressed | 7.79 | +3% | +0% | −3% | +1% |
+| shrink: `std::list` | 5.43 | −28% | −63% | −29% | −6% |
 
 **Map `uint32_t → uint32_t`**, 4,194,304 random keys; 512 operations per
 epoch, walk 4,096:
 
 | | p50 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
 |---|---:|---:|---:|---:|---:|
-| insert: `cptr::ordered_map` raw links | 1099 | ref | ref | ref | ref |
-| insert: `cptr::ordered_map` compressed | 1022 | −7% | −5% | −4% | −7% |
-| insert: `std::map` | 833 | −24% | −26% | −25% | −22% |
-| find: `cptr::ordered_map` raw links | 1136 | ref | ref | ref | ref |
-| find: `cptr::ordered_map` compressed | 1114 | −2% | +0% | +1% | +2% |
-| find: `std::map` | 904 | −20% | −20% | −19% | −18% |
-| walk: `cptr::ordered_map` raw links | 104 | ref | ref | ref | ref |
-| walk: `cptr::ordered_map` compressed | 101 | −3% | −2% | −3% | −4% |
-| walk: `std::map` | 104 | −0% | −0% | −0% | −1% |
-| erase: `cptr::ordered_map` raw links | 1062 | ref | ref | ref | ref |
-| erase: `cptr::ordered_map` compressed | 1055 | −1% | −0% | −1% | −4% |
-| erase: `std::map` | 881 | −17% | −22% | −24% | −27% |
+| insert: `cptr::ordered_map` raw links | 753 | ref | ref | ref | ref |
+| insert: `cptr::ordered_map` compressed | 702 | −7% | −6% | −6% | −16% |
+| insert: `std::map` | 829 | +10% | +7% | +9% | +15% |
+| find: `cptr::ordered_map` raw links | 855 | ref | ref | ref | ref |
+| find: `cptr::ordered_map` compressed | 803 | −6% | −5% | −6% | −11% |
+| find: `std::map` | 898 | +5% | +6% | +7% | +10% |
+| walk: `cptr::ordered_map` raw links | 103 | ref | ref | ref | ref |
+| walk: `cptr::ordered_map` compressed | 99.8 | −3% | −3% | −3% | −3% |
+| walk: `std::map` | 104 | +1% | +1% | +2% | +6% |
+| erase: `cptr::ordered_map` raw links | 918 | ref | ref | ref | ref |
+| erase: `cptr::ordered_map` compressed | 899 | −2% | −1% | −0% | +12% |
+| erase: `std::map` | 916 | −0% | +0% | +1% | +6% |
 
 What this shows:
 
 - Compressed links are never measurably slower than raw links in the same
-  container (at most +2%, within noise). For the list, grow is 13% and walk
-  8% faster at the median, and shrink is equal. The list's grow tail drops most (−35% at p99, −66% at p99.9), because
-  half as much memory is committed and touched for the first time.
-- The bundled `ordered_map` is a treap. At 4 Mi keys every operation is a
-  chain of cache misses, and `std::map`'s red-black tree is about 20%
-  faster at all percentiles; the treap's random priorities give deeper
-  paths. Compression saves memory there (see above), not time.
-- `std::list` grows 49% and walks 21% slower than the cage list, but pops
-  23% faster: glibc's `free` is cheaper than the cage allocator's
+  container (at most +3%, within noise). For the list, grow is 16% and walk
+  9% faster at the median, and shrink is within 3%. The list's grow tail
+  drops most (−83% at p99.9), because half as much memory is committed and
+  touched for the first time.
+- At 4 Mi keys every map operation is a chain of cache misses. The
+  compressed `ordered_map` inserts 15% and finds 11% faster than `std::map`
+  at the median, and erases at the same speed. Until November 2026 it was a
+  treap, which was about 20% slower than `std::map`: random priorities give
+  deeper paths than red-black balancing. The red-black tree cut insert from
+  1050 to 702 ns, find from 1136 to 803 ns and erase from 1098 to 899 ns.
+- `std::list` grows 84% and walks 22% slower than the cage list, but pops
+  28% faster: glibc's `free` is cheaper than the cage allocator's
   `deallocate`.
 
 **Pointer arithmetic**, `++p` over an array of `uint32_t`, 4,096 elements

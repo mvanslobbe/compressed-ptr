@@ -69,13 +69,14 @@ struct config {
 };
 
 using map_c = cptr::ordered_map<std::uint32_t, std::uint32_t>;
-using map_r =
-    cptr::ordered_map<std::uint32_t, std::uint32_t, std::less<std::uint32_t>,
-                      cptr::default_cage, false>;
+using map_r = cptr::detail::basic_ordered_map<std::uint32_t, std::uint32_t,
+                                              std::less<std::uint32_t>,
+                                              cptr::default_cage, false>;
 const config kConfigs[] = {
     {"list/cage-compressed", fill_list<cptr::list<std::uint32_t>>},
     {"list/cage-raw",
-     fill_list<cptr::list<std::uint32_t, cptr::default_cage, false>>},
+     fill_list<
+         cptr::detail::basic_list<std::uint32_t, cptr::default_cage, false>>},
     {"list/std", fill_list<std::list<std::uint32_t>>},
     {"map/cage-compressed", fill_map<map_c>},
     {"map/cage-raw", fill_map<map_r>},

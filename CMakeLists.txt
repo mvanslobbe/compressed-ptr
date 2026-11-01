@@ -37,7 +37,7 @@ if(COMPRESSED_PTR_BUILD_TESTS)
   enable_testing()
   add_executable(compressed_ptr_tests
     tests/test_main.cpp tests/test_cage.cpp tests/test_ptr.cpp
-    tests/test_containers.cpp)
+    tests/test_containers.cpp tests/test_list.cpp tests/test_map.cpp)
   target_link_libraries(compressed_ptr_tests PRIVATE compressed_ptr Threads::Threads)
   add_test(NAME compressed_ptr_tests COMMAND compressed_ptr_tests)
   add_executable(compressed_ptr_failure_tests tests/test_main.cpp

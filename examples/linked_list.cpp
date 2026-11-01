@@ -21,7 +21,8 @@ int main() {
   }
   std::printf("\n");
 
-  using raw = cptr::list<std::uint32_t, cptr::default_cage, false>;
+  using raw =
+      cptr::detail::basic_list<std::uint32_t, cptr::default_cage, false>;
   std::printf(
       "node size: compressed %zu B, raw pointers %zu B, std::list "
       "~%zu B + malloc header\n",

@@ -529,7 +529,9 @@ int main(int argc, char** argv) {
                 n, kChunk, kWalk);
   if (wanted("list")) {
     print_header(title);
-    list_variant<cptr::list<std::uint32_t, cptr::default_cage, false>> r;
+    list_variant<
+        cptr::detail::basic_list<std::uint32_t, cptr::default_cage, false>>
+        r;
     list_variant<cptr::list<std::uint32_t>> c;
     list_variant<std::list<std::uint32_t>> s;
     const char* names[] = {"`cptr::list` raw links", "`cptr::list` compressed",
@@ -544,9 +546,9 @@ int main(int argc, char** argv) {
     print_header(title);
     auto keys = bench::random_permutation(n, 1);
     auto lookups = bench::random_permutation(n, 2);
-    map_variant<
-        cptr::ordered_map<std::uint32_t, std::uint32_t,
-                          std::less<std::uint32_t>, cptr::default_cage, false>>
+    map_variant<cptr::detail::basic_ordered_map<std::uint32_t, std::uint32_t,
+                                                std::less<std::uint32_t>,
+                                                cptr::default_cage, false>>
         r(keys, lookups);
     map_variant<cptr::ordered_map<std::uint32_t, std::uint32_t>> c(keys,
                                                                    lookups);
