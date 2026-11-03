@@ -106,7 +106,8 @@ class atomic_ptr {
   atomic_ptr(const atomic_ptr&) = delete;
   atomic_ptr& operator=(const atomic_ptr&) = delete;
 
-  bool is_lock_free() const noexcept { return bits_.is_lock_free(); }
+  // Not bits_.is_lock_free(): clang emits a call to libatomic for it.
+  bool is_lock_free() const noexcept { return is_always_lock_free; }
 
   T* load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
     return unpack(bits_.load(order));

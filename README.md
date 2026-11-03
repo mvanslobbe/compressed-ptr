@@ -81,7 +81,8 @@ allocator, several independent cages, and containers. No V8 code is used.
 | `cptr/fancy_allocator.hpp` | `cptr::fancy_allocator<T>` with `pointer = cptr::ptr<T>`, for containers that support fancy pointers |
 | `cptr/list.hpp` | `cptr::list<T>`: doubly linked list with 4-byte links and the `std::list` interface |
 | `cptr/ordered_map.hpp` | `cptr::ordered_map<K, V>`: ordered map (red-black tree) with 4-byte links and the `std::map` interface, without node handles |
-| `cptr/all.hpp` | All of the above |
+| `cptr/mapped_cage.hpp` | `mapped_cage<Tag, SizeLog2 = 32>`: a cage whose memory is a file, with a root pointer; POSIX only |
+| `cptr/all.hpp` | All of the above except `mapped_cage.hpp` |
 
 Both containers keep a sentinel node in the cage, so an iterator is one
 8-byte pointer and `end()` stays valid as elements come and go. They are
@@ -90,6 +91,22 @@ whose last template argument, `Compressed = false`, gives raw links with the
 same code and allocator. The benchmarks use those to separate the effect of
 compression from the effect of the allocator; they are not part of the
 public interface.
+
+A compressed pointer is an offset from the cage's base, so a structure
+built in a `mapped_cage` is still valid when the file is mapped again, by
+another process, at another address. The containers store their sentinel
+as a compressed link too, so a `cptr::list` or `cptr::ordered_map` of plain
+values can live in the file. The allocator keeps its state in the file,
+behind a lock there, so several processes can allocate in one file at once;
+the containers themselves are not synchronised. The file is created sparse
+at the full cage size, and only pages written to use disk space.
+
+```cpp
+struct store_tag {};
+using store = cptr::mapped_cage<store_tag>;
+store::open("data.cage");
+auto* h = store::root<history>();  // nullptr in a new file
+```
 
 The packing helpers often matter more than `ptr` itself. A lone 4-byte field
 next to an 8-byte one is padded back to 8 bytes. Gains come from putting two
@@ -115,6 +132,7 @@ Each example is a short, self-contained program in [`examples/`](examples):
 | [`tree.cpp`](examples/tree.cpp) | A hand-written order-statistics tree with `ptr_pair`; 16-byte nodes |
 | [`graph.cpp`](examples/graph.cpp) | BFS over a graph whose edges are 4 bytes and whose adjacency vectors live in the cage |
 | [`std_containers.cpp`](examples/std_containers.cpp) | `std::deque` and `std::pmr` containers in the cage, indexed by `cptr::ptr` |
+| [`persistent.cpp`](examples/persistent.cpp) | A list kept in a file and reopened at a new address on every run |
 | [`use_after_free.cpp`](examples/use_after_free.cpp) | AddressSanitizer catching a dangling compressed pointer |
 
 ## With plf::list (fancy pointers)
@@ -238,6 +256,27 @@ What this shows:
   28% faster: glibc's `free` is cheaper than the cage allocator's
   `deallocate`.
 
+**Allocator**, free a random one of 65,536 live blocks and allocate 16 to
+256 bytes; ns per free and allocate. The threads rows run the same churn on
+every thread at once (one epoch is timed with `steady_clock`, since
+nanobench is not thread-safe); the reference is `malloc` and `free` with
+the same thread count:
+
+| | p50 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
+|---|---:|---:|---:|---:|---:|
+| `malloc` / `free` | 15.9 | ref | ref | ref | ref |
+| cage `allocate` / `deallocate` | 11.4 | −28% | −57% | −39% | −6% |
+| 1 thread, cage | 9.58 | −31% | −32% | −36% | −15% |
+| 2 threads, cage | 10.3 | −5% | −19% | −44% | −25% |
+| 4 threads, cage | 11.4 | −6% | −26% | −40% | +21% |
+| 8 threads, cage | 19.7 | −17% | −23% | −48% | +88% |
+
+Each thread keeps a cache of up to 32 freed blocks per size class and only
+takes the cage's lock to refill or flush half of it. Before these caches,
+one lock served every thread, and 8 threads took 796 ns per operation at
+the median. The 8-thread p99.9 is worse than glibc's: a flush or refill
+waits for the lock while another thread holds it.
+
 **Pointer arithmetic**, `++p` over an array of `uint32_t`, 4,096 elements
 per epoch:
 
@@ -288,6 +327,9 @@ To use an installed copy, `cmake --install build`, then in your project:
 find_package(compressed_ptr 0.1 CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE compressed_ptr::compressed_ptr)
 ```
+
+There are no vcpkg or Conan recipes yet: both pin a tagged release by its
+archive hash, and there is no tagged release.
 
 CI runs the benchmarks on every push, shows the tables in the run summary
 and keeps them as an artifact. `scripts/check_bench.py` fails the run if a

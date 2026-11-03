@@ -37,7 +37,8 @@ if(COMPRESSED_PTR_BUILD_TESTS)
   enable_testing()
   add_executable(compressed_ptr_tests
     tests/test_main.cpp tests/test_cage.cpp tests/test_ptr.cpp
-    tests/test_containers.cpp tests/test_list.cpp tests/test_map.cpp)
+    tests/test_containers.cpp tests/test_list.cpp tests/test_map.cpp
+    $<$<NOT:$<PLATFORM_ID:Windows>>:tests/test_mapped.cpp>)
   target_link_libraries(compressed_ptr_tests PRIVATE compressed_ptr Threads::Threads)
   add_test(NAME compressed_ptr_tests COMMAND compressed_ptr_tests)
   add_executable(compressed_ptr_failure_tests tests/test_main.cpp
@@ -79,7 +80,11 @@ if(COMPRESSED_PTR_BUILD_BENCHMARKS)
 endif()
 
 if(COMPRESSED_PTR_BUILD_EXAMPLES)
-  foreach(example minimal linked_list tree graph std_containers)
+  set(examples minimal linked_list tree graph std_containers)
+  if(NOT WIN32)
+    list(APPEND examples persistent)
+  endif()
+  foreach(example ${examples})
     add_executable(example_${example} examples/${example}.cpp)
     target_link_libraries(example_${example} PRIVATE compressed_ptr)
     if(COMPRESSED_PTR_BUILD_TESTS)

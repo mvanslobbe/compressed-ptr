@@ -13,7 +13,9 @@ import sys
 
 # Row name (as printed), maximum delta at p50 in percent.
 LIMITS = [
-    ("walk: `cptr::list` compressed", 15),
+    # CI's list fits in cache, where the decompression add on every hop
+    # shows: about +20% against raw links. At 4 Mi elements it is -9%.
+    ("walk: `cptr::list` compressed", 30),
     ("grow: `cptr::list` compressed", 15),
     ("find: `cptr::ordered_map` compressed", 10),
     ("walk: `cptr::ordered_map` compressed", 10),

@@ -130,10 +130,10 @@ class basic_ordered_map {
   basic_ordered_map(const basic_ordered_map& other)
       : basic_ordered_map(other.comp_) {
     if (node_base* root = other.root()) {
-      node_base* copy = clone(root, header_);
-      header_->parent = copy;
-      header_->left = minimum(copy);
-      header_->right = maximum(copy);
+      node_base* copy = clone(root, header());
+      header()->parent = copy;
+      header()->left = minimum(copy);
+      header()->right = maximum(copy);
       size_ = other.size_;
     }
   }
@@ -159,9 +159,9 @@ class basic_ordered_map {
     return *this;
   }
   ~basic_ordered_map() {
-    if (header_) {
+    if (header()) {
       clear();
-      Cage::deallocate(header_);
+      Cage::deallocate(header());
     }
   }
 
@@ -175,13 +175,14 @@ class basic_ordered_map {
   }
 
   iterator begin() noexcept {
-    return iterator(header_ ? static_cast<node_base*>(header_->left) : nullptr);
+    return iterator(header() ? static_cast<node_base*>(header()->left)
+                             : nullptr);
   }
-  iterator end() noexcept { return iterator(header_); }
+  iterator end() noexcept { return iterator(header()); }
   const_iterator begin() const noexcept {
     return const_cast<basic_ordered_map*>(this)->begin();
   }
-  const_iterator end() const noexcept { return const_iterator(header_); }
+  const_iterator end() const noexcept { return const_iterator(header()); }
   const_iterator cbegin() const noexcept { return begin(); }
   const_iterator cend() const noexcept { return end(); }
   reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
@@ -218,11 +219,11 @@ class basic_ordered_map {
   const_iterator find(const Key& key) const {
     return const_iterator(find_node(key));
   }
-  bool contains(const K& key) const { return find_node(key) != header_; }
+  bool contains(const K& key) const { return find_node(key) != header(); }
   template <class Key>
     requires kTransparent<Key>
   bool contains(const Key& key) const {
-    return find_node(key) != header_;
+    return find_node(key) != header();
   }
   size_type count(const K& key) const { return contains(key) ? 1 : 0; }
   template <class Key>
@@ -277,7 +278,7 @@ class basic_ordered_map {
 
   V& at(const K& key) {
     node_base* n = find_node(key);
-    if (n == header_) {
+    if (n == header()) {
       throw std::out_of_range("cptr::ordered_map::at: no such key");
     }
     return static_cast<node*>(n)->kv.second;
@@ -367,7 +368,7 @@ class basic_ordered_map {
   }
   size_type erase(const K& key) {
     node_base* n = find_node(key);
-    if (n == header_) {
+    if (n == header()) {
       return 0;
     }
     erase(const_iterator(n));
@@ -375,7 +376,7 @@ class basic_ordered_map {
   }
 
   void clear() noexcept {
-    if (!header_) {
+    if (!header()) {
       return;
     }
     // Post-order without recursion, using the parent links.
@@ -387,7 +388,7 @@ class basic_ordered_map {
         n = n->right;
       } else {
         node_base* p = n->parent;
-        if (p == header_) {
+        if (p == header()) {
           p = nullptr;
         } else if (p->left == n) {
           p->left = nullptr;
@@ -416,17 +417,17 @@ class basic_ordered_map {
 
   // Checks the red-black and ordering invariants and the header; for tests.
   bool valid() const {
-    if (!header_) {
+    if (!header()) {
       return size_ == 0;
     }
     node_base* root_node = root();
     if (!root_node) {
-      return size_ == 0 && header_->left == header_ &&
-             header_->right == header_;
+      return size_ == 0 && header()->left == header() &&
+             header()->right == header();
     }
-    if (root_node->color != kBlack || root_node->parent != header_ ||
-        header_->left != minimum(root_node) ||
-        header_->right != maximum(root_node)) {
+    if (root_node->color != kBlack || root_node->parent != header() ||
+        header()->left != minimum(root_node) ||
+        header()->right != maximum(root_node)) {
       return false;
     }
     std::size_t count = 0;
@@ -438,7 +439,7 @@ class basic_ordered_map {
   }
 
   // The number of nodes on the longest path from the root; for tests.
-  std::size_t height() const { return header_ ? depth(root()) : 0; }
+  std::size_t height() const { return header() ? depth(root()) : 0; }
 
   // Bytes per element, including the links: what the cage hands out.
   static constexpr std::size_t node_size = sizeof(node);
@@ -454,11 +455,11 @@ class basic_ordered_map {
   }
 
   void reset_header() noexcept {
-    header_->parent = nullptr;
-    header_->left = header_->right = header_;
+    header()->parent = nullptr;
+    header()->left = header()->right = header();
   }
 
-  node_base* root() const noexcept { return header_->parent; }
+  node_base* root() const noexcept { return header()->parent; }
 
   template <class... Args>
   static node* new_node(Args&&... args) {
@@ -483,11 +484,11 @@ class basic_ordered_map {
 
   template <class Key>
   node_base* lower_node(const Key& key) const {
-    if (!header_) {
+    if (!header()) {
       return nullptr;
     }
     node_base* n = root();
-    node_base* best = header_;
+    node_base* best = header();
     while (n) {
       if (comp_(key_of(n), key)) {
         n = n->right;
@@ -501,11 +502,11 @@ class basic_ordered_map {
 
   template <class Key>
   node_base* upper_node(const Key& key) const {
-    if (!header_) {
+    if (!header()) {
       return nullptr;
     }
     node_base* n = root();
-    node_base* best = header_;
+    node_base* best = header();
     while (n) {
       if (comp_(key, key_of(n))) {
         best = n;
@@ -520,10 +521,10 @@ class basic_ordered_map {
   template <class Key>
   node_base* find_node(const Key& key) const {
     node_base* n = lower_node(key);
-    if (n && n != header_ && !comp_(key, key_of(n))) {
+    if (n && n != header() && !comp_(key, key_of(n))) {
       return n;
     }
-    return header_;
+    return header();
   }
 
   struct slot {
@@ -534,10 +535,10 @@ class basic_ordered_map {
 
   // Where |key| belongs, or the node that already has it.
   slot find_slot(const K& key) {
-    if (!header_) {
+    if (!header()) {
       header_ = new_header();
     }
-    node_base* parent = header_;
+    node_base* parent = header();
     node_base* n = root();
     bool left = true;
     while (n) {
@@ -570,18 +571,18 @@ class basic_ordered_map {
 
   void attach(node_base* n, node_base* parent, bool left) noexcept {
     n->parent = parent;
-    if (parent == header_) {
-      header_->parent = n;
-      header_->left = header_->right = n;
+    if (parent == header()) {
+      header()->parent = n;
+      header()->left = header()->right = n;
     } else if (left) {
       parent->left = n;
-      if (parent == header_->left) {
-        header_->left = n;
+      if (parent == header()->left) {
+        header()->left = n;
       }
     } else {
       parent->right = n;
-      if (parent == header_->right) {
-        header_->right = n;
+      if (parent == header()->right) {
+        header()->right = n;
       }
     }
     insert_fixup(n);
@@ -593,8 +594,8 @@ class basic_ordered_map {
 
   void replace_child(node_base* old_child, node_base* new_child) noexcept {
     node_base* p = old_child->parent;
-    if (p == header_) {
-      header_->parent = new_child;
+    if (p == header()) {
+      header()->parent = new_child;
     } else if (p->left == old_child) {
       p->left = new_child;
     } else {
@@ -681,11 +682,11 @@ class basic_ordered_map {
   }
 
   void unlink(node_base* z) noexcept {
-    if (z == header_->left) {
-      header_->left = z->right ? minimum(z->right) : node_parent(z);
+    if (z == header()->left) {
+      header()->left = z->right ? minimum(z->right) : node_parent(z);
     }
-    if (z == header_->right) {
-      header_->right = z->left ? maximum(z->left) : node_parent(z);
+    if (z == header()->right) {
+      header()->right = z->left ? maximum(z->left) : node_parent(z);
     }
     node_base* x;
     node_base* x_parent;
@@ -876,7 +877,11 @@ class basic_ordered_map {
     return n ? 1 + std::max(depth(n->left), depth(n->right)) : 0;
   }
 
-  node_base* header_;
+  node_base* header() const noexcept { return header_; }
+
+  // A compressed link, so that a map placed in a mapped_cage file is still
+  // valid when the file is mapped elsewhere.
+  link_type header_;
   std::size_t size_ = 0;
 #if defined(_MSC_VER) && !defined(__clang__)
   [[msvc::no_unique_address]] Compare comp_{};

@@ -133,9 +133,9 @@ class basic_list {
     return *this;
   }
   ~basic_list() {
-    if (sentinel_) {
+    if (sentinel()) {
       clear();
-      Cage::deallocate(sentinel_);
+      Cage::deallocate(sentinel());
     }
   }
 
@@ -159,14 +159,14 @@ class basic_list {
   friend void swap(basic_list& a, basic_list& b) noexcept { a.swap(b); }
 
   iterator begin() noexcept {
-    return iterator(sentinel_ ? static_cast<node_base*>(sentinel_->next)
-                              : nullptr);
+    return iterator(sentinel() ? static_cast<node_base*>(sentinel()->next)
+                               : nullptr);
   }
-  iterator end() noexcept { return iterator(sentinel_); }
+  iterator end() noexcept { return iterator(sentinel()); }
   const_iterator begin() const noexcept {
     return const_cast<basic_list*>(this)->begin();
   }
-  const_iterator end() const noexcept { return const_iterator(sentinel_); }
+  const_iterator end() const noexcept { return const_iterator(sentinel()); }
   const_iterator cbegin() const noexcept { return begin(); }
   const_iterator cend() const noexcept { return end(); }
   reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
@@ -252,16 +252,16 @@ class basic_list {
   void pop_back() noexcept { erase(std::prev(end())); }
 
   void clear() noexcept {
-    if (!sentinel_) {
+    if (!sentinel()) {
       return;
     }
-    node_base* n = sentinel_->next;
-    while (n != sentinel_) {
+    node_base* n = sentinel()->next;
+    while (n != sentinel()) {
       node_base* next = n->next;
       delete_node(n);
       n = next;
     }
-    sentinel_->prev = sentinel_->next = sentinel_;
+    sentinel()->prev = sentinel()->next = sentinel();
     size_ = 0;
   }
 
@@ -320,9 +320,9 @@ class basic_list {
       return;
     }
     position(end());
-    node_base* a = sentinel_->next;
-    node_base* b = other.sentinel_->next;
-    while (a != sentinel_ && b != other.sentinel_) {
+    node_base* a = sentinel()->next;
+    node_base* b = other.sentinel()->next;
+    while (a != sentinel() && b != other.sentinel()) {
       if (comp(value_of(b), value_of(a))) {
         node_base* next = b->next;
         unlink(b);
@@ -332,8 +332,8 @@ class basic_list {
         a = a->next;
       }
     }
-    if (b != other.sentinel_) {
-      transfer(sentinel_, b, other.sentinel_);
+    if (b != other.sentinel()) {
+      transfer(sentinel(), b, other.sentinel());
     }
     size_ += other.size_;
     other.size_ = 0;
@@ -350,8 +350,8 @@ class basic_list {
       return;
     }
     // Detach the nodes as a null-terminated chain through |next|.
-    node_base* chain = sentinel_->next;
-    sentinel_->prev->next = nullptr;
+    node_base* chain = sentinel()->next;
+    sentinel()->prev->next = nullptr;
     // bins[i] holds a sorted run of 2^i nodes; higher bins hold earlier
     // elements, so merging a higher bin first keeps the sort stable.
     node_base* bins[64] = {};
@@ -373,27 +373,27 @@ class basic_list {
       }
     }
     // Restore the prev links and close the circle.
-    node_base* prev = sentinel_;
+    node_base* prev = sentinel();
     for (node_base* n = sorted; n; n = n->next) {
       n->prev = prev;
       prev->next = n;
       prev = n;
     }
-    prev->next = sentinel_;
-    sentinel_->prev = prev;
+    prev->next = sentinel();
+    sentinel()->prev = prev;
   }
 
   void reverse() noexcept {
-    if (!sentinel_) {
+    if (!sentinel()) {
       return;
     }
-    node_base* n = sentinel_;
+    node_base* n = sentinel();
     do {
       node_base* next = n->next;
       n->next = static_cast<node_base*>(n->prev);
       n->prev = next;
       n = next;
-    } while (n != sentinel_);
+    } while (n != sentinel());
   }
 
   size_type remove(const T& value) {
@@ -413,9 +413,9 @@ class basic_list {
     }
     node_base* doomed = nullptr;
     size_type removed = 0;
-    node_base* kept = sentinel_->next;
+    node_base* kept = sentinel()->next;
     node_base* n = kept->next;
-    while (n != sentinel_) {
+    while (n != sentinel()) {
       node_base* next = n->next;
       if (pred(value_of(kept), value_of(n))) {
         unlink(n);
@@ -457,11 +457,11 @@ class basic_list {
   // The node a position refers to, allocating the sentinel of a moved-from
   // list first.
   node_base* position(const_iterator pos) {
-    if (!sentinel_) {
+    if (!sentinel()) {
       sentinel_ = new_sentinel();
-      return sentinel_;
+      return sentinel();
     }
-    return pos.node_ ? pos.node_ : sentinel_;
+    return pos.node_ ? pos.node_ : sentinel();
   }
 
   template <class... Args>
@@ -583,13 +583,13 @@ class basic_list {
 
   template <class Pred>
   size_type remove_if_impl(Pred pred) {
-    if (!sentinel_) {
+    if (!sentinel()) {
       return 0;
     }
     node_base* doomed = nullptr;
     size_type removed = 0;
-    node_base* n = sentinel_->next;
-    while (n != sentinel_) {
+    node_base* n = sentinel()->next;
+    while (n != sentinel()) {
       node_base* next = n->next;
       if (pred(value_of(n))) {
         unlink(n);
@@ -612,7 +612,11 @@ class basic_list {
     }
   }
 
-  node_base* sentinel_;
+  node_base* sentinel() const noexcept { return sentinel_; }
+
+  // A compressed link, so that a list placed in a mapped_cage file is still
+  // valid when the file is mapped elsewhere.
+  link_type sentinel_;
   std::size_t size_ = 0;
 };
 

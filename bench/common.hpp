@@ -10,8 +10,9 @@
 #  ifndef NOMINMAX
 #    define NOMINMAX
 #  endif
-#  include <psapi.h>
 #  include <windows.h>
+// psapi.h needs the types from windows.h.
+#  include <psapi.h>
 #elif defined(__APPLE__)
 #  include <mach/mach.h>
 #else
