@@ -360,3 +360,44 @@ TEST(atomic_ptr_std_interface) {
   cptr::default_cage::deallocate(a);
   cptr::default_cage::deallocate(b);
 }
+
+// Everything that works on the stored offset alone, without the cage base,
+// can run at compile time.
+namespace {
+constexpr bool offset_arithmetic_is_constexpr() {
+  using p32 = cptr::ptr<std::uint32_t>;
+  p32 null = nullptr;
+  p32 zero = 0;
+  if (null || zero != nullptr || !(null == zero)) {
+    return false;
+  }
+  p32 a = p32::from_bits(64);
+  p32 b = a + 3;
+  b -= 1;
+  ++b;
+  b++;
+  --b;
+  b--;
+  b += 2;
+  cptr::ptr<const std::uint32_t> c = b;  // same address: copies the offset
+  cptr::ptr<void> v = a;
+  p32 d = 4 + a;
+  d = d - 4;
+  d = nullptr;
+  d = 0;
+  return b.bits() == 64 + 4 * 4 && b - a == 4 && c.bits() == b.bits() &&
+         v.bits() == 64 && (a <=> b) < 0 && a != b && !d;
+}
+static_assert(offset_arithmetic_is_constexpr());
+
+constexpr bool packing_is_constexpr() {
+  cptr::ptr_with_payload<int> pp;
+  pp.set_payload(7);
+  cptr::tagged_ptr<std::uint64_t, 2> t;
+  cptr::ptr_pair<int> pair;
+  (void)pair;
+  return pp.payload() == 7 && t.tag() == 0;
+}
+static_assert(packing_is_constexpr());
+constinit cptr::atomic_ptr<int> global_atomic;
+}  // namespace

@@ -44,13 +44,13 @@ class basic_ptr {
   // Accepts a literal 0 or NULL, which older code uses for null pointers.
   template <class I>
     requires std::is_integral_v<I>
-  basic_ptr([[maybe_unused]] I zero) noexcept {
+  constexpr basic_ptr([[maybe_unused]] I zero) noexcept {
     CPTR_ASSERT(zero == 0, "only zero converts to a pointer");
   }
   explicit(Strict) basic_ptr(T* p) noexcept : bits_(Cage::compress(p)) {}
   template <class U, bool S>
     requires std::is_convertible_v<U*, T*>
-  basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
+  constexpr basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
       : bits_(same_address_v<U>
                   ? other.bits()
                   : Cage::compress(static_cast<T*>(other.get()))) {}
@@ -73,13 +73,13 @@ class basic_ptr {
     bits_ = Cage::compress(p);
     return *this;
   }
-  basic_ptr& operator=(std::nullptr_t) noexcept {
+  constexpr basic_ptr& operator=(std::nullptr_t) noexcept {
     bits_ = 0;
     return *this;
   }
   template <class I>
     requires std::is_integral_v<I>
-  basic_ptr& operator=([[maybe_unused]] I zero) noexcept {
+  constexpr basic_ptr& operator=([[maybe_unused]] I zero) noexcept {
     CPTR_ASSERT(zero == 0, "only zero converts to a pointer");
     bits_ = 0;
     return *this;
@@ -96,7 +96,7 @@ class basic_ptr {
   U& operator*() const noexcept {
     return *static_cast<U*>(Cage::decompress_nonnull(bits_));
   }
-  explicit operator bool() const noexcept { return bits_ != 0; }
+  constexpr explicit operator bool() const noexcept { return bits_ != 0; }
 
   // Pointer arithmetic, so ptr can serve as an allocator's pointer type for
   // containers that index into blocks of elements. It works on the
@@ -107,58 +107,58 @@ class basic_ptr {
   U& operator[](std::ptrdiff_t i) const noexcept {
     return *(*this + i);
   }
-  basic_ptr& operator+=(std::ptrdiff_t n) noexcept
+  constexpr basic_ptr& operator+=(std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
     bits_ += static_cast<std::uint32_t>(n * step());
     return *this;
   }
-  basic_ptr& operator-=(std::ptrdiff_t n) noexcept
+  constexpr basic_ptr& operator-=(std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
     bits_ -= static_cast<std::uint32_t>(n * step());
     return *this;
   }
-  basic_ptr& operator++() noexcept
+  constexpr basic_ptr& operator++() noexcept
     requires(!std::is_void_v<T>)
   {
     return *this += 1;
   }
-  basic_ptr& operator--() noexcept
+  constexpr basic_ptr& operator--() noexcept
     requires(!std::is_void_v<T>)
   {
     return *this -= 1;
   }
-  basic_ptr operator++(int) noexcept
+  constexpr basic_ptr operator++(int) noexcept
     requires(!std::is_void_v<T>)
   {
     basic_ptr old = *this;
     ++*this;
     return old;
   }
-  basic_ptr operator--(int) noexcept
+  constexpr basic_ptr operator--(int) noexcept
     requires(!std::is_void_v<T>)
   {
     basic_ptr old = *this;
     --*this;
     return old;
   }
-  friend basic_ptr operator+(basic_ptr p, std::ptrdiff_t n) noexcept
+  friend constexpr basic_ptr operator+(basic_ptr p, std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
     return p += n;
   }
-  friend basic_ptr operator+(std::ptrdiff_t n, basic_ptr p) noexcept
+  friend constexpr basic_ptr operator+(std::ptrdiff_t n, basic_ptr p) noexcept
     requires(!std::is_void_v<T>)
   {
     return p += n;
   }
-  friend basic_ptr operator-(basic_ptr p, std::ptrdiff_t n) noexcept
+  friend constexpr basic_ptr operator-(basic_ptr p, std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
     return p -= n;
   }
-  friend std::ptrdiff_t operator-(basic_ptr a, basic_ptr b) noexcept
+  friend constexpr std::ptrdiff_t operator-(basic_ptr a, basic_ptr b) noexcept
     requires(!std::is_void_v<T>)
   {
     return (std::int64_t(a.bits_) - std::int64_t(b.bits_)) / step();
@@ -172,28 +172,30 @@ class basic_ptr {
   }
 
   // The compressed representation, e.g. for packing it with other data.
-  std::uint32_t bits() const noexcept { return bits_; }
-  static basic_ptr from_bits(std::uint32_t bits) noexcept {
+  constexpr std::uint32_t bits() const noexcept { return bits_; }
+  static constexpr basic_ptr from_bits(std::uint32_t bits) noexcept {
     basic_ptr p;
     p.bits_ = bits;
     return p;
   }
 
-  friend bool operator==(basic_ptr a, basic_ptr b) noexcept {
+  friend constexpr bool operator==(basic_ptr a, basic_ptr b) noexcept {
     return a.bits_ == b.bits_;
   }
-  friend bool operator==(basic_ptr a, std::nullptr_t) noexcept {
+  friend constexpr bool operator==(basic_ptr a, std::nullptr_t) noexcept {
     return !a.bits_;
   }
   friend bool operator==(basic_ptr a, T* b) noexcept { return a.get() == b; }
   template <class I>
     requires std::is_integral_v<I>
-  friend bool operator==(basic_ptr a, [[maybe_unused]] I zero) noexcept {
+  friend constexpr bool operator==(basic_ptr a,
+                                   [[maybe_unused]] I zero) noexcept {
     CPTR_ASSERT(zero == 0, "only zero compares as a pointer");
     return !a.bits_;
   }
   // All pointers share the cage base, so offsets order like addresses.
-  friend std::strong_ordering operator<=>(basic_ptr a, basic_ptr b) noexcept {
+  friend constexpr std::strong_ordering operator<=>(basic_ptr a,
+                                                    basic_ptr b) noexcept {
     return a.bits_ <=> b.bits_;
   }
 

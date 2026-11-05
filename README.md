@@ -1,8 +1,15 @@
 # compressed-ptr
 
-32-bit compressed pointers for 64-bit C++, in the style of
-[V8's pointer compression](https://v8.dev/blog/pointer-compression). A
-header-only C++20 library.
+[![CI](https://github.com/mvanslobbe/compressed-ptr/actions/workflows/ci.yml/badge.svg)](https://github.com/mvanslobbe/compressed-ptr/actions/workflows/ci.yml)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)
+![header-only](https://img.shields.io/badge/header--only-yes-brightgreen)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
+
+**4-byte pointers for 64-bit C++.** Pointer-heavy data structures, such as
+lists, trees, graphs, tries and object graphs, often spend half their memory
+on pointers. compressed-ptr keeps the nodes in one reserved region (a
+*cage*) and stores each pointer as a 32-bit offset into it, in the style of
+[V8's pointer compression](https://v8.dev/blog/pointer-compression).
 
 ```cpp
 #include "cptr/ptr.hpp"
@@ -17,11 +24,65 @@ head->next = cptr::make<node>(2, nullptr);
 node* raw = head->next;   // converts back to a raw pointer
 ```
 
-Pointer-heavy data structures, such as lists, trees, graphs, tries and
-object graphs, often spend half their memory on pointers. Most programs
-never need more than 4 GiB for one such structure. If every node lives in
-one 4 GiB region, a pointer to a node only needs its 32-bit offset into that
-region.
+## Highlights
+
+- **Half the memory** for linked structures: a list of `uint32_t` takes
+  16 B per element against `std::list`'s 32 B, and a map 24 B against
+  `std::map`'s 48 B ([measurements](#memory-resident-set-growth-for-2000000-elements)).
+- **Often faster, not slower:** smaller nodes mean fewer cache misses. At
+  4 Mi elements the compressed list walks 9% faster than the same list
+  with raw links, and `cptr::ordered_map` finds 11% faster than `std::map`
+  ([latency percentiles](#time-latency-percentiles-against-a-reference)).
+- **Drop-in pieces:** `cptr::ptr<T>` converts to and from `T*`;
+  `cptr::list` and `cptr::ordered_map` have the `std::list` and `std::map`
+  interfaces; `cptr::allocator` and `cptr::fancy_allocator` put standard
+  and fancy-pointer-aware containers in the cage.
+- **A fast built-in allocator** with per-thread caches: 28% faster than
+  glibc `malloc` at the median, and it gives freed memory back to the OS.
+- **Persistent data:** a `mapped_cage` is backed by a file, and the
+  structures in it survive being mapped again at another address.
+- **Up to 32 GiB** per cage with 8-byte alignment, as the JVM's
+  "compressed oops" do, and any number of independent cages.
+- **Tested hard:** differential tests against the standard containers,
+  AddressSanitizer, UndefinedBehaviorSanitizer, ThreadSanitizer, a
+  libFuzzer allocator fuzzer, and CI on Linux, macOS and Windows (x64 and
+  ARM64) with GCC, Clang and MSVC.
+
+## Quick start
+
+Header-only; needs C++20 and a 64-bit target. With CMake:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(compressed_ptr
+  GIT_REPOSITORY https://github.com/mvanslobbe/compressed-ptr.git
+  GIT_TAG main)
+FetchContent_MakeAvailable(compressed_ptr)
+target_link_libraries(your_target PRIVATE compressed_ptr::compressed_ptr)
+```
+
+Or copy `include/cptr` into your project, or install it and use
+`find_package(compressed_ptr)` ([details](#building)).
+
+## Contents
+
+- [Background](#background)
+- [How it works](#how-it-works)
+- [What is in the box](#what-is-in-the-box)
+- [Examples](#examples)
+- [With plf::list (fancy pointers)](#with-plflist-fancy-pointers)
+- [Benchmarks](#benchmarks)
+- [Building](#building)
+- [Rules and limitations](#rules-and-limitations)
+- [Using it in a larger code base](#using-it-in-a-larger-code-base)
+- [Contributing](#contributing)
+- [Licence](#licence)
+
+## Background
+
+Most programs never need more than 4 GiB for one data structure. If every
+node lives in one 4 GiB region, a pointer to a node only needs its 32-bit
+offset into that region.
 
 The idea comes from V8, Chrome's JavaScript engine. It keeps its whole heap
 in one 4 GiB "cage" and stores 32-bit offsets instead of full pointers. See
@@ -83,6 +144,11 @@ allocator, several independent cages, and containers. No V8 code is used.
 | `cptr/ordered_map.hpp` | `cptr::ordered_map<K, V>`: ordered map (red-black tree) with 4-byte links and the `std::map` interface, without node handles |
 | `cptr/mapped_cage.hpp` | `mapped_cage<Tag, SizeLog2 = 32>`: a cage whose memory is a file, with a root pointer; POSIX only |
 | `cptr/all.hpp` | All of the above except `mapped_cage.hpp` |
+
+Operations that only touch the stored offset are `constexpr`: null,
+pointer arithmetic, comparisons, `bits()` and `from_bits()`, and
+conversions that keep the address. Compressing and decompressing need the
+cage's base, which is only known at run time.
 
 Both containers keep a sentinel node in the cage, so an iterator is one
 8-byte pointer and `end()` stays valid as elements come and go. They are
@@ -440,6 +506,12 @@ and the packing helpers, which keep the bit layout in one place. For a code
 base with its own allocator, the reservation and the arithmetic can be used
 on their own, with `cptr::detail::reserve_aligned` and the compress and
 decompress functions.
+
+## Contributing
+
+Contributions are welcome: bug reports, benchmarks on other machines,
+ports, documentation and code. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+how to build, test and send a change.
 
 ## Licence
 

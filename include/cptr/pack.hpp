@@ -19,7 +19,7 @@ namespace cptr {
 template <class A, class B = A, class Cage = default_cage>
 class ptr_pair {
  public:
-  ptr_pair() noexcept = default;
+  constexpr ptr_pair() noexcept = default;
   ptr_pair(A* a, B* b) noexcept
       : bits_(std::uint64_t(Cage::compress(a)) |
               std::uint64_t(Cage::compress(b)) << 32) {}
@@ -46,7 +46,7 @@ class ptr_pair {
 template <class T, class Cage = default_cage>
 class ptr_with_payload {
  public:
-  ptr_with_payload() noexcept = default;
+  constexpr ptr_with_payload() noexcept = default;
   ptr_with_payload(T* p, std::uint32_t payload) noexcept
       : bits_(std::uint64_t(Cage::compress(p)) | std::uint64_t(payload) << 32) {
   }
@@ -54,11 +54,13 @@ class ptr_with_payload {
   T* get() const noexcept {
     return static_cast<T*>(Cage::decompress(std::uint32_t(bits_)));
   }
-  std::uint32_t payload() const noexcept { return std::uint32_t(bits_ >> 32); }
+  constexpr std::uint32_t payload() const noexcept {
+    return std::uint32_t(bits_ >> 32);
+  }
   void set(T* p) noexcept {
     bits_ = (bits_ & ~std::uint64_t(UINT32_MAX)) | Cage::compress(p);
   }
-  void set_payload(std::uint32_t v) noexcept {
+  constexpr void set_payload(std::uint32_t v) noexcept {
     bits_ = (bits_ & UINT32_MAX) | std::uint64_t(v) << 32;
   }
 
@@ -74,14 +76,14 @@ class tagged_ptr {
   static constexpr std::uint32_t kTagMask = (1u << TagBits) - 1;
 
  public:
-  tagged_ptr() noexcept = default;
+  constexpr tagged_ptr() noexcept = default;
   tagged_ptr(T* p, std::uint32_t tag) noexcept { set(p, tag); }
 
   T* get() const noexcept {
     std::uint32_t bits = bits_ & ~kTagMask;
     return static_cast<T*>(Cage::decompress(bits));
   }
-  std::uint32_t tag() const noexcept { return bits_ & kTagMask; }
+  constexpr std::uint32_t tag() const noexcept { return bits_ & kTagMask; }
   void set(T* p, std::uint32_t tag) noexcept {
     CPTR_ASSERT(tag <= kTagMask, "tag does not fit in the tag bits");
     std::uint32_t bits = Cage::compress(p);
@@ -101,13 +103,13 @@ class atomic_ptr {
   static constexpr bool is_always_lock_free =
       std::atomic<std::uint32_t>::is_always_lock_free;
 
-  atomic_ptr() noexcept = default;
+  constexpr atomic_ptr() noexcept = default;
   explicit atomic_ptr(T* p) noexcept : bits_(Cage::compress(p)) {}
   atomic_ptr(const atomic_ptr&) = delete;
   atomic_ptr& operator=(const atomic_ptr&) = delete;
 
   // Not bits_.is_lock_free(): clang emits a call to libatomic for it.
-  bool is_lock_free() const noexcept { return is_always_lock_free; }
+  constexpr bool is_lock_free() const noexcept { return is_always_lock_free; }
 
   T* load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
     return unpack(bits_.load(order));

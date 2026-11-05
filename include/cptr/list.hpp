@@ -33,6 +33,16 @@ class basic_list {
     link_type prev;
     link_type next;
   };
+  // The list is circular, so a node's links are never null and following
+  // one skips decompression's null check.
+  static node_base* follow(const link_type& l) noexcept {
+    if constexpr (Compressed) {
+      return static_cast<node_base*>(Cage::decompress_nonnull(l.bits()));
+    } else {
+      return l;
+    }
+  }
+
   struct node : node_base {
     T value;
   };
@@ -66,7 +76,7 @@ class basic_list {
       return &static_cast<node*>(node_)->value;
     }
     basic_iterator& operator++() noexcept {
-      node_ = node_->next;
+      node_ = follow(node_->next);
       return *this;
     }
     basic_iterator operator++(int) noexcept {
@@ -75,7 +85,7 @@ class basic_list {
       return old;
     }
     basic_iterator& operator--() noexcept {
-      node_ = node_->prev;
+      node_ = follow(node_->prev);
       return *this;
     }
     basic_iterator operator--(int) noexcept {
