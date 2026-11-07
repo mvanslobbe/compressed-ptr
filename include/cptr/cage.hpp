@@ -65,9 +65,9 @@ struct lock_guard {
   lock_guard& operator=(const lock_guard&) = delete;
 };
 
-// Size classes: multiples of 8 up to 128, multiples of 16 up to 256, then
-// four classes per power of two up to 32 KiB. Larger requests get whole
-// spans. Blocks have no header, so a 24-byte node really costs 24 bytes.
+/// Size classes: multiples of 8 up to 128, multiples of 16 up to 256, then
+/// four classes per power of two up to 32 KiB. Larger requests get whole
+/// spans. Blocks have no header, so a 24-byte node really costs 24 bytes.
 inline constexpr std::size_t kMaxSmall = 32 * 1024;
 
 constexpr std::size_t class_count() {
@@ -100,15 +100,15 @@ static_assert(kClassSizes.back() == kMaxSmall && kMaxSmall % 4096 == 0);
 
 }  // namespace detail
 
-// A cage of 2^SizeLog2 bytes. Compressed pointers are 32-bit offsets shifted
-// right by Shift, so a cage can be up to 2^(32 + Shift) bytes as long as all
-// compressed pointers are aligned to 2^Shift.
-//
-// Tag makes each cage a distinct type with its own static base address, so
-// decompression is a load of a global and an add. Define one cage type per
-// heap you want to compress, for example:
-//
-//   struct my_heap : cptr::cage<my_heap> {};
+/// A cage of 2^SizeLog2 bytes. Compressed pointers are 32-bit offsets shifted
+/// right by Shift, so a cage can be up to 2^(32 + Shift) bytes as long as all
+/// compressed pointers are aligned to 2^Shift.
+///
+/// Tag makes each cage a distinct type with its own static base address, so
+/// decompression is a load of a global and an add. Define one cage type per
+/// heap you want to compress, for example:
+///
+///   struct my_heap : cptr::cage<my_heap> {};
 template <class Tag, unsigned SizeLog2 = 32, unsigned Shift = 0>
 class CPTR_VISIBLE cage {
   static_assert(sizeof(void*) == 8, "cages need a 64-bit address space");
@@ -121,17 +121,17 @@ class CPTR_VISIBLE cage {
   using tag = Tag;
   static constexpr std::size_t size = std::size_t(1) << SizeLog2;
   static constexpr unsigned shift = Shift;
-  // Every compressible pointer must be aligned to this.
+  /// Every compressible pointer must be aligned to this.
   static constexpr std::size_t granularity = std::size_t(1) << Shift;
-  // The first span is never handed out, so offset zero stays nullptr. The
-  // last is not either, so that one past the end of any block is inside the
-  // cage and compresses; for a 4 GiB cage the end itself would wrap to 0.
+  /// The first span is never handed out, so offset zero stays nullptr. The
+  /// last is not either, so that one past the end of any block is inside the
+  /// cage and compresses; for a 4 GiB cage the end itself would wrap to 0.
   static constexpr std::size_t span_size = 64 * 1024;
   static constexpr std::size_t span_count = size / span_size;
   static constexpr std::size_t usable_end = size - span_size;
 
-  // Reserve the cage. Called lazily by allocate(); call it early to fail
-  // fast. Returns false if the address space could not be reserved.
+  /// Reserve the cage. Called lazily by allocate(); call it early to fail
+  /// fast. Returns false if the address space could not be reserved.
   static bool init() noexcept {
     if (ready_.load(std::memory_order_acquire)) {
       return true;
@@ -165,8 +165,8 @@ class CPTR_VISIBLE cage {
     return true;
   }
 
-  // Zero until init() succeeds. Any thread that obtained a pointer into the
-  // cage is ordered after init(), so reading the base needs no atomics.
+  /// Zero until init() succeeds. Any thread that obtained a pointer into the
+  /// cage is ordered after init(), so reading the base needs no atomics.
   static std::uintptr_t base() noexcept { return base_; }
 
   static bool contains(const void* p) noexcept {
@@ -184,8 +184,8 @@ class CPTR_VISIBLE cage {
     return static_cast<std::uint32_t>(offset >> Shift);
   }
 
-  // Zero maps back to nullptr. Compilers turn this into a conditional move,
-  // which keeps the null check off the critical path of a pointer chase.
+  /// Zero maps back to nullptr. Compilers turn this into a conditional move,
+  /// which keeps the null check off the critical path of a pointer chase.
   static void* decompress(std::uint32_t bits) noexcept {
     CPTR_ASSERT(bits == 0 || base_ != 0, kUninitialised);
     std::uintptr_t full = base_ + (std::uintptr_t(bits) << Shift);
@@ -197,8 +197,8 @@ class CPTR_VISIBLE cage {
     return reinterpret_cast<void*>(base_ + (std::uintptr_t(bits) << Shift));
   }
 
-  // Allocate memory inside the cage. Throws std::bad_alloc when the cage is
-  // full or cannot be reserved.
+  /// Allocate memory inside the cage. Throws std::bad_alloc when the cage is
+  /// full or cannot be reserved.
   static void* allocate(std::size_t bytes,
                         std::size_t align = alignof(std::max_align_t)) {
     if (void* p = try_allocate(bytes, align)) {
@@ -207,7 +207,7 @@ class CPTR_VISIBLE cage {
     throw std::bad_alloc();
   }
 
-  // As allocate(), but returns nullptr on failure.
+  /// As allocate(), but returns nullptr on failure.
   static void* try_allocate(std::size_t bytes, std::size_t align = alignof(
                                                    std::max_align_t)) noexcept {
     CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
@@ -240,8 +240,8 @@ class CPTR_VISIBLE cage {
     return allocate_large(bytes, align);
   }
 
-  // Free memory from allocate(). The size is not needed: the span table
-  // records how every span is used.
+  /// Free memory from allocate(). The size is not needed: the span table
+  /// records how every span is used.
   static void deallocate(void* p) noexcept {
     if (!p) {
       return;
@@ -276,7 +276,7 @@ class CPTR_VISIBLE cage {
     deallocate(p);
   }
 
-  // Bytes handed out and not yet freed, rounded up to the size class.
+  /// Bytes handed out and not yet freed, rounded up to the size class.
   static std::size_t allocated_bytes() noexcept {
     if (!ready_.load(std::memory_order_acquire)) {
       return 0;
@@ -290,7 +290,7 @@ class CPTR_VISIBLE cage {
     return bytes;
   }
 
-  // Bytes of the cage backed by committed memory.
+  /// Bytes of the cage backed by committed memory.
   static std::size_t committed_bytes() noexcept {
     if (!ready_.load(std::memory_order_acquire)) {
       return 0;
@@ -299,11 +299,11 @@ class CPTR_VISIBLE cage {
     return state().committed;
   }
 
-  // Return the memory the allocator keeps for reuse to the OS: this
-  // thread's cached blocks go back to their slabs, and empty slabs are
-  // purged. Freed memory is otherwise returned on its own once it has been
-  // unused for a quarter of a second, checked whenever a slab becomes
-  // empty; other threads' cached blocks go back when they exit.
+  /// Return the memory the allocator keeps for reuse to the OS: this
+  /// thread's cached blocks go back to their slabs, and empty slabs are
+  /// purged. Freed memory is otherwise returned on its own once it has been
+  /// unused for a quarter of a second, checked whenever a slab becomes
+  /// empty; other threads' cached blocks go back when they exit.
   static void trim() noexcept {
     if (!ready_.load(std::memory_order_acquire)) {
       return;
@@ -317,7 +317,7 @@ class CPTR_VISIBLE cage {
     purge_empty_slabs(INT64_MAX);
   }
 
-  // A std::pmr::memory_resource that allocates from this cage.
+  /// A std::pmr::memory_resource that allocates from this cage.
   static std::pmr::memory_resource* resource() noexcept {
     // Never destroyed, so containers with static storage duration can still
     // free into it during program exit.
@@ -331,14 +331,14 @@ class CPTR_VISIBLE cage {
   static constexpr std::uint8_t kFreeSpan = 0xFD;  // in a decommitted run
   static constexpr std::size_t kCommitStep = 1024 * 1024;
   static constexpr std::uint32_t kRecent = 32;
-  // Empty slabs stay committed for reuse until they have been empty this
-  // long, or until more than kRetainMax bytes of them are kept.
+  /// Empty slabs stay committed for reuse until they have been empty this
+  /// long, or until more than kRetainMax bytes of them are kept.
   static constexpr std::int64_t kRetainMs = 250;
   static constexpr std::size_t kRetainMax = 64 * 1024 * 1024;
   static constexpr std::uint8_t kEmptySlab = 0xFC;
 
-  // Bookkeeping for small-block slabs, one entry per span. |start| is set
-  // for every span of a slab; the other fields only at its first span.
+  /// Bookkeeping for small-block slabs, one entry per span. |start| is set
+  /// for every span of a slab; the other fields only at its first span.
   struct slab_meta {
     std::uint32_t start;
     std::uint32_t live;       // blocks handed out
@@ -348,9 +348,9 @@ class CPTR_VISIBLE cage {
     std::uint32_t in_partial;
   };
 
-  // Zero-filled by the OS and only backed by memory where it is touched, so
-  // a 4 GiB cage costs 1.5 MiB of address space but only a page or two per
-  // 4 MiB of cage in use.
+  /// Zero-filled by the OS and only backed by memory where it is touched, so
+  /// a 4 GiB cage costs 1.5 MiB of address space but only a page or two per
+  /// 4 MiB of cage in use.
   static slab_meta* new_slab_table() {
     std::size_t bytes = span_count * sizeof(slab_meta);
     bytes = (bytes + 65535) / 65536 * 65536;
@@ -369,13 +369,13 @@ class CPTR_VISIBLE cage {
     std::size_t commit_end = 0;  // end of the committed bump region
     std::size_t committed = 0;   // bytes currently committed
     std::size_t allocated = 0;
-    // Per size class: the slab blocks are taken from, the unused tail of
-    // that slab, and a list of other slabs that have free blocks.
+    /// Per size class: the slab blocks are taken from, the unused tail of
+    /// that slab, and a list of other slabs that have free blocks.
     std::array<std::uint32_t, detail::kClassSizes.size()> current{};
     std::array<std::size_t, detail::kClassSizes.size()> slab_cursor{};
     std::array<std::size_t, detail::kClassSizes.size()> slab_end{};
     std::array<std::uint32_t, detail::kClassSizes.size()> partial{};
-    // Every thread's cache, for allocated_bytes().
+    /// Every thread's cache, for allocated_bytes().
     thread_cache* caches = nullptr;
     slab_meta* slabs = new_slab_table();
     struct empty_slab {
@@ -386,8 +386,8 @@ class CPTR_VISIBLE cage {
     std::size_t empty_bytes = 0;
     std::vector<std::uint8_t> span_class =
         std::vector<std::uint8_t>(span_count, kUnusedSpan);
-    // For a large allocation or a free run: its length in spans, stored at
-    // its first and last span so that neighbours can be merged.
+    /// For a large allocation or a free run: its length in spans, stored at
+    /// its first and last span so that neighbours can be merged.
     std::vector<std::uint32_t> run_length =
         std::vector<std::uint32_t>(span_count, 0);
     std::multimap<std::uint32_t, std::uint32_t> free_runs;  // length -> first
@@ -405,20 +405,20 @@ class CPTR_VISIBLE cage {
     }
   };
 
-  // Never destroyed, for the same reason as resource().
+  /// Never destroyed, for the same reason as resource().
   static state_type& state() {
     static state_type* s = new state_type;
     return *s;
   }
 
-  // Freed small blocks, per thread and size class, so that most
-  // allocations and frees take no lock. Blocks here count as live in their
-  // slabs. A thread's cache goes back to the slabs when the thread exits.
+  /// Freed small blocks, per thread and size class, so that most
+  /// allocations and frees take no lock. Blocks here count as live in their
+  /// slabs. A thread's cache goes back to the slabs when the thread exits.
   struct thread_cache {
     std::array<std::uint32_t, detail::kClassSizes.size()> count{};
     std::array<std::array<std::uint32_t, kRecent>, detail::kClassSizes.size()>
         blocks;
-    // Bytes in |blocks|. Only the owning thread writes it.
+    /// Bytes in |blocks|. Only the owning thread writes it.
     std::atomic<std::size_t> cached{0};
     thread_cache* next = nullptr;
     thread_cache* prev = nullptr;
@@ -456,13 +456,13 @@ class CPTR_VISIBLE cage {
     return c;
   }
 
-  // Blocks a thread keeps per class: up to kRecent, and up to 32 KiB.
+  /// Blocks a thread keeps per class: up to kRecent, and up to 32 KiB.
   static std::uint32_t cache_capacity(int cls) noexcept {
     std::uint32_t n = 32768 / detail::kClassSizes[cls];
     return n < 4 ? 4 : n > kRecent ? kRecent : n;
   }
 
-  // Fill half of this thread's cache for |cls| from the slabs.
+  /// Fill half of this thread's cache for |cls| from the slabs.
   static bool refill(thread_cache& tc, int cls) noexcept {
     state_type& st = state();
     std::uint32_t block_size = detail::kClassSizes[cls];
@@ -501,8 +501,8 @@ class CPTR_VISIBLE cage {
     return n > 0;
   }
 
-  // Return the oldest |k| blocks of this thread's cache for |cls| to their
-  // slabs.
+  /// Return the oldest |k| blocks of this thread's cache for |cls| to their
+  /// slabs.
   static void flush(thread_cache& tc, int cls, std::uint32_t k) noexcept {
     if (k == 0) {
       return;
@@ -572,8 +572,8 @@ class CPTR_VISIBLE cage {
     }
   }
 
-  // Record a free run. If the index cannot grow, the run is leaked: its
-  // memory is already decommitted, only the address space is lost.
+  /// Record a free run. If the index cannot grow, the run is leaked: its
+  /// memory is already decommitted, only the address space is lost.
   static void remember_free_run(std::uint32_t first,
                                 std::uint32_t count) noexcept {
     set_run(first, count, kFreeSpan);
@@ -583,8 +583,8 @@ class CPTR_VISIBLE cage {
     }
   }
 
-  // Take |count| spans, reusing a free run if one is big enough, and commit
-  // them. Returns 0 on failure.
+  /// Take |count| spans, reusing a free run if one is big enough, and commit
+  /// them. Returns 0 on failure.
   static std::uint32_t take_spans(std::uint32_t count) noexcept {
     std::uint32_t first = take_spans_once(count);
     if (!first && state().empty_bytes) {
@@ -595,8 +595,8 @@ class CPTR_VISIBLE cage {
     return first;
   }
 
-  // A parked empty slab of |count| spans, most recently emptied first, as
-  // its memory is still resident. Returns 0 if there is none.
+  /// A parked empty slab of |count| spans, most recently emptied first, as
+  /// its memory is still resident. Returns 0 if there is none.
   static std::uint32_t reuse_empty_slab(std::uint32_t count) noexcept {
     auto& empty = state().empty;
     for (auto it = empty.rbegin(); it != empty.rend(); ++it) {
@@ -610,8 +610,8 @@ class CPTR_VISIBLE cage {
     return 0;
   }
 
-  // Keep an empty slab committed for reuse, then purge slabs that have been
-  // empty too long or exceed the retention limit.
+  /// Keep an empty slab committed for reuse, then purge slabs that have been
+  /// empty too long or exceed the retention limit.
   static void park_empty_slab(std::uint32_t first,
                               std::uint32_t count) noexcept {
     state_type& st = state();
@@ -627,8 +627,8 @@ class CPTR_VISIBLE cage {
     purge_empty_slabs(now - kRetainMs);
   }
 
-  // Purge parked slabs emptied before |before_ms|, and the oldest beyond
-  // kRetainMax. purge_empty_slabs(INT64_MAX) purges all of them.
+  /// Purge parked slabs emptied before |before_ms|, and the oldest beyond
+  /// kRetainMax. purge_empty_slabs(INT64_MAX) purges all of them.
   static void purge_empty_slabs(std::int64_t before_ms) noexcept {
     state_type& st = state();
     while (!st.empty.empty() && (st.empty.front().since_ms < before_ms ||
@@ -688,7 +688,7 @@ class CPTR_VISIBLE cage {
     return static_cast<std::uint32_t>(start / span_size);
   }
 
-  // Spans per slab: a whole number holding at least 16 blocks.
+  /// Spans per slab: a whole number holding at least 16 blocks.
   static std::uint32_t slab_spans(std::uint32_t block_size) noexcept {
     return static_cast<std::uint32_t>(
         (std::size_t(block_size) * 16 + span_size - 1) / span_size);
@@ -762,9 +762,9 @@ class CPTR_VISIBLE cage {
     return p;
   }
 
-  // Put a block back on its slab's free list. A slab that is not the
-  // current one joins the partial list, or, once all its blocks are free,
-  // is decommitted and its spans returned.
+  /// Put a block back on its slab's free list. A slab that is not the
+  /// current one joins the partial list, or, once all its blocks are free,
+  /// is decommitted and its spans returned.
   static void return_to_slab(void* p, int cls) noexcept {
     state_type& st = state();
     std::uint32_t block_size = detail::kClassSizes[cls];
@@ -825,10 +825,10 @@ class CPTR_VISIBLE cage {
     release_run(first, count);
   }
 
-  // Decommit |count| spans from |first| and record them as a free run,
-  // merged with free neighbours.
-  // |purge| releases the pages but keeps the mapping, which is cheaper for
-  // slabs; large runs are decommitted, so stray accesses fault.
+  /// Decommit |count| spans from |first| and record them as a free run,
+  /// merged with free neighbours.
+  /// |purge| releases the pages but keeps the mapping, which is cheaper for
+  /// slabs; large runs are decommitted, so stray accesses fault.
   static void release_run(std::uint32_t first, std::uint32_t count,
                           bool purge = false) noexcept {
     state_type& st = state();
@@ -864,7 +864,7 @@ class CPTR_VISIBLE cage {
   inline static std::atomic<bool> ready_{false};
 };
 
-// The default cage: 4 GiB, byte granularity.
+/// The default cage: 4 GiB, byte granularity.
 struct CPTR_VISIBLE default_cage : cage<default_cage> {};
 
 }  // namespace cptr

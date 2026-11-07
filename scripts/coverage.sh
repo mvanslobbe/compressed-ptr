@@ -25,3 +25,18 @@ done
   -instr-profile=all.profdata -format=html -output-dir=coverage-html \
   ../include/cptr/*.hpp
 echo "HTML report: $build/coverage-html/index.html"
+
+# Line coverage as a shields.io endpoint badge, for the README.
+# shellcheck disable=SC2086
+"llvm-cov${LLVM_SUFFIX:-}" export ./compressed_ptr_tests $objects \
+  -instr-profile=all.profdata -summary-only ../include/cptr/*.hpp > summary.json
+python3 - <<'PYEOF'
+import json
+lines = json.load(open("summary.json"))["data"][0]["totals"]["lines"]
+pct = lines["percent"]
+color = "brightgreen" if pct >= 90 else "green" if pct >= 80 else "yellow" if pct >= 70 else "red"
+json.dump({"schemaVersion": 1, "label": "coverage",
+           "message": f"{pct:.0f}%", "color": color},
+          open("coverage-html/badge.json", "w"))
+print(f"line coverage {pct:.1f}%")
+PYEOF

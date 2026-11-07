@@ -40,8 +40,8 @@ class fancy_allocator {
     Cage::deallocate(p.get());
   }
 
-  // std::allocator_traits::construct takes a raw pointer; containers written
-  // for fancy pointers pass the allocator's pointer type instead.
+  /// std::allocator_traits::construct takes a raw pointer; containers written
+  /// for fancy pointers pass the allocator's pointer type instead.
   template <class U, class... Args>
   void construct(U* p, Args&&... args) {
     ::new (static_cast<void*>(p)) U(std::forward<Args>(args)...);

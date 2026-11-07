@@ -14,8 +14,8 @@
 
 namespace cptr {
 
-// Two compressed pointers in 8 bytes, e.g. a tree node's children or a list
-// node's links.
+/// Two compressed pointers in 8 bytes, e.g. a tree node's children or a list
+/// node's links.
 template <class A, class B = A, class Cage = default_cage>
 class ptr_pair {
  public:
@@ -41,8 +41,8 @@ class ptr_pair {
   std::uint64_t bits_ = 0;
 };
 
-// A compressed pointer and a 32-bit payload in 8 bytes, e.g. a node pointer
-// and a count, hash or flags.
+/// A compressed pointer and a 32-bit payload in 8 bytes, e.g. a node pointer
+/// and a count, hash or flags.
 template <class T, class Cage = default_cage>
 class ptr_with_payload {
  public:
@@ -68,8 +68,8 @@ class ptr_with_payload {
   std::uint64_t bits_ = 0;
 };
 
-// A compressed pointer with TagBits small tag bits stored in its alignment
-// bits, all in 4 bytes. T must be aligned to 2^(TagBits + Cage::shift).
+/// A compressed pointer with TagBits small tag bits stored in its alignment
+/// bits, all in 4 bytes. T must be aligned to 2^(TagBits + Cage::shift).
 template <class T, unsigned TagBits, class Cage = default_cage>
 class tagged_ptr {
   static_assert(TagBits >= 1 && TagBits <= 4);
@@ -96,7 +96,7 @@ class tagged_ptr {
   std::uint32_t bits_ = 0;
 };
 
-// A compressed pointer that can be updated atomically.
+/// A compressed pointer that can be updated atomically.
 template <class T, class Cage = default_cage>
 class atomic_ptr {
  public:
@@ -108,7 +108,7 @@ class atomic_ptr {
   atomic_ptr(const atomic_ptr&) = delete;
   atomic_ptr& operator=(const atomic_ptr&) = delete;
 
-  // Not bits_.is_lock_free(): clang emits a call to libatomic for it.
+  /// Not bits_.is_lock_free(): clang emits a call to libatomic for it.
   constexpr bool is_lock_free() const noexcept { return is_always_lock_free; }
 
   T* load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
@@ -159,7 +159,7 @@ class atomic_ptr {
                                    failure_order(order));
   }
 
-  // Blocks until the value is no longer |old| (and a notify call wakes it).
+  /// Blocks until the value is no longer |old| (and a notify call wakes it).
   void wait(T* old, std::memory_order order =
                         std::memory_order_seq_cst) const noexcept {
     bits_.wait(Cage::compress(old), order);
@@ -171,7 +171,7 @@ class atomic_ptr {
   static T* unpack(std::uint32_t bits) noexcept {
     return static_cast<T*>(Cage::decompress(bits));
   }
-  // The failure order std::atomic derives from a single order.
+  /// The failure order std::atomic derives from a single order.
   static constexpr std::memory_order failure_order(
       std::memory_order order) noexcept {
     if (order == std::memory_order_acq_rel) {

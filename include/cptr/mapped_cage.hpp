@@ -27,26 +27,26 @@
 
 namespace cptr {
 
-// A cage of 2^SizeLog2 bytes whose memory is the file opened with open().
-// It has the interface the containers and cptr::ptr need, plus a root
-// pointer stored in the file to find the data again after reopening.
-//
-//   struct store_tag {};
-//   using store = cptr::mapped_cage<store_tag>;
-//   store::open("data.cage");
-//   auto* r = store::root<my_root>();  // nullptr in a new file
-//
-// The file is created sparse at the full cage size; only pages written to
-// take disk space. Everything that must survive reopening has to live in
-// the cage and point into it with cptr::ptr: a cptr::list or
-// cptr::ordered_map of trivially copyable values qualifies, a std::string
-// does not.
-//
-// The allocator's state is in the file too, behind a lock in the file, so
-// several processes may allocate in the same file at once. The containers
-// themselves are not synchronised. A process that dies while holding the
-// lock leaves the file locked. Freed small blocks are kept per size class;
-// freed large runs are kept in one list, first fit, without coalescing.
+/// A cage of 2^SizeLog2 bytes whose memory is the file opened with open().
+/// It has the interface the containers and cptr::ptr need, plus a root
+/// pointer stored in the file to find the data again after reopening.
+///
+///   struct store_tag {};
+///   using store = cptr::mapped_cage<store_tag>;
+///   store::open("data.cage");
+///   auto* r = store::root<my_root>();  // nullptr in a new file
+///
+/// The file is created sparse at the full cage size; only pages written to
+/// take disk space. Everything that must survive reopening has to live in
+/// the cage and point into it with cptr::ptr: a cptr::list or
+/// cptr::ordered_map of trivially copyable values qualifies, a std::string
+/// does not.
+///
+/// The allocator's state is in the file too, behind a lock in the file, so
+/// several processes may allocate in the same file at once. The containers
+/// themselves are not synchronised. A process that dies while holding the
+/// lock leaves the file locked. Freed small blocks are kept per size class;
+/// freed large runs are kept in one list, first fit, without coalescing.
 template <class Tag, unsigned SizeLog2 = 32>
 class CPTR_VISIBLE mapped_cage {
   static_assert(sizeof(void*) == 8, "cages need a 64-bit address space");
@@ -60,13 +60,13 @@ class CPTR_VISIBLE mapped_cage {
   static constexpr std::size_t granularity = 1;
   static constexpr std::size_t span_size = 64 * 1024;
   static constexpr std::size_t span_count = size / span_size;
-  // The last span is never handed out, so one past the end of any block
-  // compresses; see cage::usable_end.
+  /// The last span is never handed out, so one past the end of any block
+  /// compresses; see cage::usable_end.
   static constexpr std::size_t usable_end = size - span_size;
 
-  // Map the file at |path| as the cage, creating it if it does not exist.
-  // Fails if a file is already open, if the file is not a cage of this
-  // size, or if address space or the file cannot be had.
+  /// Map the file at |path| as the cage, creating it if it does not exist.
+  /// Fails if a file is already open, if the file is not a cage of this
+  /// size, or if address space or the file cannot be had.
   static bool open(const char* path) noexcept {
     if (base_ != 0) {
       return false;
@@ -101,8 +101,8 @@ class CPTR_VISIBLE mapped_cage {
     return true;
   }
 
-  // Write the file's changed pages back and unmap it. Pointers into the
-  // cage are invalid afterwards.
+  /// Write the file's changed pages back and unmap it. Pointers into the
+  /// cage are invalid afterwards.
   static void close() noexcept {
     if (base_ == 0) {
       return;
@@ -113,7 +113,7 @@ class CPTR_VISIBLE mapped_cage {
     base_ = 0;
   }
 
-  // Write changed pages back to the file without unmapping it.
+  /// Write changed pages back to the file without unmapping it.
   static bool flush() noexcept {
     return base_ != 0 &&
            msync(reinterpret_cast<void*>(base_), size, MS_SYNC) == 0;
@@ -121,14 +121,14 @@ class CPTR_VISIBLE mapped_cage {
 
   static bool is_open() noexcept { return base_ != 0; }
 
-  // Zero while no file is open.
+  /// Zero while no file is open.
   static std::uintptr_t base() noexcept { return base_; }
 
-  // Where the file was mapped the last time before this open(), or 0 for a
-  // new file.
+  /// Where the file was mapped the last time before this open(), or 0 for a
+  /// new file.
   static std::uintptr_t previous_base() noexcept { return previous_base_; }
 
-  // The object the file's user designated with set_root(), or nullptr.
+  /// The object the file's user designated with set_root(), or nullptr.
   template <class T>
   static T* root() noexcept {
     return static_cast<T*>(decompress(hdr()->root.load()));
@@ -169,7 +169,7 @@ class CPTR_VISIBLE mapped_cage {
     throw std::bad_alloc();
   }
 
-  // Returns nullptr when the cage is full or no file is open.
+  /// Returns nullptr when the cage is full or no file is open.
   static void* try_allocate(std::size_t bytes, std::size_t align = alignof(
                                                    std::max_align_t)) noexcept {
     CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
@@ -232,7 +232,7 @@ class CPTR_VISIBLE mapped_cage {
     deallocate(p);
   }
 
-  // Bytes handed out and not yet freed, rounded up to the size class.
+  /// Bytes handed out and not yet freed, rounded up to the size class.
   static std::size_t allocated_bytes() noexcept {
     return base_ ? std::size_t(hdr()->allocated) : 0;
   }
@@ -242,15 +242,15 @@ class CPTR_VISIBLE mapped_cage {
   static constexpr std::uint32_t kVersion = 1;
   static constexpr std::uint32_t kLarge = 0x80000000u;
   static constexpr std::size_t kClasses = detail::kClassSizes.size();
-  // One 32-bit entry per span: 0 if free or inside a large run, the size
-  // class + 1 for a slab span, or kLarge | length at the start of a large
-  // run. It follows the header span.
+  /// One 32-bit entry per span: 0 if free or inside a large run, the size
+  /// class + 1 for a slab span, or kLarge | length at the start of a large
+  /// run. It follows the header span.
   static constexpr std::size_t kTableSpans =
       (span_count * 4 + span_size - 1) / span_size;
   static constexpr std::uint32_t kFirstSpan = 1 + kTableSpans;
 
-  // The file's first span. Offset 0 is never handed out, so its use here
-  // costs nothing.
+  /// The file's first span. Offset 0 is never handed out, so its use here
+  /// costs nothing.
   struct header {
     std::uint64_t magic;
     std::uint32_t version;
@@ -269,7 +269,7 @@ class CPTR_VISIBLE mapped_cage {
   static_assert(std::atomic<std::uint32_t>::is_always_lock_free,
                 "the lock must work between processes");
 
-  // At the start of a freed large run.
+  /// At the start of a freed large run.
   struct free_run_header {
     std::uint32_t spans;
     std::uint32_t next;  // span index, 0 = end
@@ -305,8 +305,8 @@ class CPTR_VISIBLE mapped_cage {
     return reinterpret_cast<void*>(base_ + off);
   }
 
-  // The smallest class that fits |bytes| and is a multiple of |align|, or
-  // -1 for a large allocation.
+  /// The smallest class that fits |bytes| and is a multiple of |align|, or
+  /// -1 for a large allocation.
   static int size_class(std::size_t bytes, std::size_t align) noexcept {
     for (std::size_t i = 0; i < kClasses; i++) {
       std::uint32_t s = detail::kClassSizes[i];
@@ -317,12 +317,12 @@ class CPTR_VISIBLE mapped_cage {
     return -1;
   }
 
-  // Enough spans for at least 8 blocks.
+  /// Enough spans for at least 8 blocks.
   static std::uint32_t slab_spans(std::uint32_t block) noexcept {
     return std::uint32_t((std::size_t(block) * 8 + span_size - 1) / span_size);
   }
 
-  // Returns the first of |count| fresh spans, or 0 if the cage is full.
+  /// Returns the first of |count| fresh spans, or 0 if the cage is full.
   static std::uint32_t take_spans(header* h, std::uint32_t count) noexcept {
     // First fit from the freed large runs.
     std::uint32_t* link = &h->free_runs;

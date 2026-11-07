@@ -65,8 +65,8 @@ namespace cptr::detail {
 
 namespace cptr::detail {
 
-// Reserve |size| bytes of inaccessible address space aligned to |align|.
-// Returns nullptr on failure.
+/// Reserve |size| bytes of inaccessible address space aligned to |align|.
+/// Returns nullptr on failure.
 inline void* reserve_aligned(std::size_t size, std::size_t align) noexcept {
 #if defined(_WIN32)
   // Windows cannot release part of a reservation, so reserve an oversized
@@ -112,7 +112,7 @@ inline void* reserve_aligned(std::size_t size, std::size_t align) noexcept {
 }
 
 #ifdef CPTR_FAULT_INJECTION
-// Tests set this to make the next N commits fail.
+/// Tests set this to make the next N commits fail.
 inline std::atomic<int> commit_failures_to_inject{0};
 #endif
 
@@ -130,7 +130,7 @@ inline bool commit(void* p, std::size_t size) noexcept {
 #endif
 }
 
-// Return the physical memory and make the range inaccessible again.
+/// Return the physical memory and make the range inaccessible again.
 inline void decommit(void* p, std::size_t size) noexcept {
 #if defined(_WIN32)
   VirtualFree(p, size, MEM_DECOMMIT);
@@ -143,11 +143,11 @@ inline void decommit(void* p, std::size_t size) noexcept {
 #endif
 }
 
-// Give the pages of a committed range back to the OS. On Linux and macOS
-// the range stays mapped and reads as zeros afterwards; unlike decommit()
-// this does not split the mapping, so it is much cheaper for small ranges.
-// The caller must commit() the range again before reusing it, which is
-// needed on Windows, where this decommits.
+/// Give the pages of a committed range back to the OS. On Linux and macOS
+/// the range stays mapped and reads as zeros afterwards; unlike decommit()
+/// this does not split the mapping, so it is much cheaper for small ranges.
+/// The caller must commit() the range again before reusing it, which is
+/// needed on Windows, where this decommits.
 inline void purge(void* p, std::size_t size) noexcept {
 #if defined(_WIN32)
   VirtualFree(p, size, MEM_DECOMMIT);

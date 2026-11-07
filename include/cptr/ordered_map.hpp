@@ -22,12 +22,12 @@
 namespace cptr {
 namespace detail {
 
-// The map behind cptr::ordered_map. Compressed = false gives the same tree
-// with raw 8-byte links, which the benchmarks compare against.
-//
-// A red-black tree with parent links. A header node in the cage holds the
-// root, the leftmost and the rightmost node, and serves as end(), so
-// iterators are a single node pointer and the map object can live anywhere.
+/// The map behind cptr::ordered_map. Compressed = false gives the same tree
+/// with raw 8-byte links, which the benchmarks compare against.
+///
+/// A red-black tree with parent links. A header node in the cage holds the
+/// root, the leftmost and the rightmost node, and serves as end(), so
+/// iterators are a single node pointer and the map object can live anywhere.
 template <class K, class V, class Compare, class Cage, bool Compressed>
 class basic_ordered_map {
   struct node_base;
@@ -114,7 +114,7 @@ class basic_ordered_map {
   using reverse_iterator = std::reverse_iterator<iterator>;
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-  // Allocates the header, so it can throw std::bad_alloc.
+  /// Allocates the header, so it can throw std::bad_alloc.
   basic_ordered_map() : header_(new_header()) {}
   explicit basic_ordered_map(const Compare& comp)
       : header_(new_header()), comp_(comp) {}
@@ -126,7 +126,7 @@ class basic_ordered_map {
   basic_ordered_map(std::initializer_list<value_type> values,
                     const Compare& comp = Compare())
       : basic_ordered_map(values.begin(), values.end(), comp) {}
-  // Copies the tree's shape, in linear time.
+  /// Copies the tree's shape, in linear time.
   basic_ordered_map(const basic_ordered_map& other)
       : basic_ordered_map(other.comp_) {
     if (node_base* root = other.root()) {
@@ -137,8 +137,8 @@ class basic_ordered_map {
       size_ = other.size_;
     }
   }
-  // Takes the other map's nodes and header; the other map is left empty
-  // and allocates a new header when it is next inserted into.
+  /// Takes the other map's nodes and header; the other map is left empty
+  /// and allocates a new header when it is next inserted into.
   basic_ordered_map(basic_ordered_map&& other) noexcept
       : header_(std::exchange(other.header_, nullptr)),
         size_(std::exchange(other.size_, 0)),
@@ -203,8 +203,8 @@ class basic_ordered_map {
   }
   key_compare key_comp() const { return comp_; }
 
-  // Lookup. The template overloads take any key type that a transparent
-  // comparator (one with is_transparent, such as std::less<>) accepts.
+  /// Lookup. The template overloads take any key type that a transparent
+  /// comparator (one with is_transparent, such as std::less<>) accepts.
   iterator find(const K& key) { return iterator(find_node(key)); }
   const_iterator find(const K& key) const {
     return const_iterator(find_node(key));
@@ -289,8 +289,8 @@ class basic_ordered_map {
   V& operator[](const K& key) { return try_emplace(key).first->second; }
   V& operator[](K&& key) { return try_emplace(std::move(key)).first->second; }
 
-  // Insertion. As std::map: emplace builds the element first, try_emplace
-  // only builds the mapped value if the key is new.
+  /// Insertion. As std::map: emplace builds the element first, try_emplace
+  /// only builds the mapped value if the key is new.
   template <class... Args>
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
@@ -302,7 +302,7 @@ class basic_ordered_map {
     attach(n, parent, left);
     return {iterator(n), true};
   }
-  // The hint is not used; the result is the same as emplace's.
+  /// The hint is not used; the result is the same as emplace's.
   template <class... Args>
   iterator emplace_hint(const_iterator, Args&&... args) {
     return emplace(std::forward<Args>(args)...).first;
@@ -415,7 +415,7 @@ class basic_ordered_map {
                                                   b.end());
   }
 
-  // Checks the red-black and ordering invariants and the header; for tests.
+  /// Checks the red-black and ordering invariants and the header; for tests.
   bool valid() const {
     if (!header()) {
       return size_ == 0;
@@ -438,10 +438,10 @@ class basic_ordered_map {
                               }) == end();
   }
 
-  // The number of nodes on the longest path from the root; for tests.
+  /// The number of nodes on the longest path from the root; for tests.
   std::size_t height() const { return header() ? depth(root()) : 0; }
 
-  // Bytes per element, including the links: what the cage hands out.
+  /// Bytes per element, including the links: what the cage hands out.
   static constexpr std::size_t node_size = sizeof(node);
 
  private:
@@ -533,7 +533,7 @@ class basic_ordered_map {
     node_base* existing;
   };
 
-  // Where |key| belongs, or the node that already has it.
+  /// Where |key| belongs, or the node that already has it.
   slot find_slot(const K& key) {
     if (!header()) {
       header_ = new_header();
@@ -603,7 +603,7 @@ class basic_ordered_map {
     }
   }
 
-  // x's right child takes x's place.
+  /// x's right child takes x's place.
   void rotate_left(node_base* x) noexcept {
     node_base* y = x->right;
     node_base* b = y->left;
@@ -673,7 +673,7 @@ class basic_ordered_map {
     root()->color = kBlack;
   }
 
-  // Put |v| (possibly null) where |u| was.
+  /// Put |v| (possibly null) where |u| was.
   void transplant(node_base* u, node_base* v) noexcept {
     replace_child(u, v);
     if (v) {
@@ -785,7 +785,7 @@ class basic_ordered_map {
     }
   }
 
-  // Copy the subtree at |n|, colours included.
+  /// Copy the subtree at |n|, colours included.
   node_base* clone(node_base* n, node_base* parent) {
     node* copy = new_node(static_cast<node*>(n)->kv);
     copy->color = n->color;
@@ -850,9 +850,9 @@ class basic_ordered_map {
     return p;
   }
 
-  // The number of black nodes on every path down from |n|, or 0 if the
-  // paths differ or a red node has a red child. Counts the nodes into
-  // |count| and checks the parent links and the key order.
+  /// The number of black nodes on every path down from |n|, or 0 if the
+  /// paths differ or a red node has a red child. Counts the nodes into
+  /// |count| and checks the parent links and the key order.
   std::size_t black_height(node_base* n, std::size_t& count) const {
     if (!n) {
       return 1;
@@ -879,8 +879,8 @@ class basic_ordered_map {
 
   node_base* header() const noexcept { return header_; }
 
-  // A compressed link, so that a map placed in a mapped_cage file is still
-  // valid when the file is mapped elsewhere.
+  /// A compressed link, so that a map placed in a mapped_cage file is still
+  /// valid when the file is mapped elsewhere.
   link_type header_;
   std::size_t size_ = 0;
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -892,8 +892,8 @@ class basic_ordered_map {
 
 }  // namespace detail
 
-// An ordered map with 4-byte links, like std::map without the allocator
-// parameter and node handles. Nodes are allocated in |Cage|.
+/// An ordered map with 4-byte links, like std::map without the allocator
+/// parameter and node handles. Nodes are allocated in |Cage|.
 template <class K, class V, class Compare = std::less<K>,
           class Cage = default_cage>
 using ordered_map = detail::basic_ordered_map<K, V, Compare, Cage, true>;

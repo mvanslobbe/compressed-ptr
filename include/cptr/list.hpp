@@ -18,13 +18,13 @@
 namespace cptr {
 namespace detail {
 
-// The list behind cptr::list. Compressed = false gives the same list with
-// raw 8-byte links, which the benchmarks compare against.
-//
-// It is circular around a sentinel node that holds only the two links. The
-// sentinel lives in the cage, so it can be linked to with compressed
-// pointers, and the list object itself can live anywhere. Iterators are a
-// single node pointer, and end() stays valid while the list exists.
+/// The list behind cptr::list. Compressed = false gives the same list with
+/// raw 8-byte links, which the benchmarks compare against.
+///
+/// It is circular around a sentinel node that holds only the two links. The
+/// sentinel lives in the cage, so it can be linked to with compressed
+/// pointers, and the list object itself can live anywhere. Iterators are a
+/// single node pointer, and end() stays valid while the list exists.
 template <class T, class Cage, bool Compressed>
 class basic_list {
   struct node_base;
@@ -33,8 +33,8 @@ class basic_list {
     link_type prev;
     link_type next;
   };
-  // The list is circular, so a node's links are never null and following
-  // one skips decompression's null check.
+  /// The list is circular, so a node's links are never null and following
+  /// one skips decompression's null check.
   static node_base* follow(const link_type& l) noexcept {
     if constexpr (Compressed) {
       return static_cast<node_base*>(Cage::decompress_nonnull(l.bits()));
@@ -109,7 +109,7 @@ class basic_list {
   using reverse_iterator = std::reverse_iterator<iterator>;
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-  // Allocates the sentinel, so it can throw std::bad_alloc.
+  /// Allocates the sentinel, so it can throw std::bad_alloc.
   basic_list() : sentinel_(new_sentinel()) {}
   explicit basic_list(size_type n) : basic_list() { resize(n); }
   basic_list(size_type n, const T& value) : basic_list() {
@@ -123,8 +123,8 @@ class basic_list {
       : basic_list(values.begin(), values.end()) {}
   basic_list(const basic_list& other)
       : basic_list(other.begin(), other.end()) {}
-  // Takes the other list's nodes and sentinel; the other list is left empty
-  // and allocates a new sentinel when it is next used.
+  /// Takes the other list's nodes and sentinel; the other list is left empty
+  /// and allocates a new sentinel when it is next used.
   basic_list(basic_list&& other) noexcept
       : sentinel_(std::exchange(other.sentinel_, nullptr)),
         size_(std::exchange(other.size_, 0)) {}
@@ -282,12 +282,12 @@ class basic_list {
     resize_with(n, [&]() -> const T& { return v; });
   }
 
-  // Move all of |other| before |pos|.
+  /// Move all of |other| before |pos|.
   void splice(const_iterator pos, basic_list& other) {
     splice(pos, other, other.begin(), other.end());
   }
   void splice(const_iterator pos, basic_list&& other) { splice(pos, other); }
-  // Move the element at |it| in |other| before |pos|.
+  /// Move the element at |it| in |other| before |pos|.
   void splice(const_iterator pos, basic_list& other, const_iterator it) {
     node_base* n = it.node_;
     node_base* at = position(pos);
@@ -302,8 +302,8 @@ class basic_list {
   void splice(const_iterator pos, basic_list&& other, const_iterator it) {
     splice(pos, other, it);
   }
-  // Move [first, last) of |other| before |pos|. Linear in the length of the
-  // range when |other| is another list, to keep size() constant time.
+  /// Move [first, last) of |other| before |pos|. Linear in the length of the
+  /// range when |other| is another list, to keep size() constant time.
   void splice(const_iterator pos, basic_list& other, const_iterator first,
               const_iterator last) {
     if (first == last) {
@@ -322,8 +322,8 @@ class basic_list {
     splice(pos, other, first, last);
   }
 
-  // Merge sorted |other| into this sorted list. Stable: of equal elements,
-  // this list's come first.
+  /// Merge sorted |other| into this sorted list. Stable: of equal elements,
+  /// this list's come first.
   template <class Compare = std::less<>>
   void merge(basic_list& other, Compare comp = Compare()) {
     if (&other == this || other.empty()) {
@@ -353,7 +353,7 @@ class basic_list {
     merge(other, comp);
   }
 
-  // Stable merge sort on the links; no element is copied or moved.
+  /// Stable merge sort on the links; no element is copied or moved.
   template <class Compare = std::less<>>
   void sort(Compare comp = Compare()) {
     if (size_ < 2) {
@@ -452,7 +452,7 @@ class basic_list {
                                                   b.end());
   }
 
-  // Bytes per element, including the links: what the cage hands out.
+  /// Bytes per element, including the links: what the cage hands out.
   static constexpr std::size_t node_size = sizeof(node);
 
  private:
@@ -464,8 +464,8 @@ class basic_list {
     return s;
   }
 
-  // The node a position refers to, allocating the sentinel of a moved-from
-  // list first.
+  /// The node a position refers to, allocating the sentinel of a moved-from
+  /// list first.
   node_base* position(const_iterator pos) {
     if (!sentinel()) {
       sentinel_ = new_sentinel();
@@ -495,8 +495,8 @@ class basic_list {
     return static_cast<node*>(n)->value;
   }
 
-  // These copy links as stored where they can, which for compressed links
-  // saves a decompress and compress per copy.
+  /// These copy links as stored where they can, which for compressed links
+  /// saves a decompress and compress per copy.
   static void link_before(node_base* at, node_base* n) noexcept {
     link_type to_n = n;
     node_base* prev = at->prev;
@@ -506,7 +506,7 @@ class basic_list {
     at->prev = to_n;
   }
 
-  // Returns the node after |n|.
+  /// Returns the node after |n|.
   static node_base* unlink(node_base* n) noexcept {
     node_base* prev = n->prev;
     node_base* next = n->next;
@@ -515,7 +515,7 @@ class basic_list {
     return next;
   }
 
-  // Move the nodes [first, last) before |at|.
+  /// Move the nodes [first, last) before |at|.
   static void transfer(node_base* at, node_base* first,
                        node_base* last) noexcept {
     if (at == last) {
@@ -532,8 +532,8 @@ class basic_list {
     at->prev = tail;
   }
 
-  // Merge two null-terminated sorted chains linked through |next|; |a|'s
-  // elements come first among equals.
+  /// Merge two null-terminated sorted chains linked through |next|; |a|'s
+  /// elements come first among equals.
   template <class Compare>
   static node_base* merge_runs(node_base* a, node_base* b, Compare& comp) {
     node_base head;
@@ -553,8 +553,8 @@ class basic_list {
     return head.next;
   }
 
-  // Insert the values that |produce| passes to its callback before |pos|.
-  // If one throws, the values inserted so far are removed again.
+  /// Insert the values that |produce| passes to its callback before |pos|.
+  /// If one throws, the values inserted so far are removed again.
   template <class Produce>
   iterator insert_each(const_iterator pos, Produce produce) {
     node_base* at = position(pos);
@@ -624,16 +624,16 @@ class basic_list {
 
   node_base* sentinel() const noexcept { return sentinel_; }
 
-  // A compressed link, so that a list placed in a mapped_cage file is still
-  // valid when the file is mapped elsewhere.
+  /// A compressed link, so that a list placed in a mapped_cage file is still
+  /// valid when the file is mapped elsewhere.
   link_type sentinel_;
   std::size_t size_ = 0;
 };
 
 }  // namespace detail
 
-// A doubly linked list with 4-byte links, like std::list without the
-// allocator parameter. Nodes are allocated in |Cage|.
+/// A doubly linked list with 4-byte links, like std::list without the
+/// allocator parameter. Nodes are allocated in |Cage|.
 template <class T, class Cage = default_cage>
 using list = detail::basic_list<T, Cage, true>;
 

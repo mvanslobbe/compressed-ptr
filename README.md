@@ -1,6 +1,8 @@
 # compressed-ptr
 
 [![CI](https://github.com/mvanslobbe/compressed-ptr/actions/workflows/ci.yml/badge.svg)](https://github.com/mvanslobbe/compressed-ptr/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://mvanslobbe.github.io/compressed-ptr/coverage/badge.json)](https://mvanslobbe.github.io/compressed-ptr/coverage/)
+[![Docs](https://img.shields.io/badge/docs-API%20reference-informational)](https://mvanslobbe.github.io/compressed-ptr/reference/)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)
 ![header-only](https://img.shields.io/badge/header--only-yes-brightgreen)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
@@ -47,6 +49,10 @@ node* raw = head->next;   // converts back to a raw pointer
   AddressSanitizer, UndefinedBehaviorSanitizer, ThreadSanitizer, a
   libFuzzer allocator fuzzer, and CI on Linux, macOS and Windows (x64 and
   ARM64) with GCC, Clang and MSVC.
+
+**Documentation:** [API reference](https://mvanslobbe.github.io/compressed-ptr/reference/)
+· [code coverage](https://mvanslobbe.github.io/compressed-ptr/coverage/)
+· [benchmark history](https://mvanslobbe.github.io/compressed-ptr/bench/)
 
 ## Quick start
 

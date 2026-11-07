@@ -15,16 +15,16 @@
 
 namespace cptr {
 
-// A nullable pointer to a T inside |Cage|, stored in 4 bytes. Use it as
-// ptr<T> or strict_ptr<T>, declared below.
-//
-// ptr converts implicitly from and to T*, so it can replace a raw pointer
-// member with few other changes. strict_ptr (Strict = true) only converts to
-// T* implicitly: compressing a T* takes an explicit constructor call, so a
-// pointer from outside the cage cannot slip in unnoticed, and mixing it with
-// T* in ?: is not ambiguous. Constructing either from a pointer outside the
-// cage is a bug (checked by assertions in debug builds, or always with
-// CPTR_CHECKED).
+/// A nullable pointer to a T inside |Cage|, stored in 4 bytes. Use it as
+/// ptr<T> or strict_ptr<T>, declared below.
+///
+/// ptr converts implicitly from and to T*, so it can replace a raw pointer
+/// member with few other changes. strict_ptr (Strict = true) only converts to
+/// T* implicitly: compressing a T* takes an explicit constructor call, so a
+/// pointer from outside the cage cannot slip in unnoticed, and mixing it with
+/// T* in ?: is not ambiguous. Constructing either from a pointer outside the
+/// cage is a bug (checked by assertions in debug builds, or always with
+/// CPTR_CHECKED).
 template <class T, class Cage, bool Strict>
 class basic_ptr {
  public:
@@ -33,7 +33,7 @@ class basic_ptr {
   using difference_type = std::ptrdiff_t;
   template <class U>
   using rebind = basic_ptr<U, Cage, Strict>;
-  // An allocator's pointer type must be a random access iterator.
+  /// An allocator's pointer type must be a random access iterator.
   using value_type = std::remove_cv_t<T>;
   using pointer = T*;
   using reference = std::add_lvalue_reference_t<T>;
@@ -41,7 +41,7 @@ class basic_ptr {
 
   constexpr basic_ptr() noexcept = default;
   constexpr basic_ptr(std::nullptr_t) noexcept {}
-  // Accepts a literal 0 or NULL, which older code uses for null pointers.
+  /// Accepts a literal 0 or NULL, which older code uses for null pointers.
   template <class I>
     requires std::is_integral_v<I>
   constexpr basic_ptr([[maybe_unused]] I zero) noexcept {
@@ -54,8 +54,8 @@ class basic_ptr {
       : bits_(same_address_v<U>
                   ? other.bits()
                   : Cage::compress(static_cast<T*>(other.get()))) {}
-  // Explicit casts that static_cast allows, such as base to derived or
-  // void* to T*.
+  /// Explicit casts that static_cast allows, such as base to derived or
+  /// void* to T*.
   template <class U>
     requires(!std::is_convertible_v<U*, T*> &&
              requires(U* u) { static_cast<T*>(u); })
@@ -87,7 +87,7 @@ class basic_ptr {
 
   T* get() const noexcept { return static_cast<T*>(Cage::decompress(bits_)); }
   operator T*() const noexcept { return get(); }
-  // Dereferencing null is undefined, so these skip the null check.
+  /// Dereferencing null is undefined, so these skip the null check.
   T* operator->() const noexcept {
     return static_cast<T*>(Cage::decompress_nonnull(bits_));
   }
@@ -98,10 +98,10 @@ class basic_ptr {
   }
   constexpr explicit operator bool() const noexcept { return bits_ != 0; }
 
-  // Pointer arithmetic, so ptr can serve as an allocator's pointer type for
-  // containers that index into blocks of elements. It works on the
-  // compressed offset directly, so it is as cheap as raw pointer arithmetic.
-  // In a shifted cage, sizeof(T) must be a multiple of the granularity.
+  /// Pointer arithmetic, so ptr can serve as an allocator's pointer type for
+  /// containers that index into blocks of elements. It works on the
+  /// compressed offset directly, so it is as cheap as raw pointer arithmetic.
+  /// In a shifted cage, sizeof(T) must be a multiple of the granularity.
   template <class U = T>
     requires(!std::is_void_v<U>)
   U& operator[](std::ptrdiff_t i) const noexcept {
@@ -164,14 +164,14 @@ class basic_ptr {
     return (std::int64_t(a.bits_) - std::int64_t(b.bits_)) / step();
   }
 
-  // For std::pointer_traits, so ptr can serve as an allocator's pointer type.
+  /// For std::pointer_traits, so ptr can serve as an allocator's pointer type.
   template <class U = T>
     requires(!std::is_void_v<U>)
   static basic_ptr pointer_to(U& r) noexcept {
     return basic_ptr(std::addressof(r));
   }
 
-  // The compressed representation, e.g. for packing it with other data.
+  /// The compressed representation, e.g. for packing it with other data.
   constexpr std::uint32_t bits() const noexcept { return bits_; }
   static constexpr basic_ptr from_bits(std::uint32_t bits) noexcept {
     basic_ptr p;
@@ -193,22 +193,22 @@ class basic_ptr {
     CPTR_ASSERT(zero == 0, "only zero compares as a pointer");
     return !a.bits_;
   }
-  // All pointers share the cage base, so offsets order like addresses.
+  /// All pointers share the cage base, so offsets order like addresses.
   friend constexpr std::strong_ordering operator<=>(basic_ptr a,
                                                     basic_ptr b) noexcept {
     return a.bits_ <=> b.bits_;
   }
 
  private:
-  // Converting a U* to T* keeps the address when only cv-qualifiers differ
-  // or T is void, so the offset can be copied as is. Base classes may sit at
-  // an offset, so those go through a raw pointer.
+  /// Converting a U* to T* keeps the address when only cv-qualifiers differ
+  /// or T is void, so the offset can be copied as is. Base classes may sit at
+  /// an offset, so those go through a raw pointer.
   template <class U>
   static constexpr bool same_address_v =
       std::is_void_v<T> ||
       std::is_same_v<std::remove_cv_t<U>, std::remove_cv_t<T>>;
 
-  // One element, in compressed units.
+  /// One element, in compressed units.
   static constexpr std::ptrdiff_t step() noexcept {
     static_assert(sizeof(T) % Cage::granularity == 0,
                   "pointer arithmetic in a shifted cage needs sizeof(T) to "
@@ -219,15 +219,15 @@ class basic_ptr {
   std::uint32_t bits_ = 0;
 };
 
-// The usual compressed pointer: converts implicitly from and to T*.
+/// The usual compressed pointer: converts implicitly from and to T*.
 template <class T, class Cage = default_cage>
 using ptr = basic_ptr<T, Cage, false>;
 
-// Compressing a T* needs an explicit strict_ptr<T>(p).
+/// Compressing a T* needs an explicit strict_ptr<T>(p).
 template <class T, class Cage = default_cage>
 using strict_ptr = basic_ptr<T, Cage, true>;
 
-// Like ptr, but never null, which makes decompression a single add.
+/// Like ptr, but never null, which makes decompression a single add.
 template <class T, class Cage = default_cage>
 class nonnull_ptr {
  public:
@@ -264,7 +264,7 @@ static_assert(sizeof(ptr<int>) == 4);
 static_assert(sizeof(nonnull_ptr<int>) == 4);
 static_assert(std::is_trivially_copyable_v<ptr<int>>);
 
-// Allocate and construct a T inside the cage.
+/// Allocate and construct a T inside the cage.
 template <class T, class Cage = default_cage, class... Args>
 ptr<T, Cage> make(Args&&... args) {
   void* mem = Cage::allocate(sizeof(T), alignof(T));
@@ -276,7 +276,7 @@ ptr<T, Cage> make(Args&&... args) {
   }
 }
 
-// Destroy and free an object created by make().
+/// Destroy and free an object created by make().
 template <class T, class Cage, bool Strict>
 void destroy(basic_ptr<T, Cage, Strict> p) noexcept {
   if (T* raw = p.get()) {

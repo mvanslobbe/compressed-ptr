@@ -1,0 +1,32 @@
+# MrDocs configuration: generates the API reference that CI publishes to
+# GitHub Pages. Run from the repository root:
+#   mrdocs docs/mrdocs.yml
+source-root: ..
+includes:
+  - ../include
+defines:
+  - CPTR_DOCS
+input:
+  - ../include
+file-patterns:
+  - '*.hpp'
+include-symbols:
+  - 'cptr::**'
+  - 'std::hash'
+exclude-symbols:
+  - 'cptr::detail::**'
+  - 'cptr::link'
+see-below:
+  - 'cptr::detail::basic_list'
+  - 'cptr::detail::basic_ordered_map'
+implementation-defined: []
+generator: html
+multipage: true
+output: ../build-docs/site
+base-url: https://github.com/mvanslobbe/compressed-ptr/blob/main/
+auto-brief: true
+auto-relates: true
+overloads: true
+sort-members: true
+warnings: true
+warn-if-undocumented: false
