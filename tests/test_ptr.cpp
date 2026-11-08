@@ -399,5 +399,5 @@ constexpr bool packing_is_constexpr() {
   return pp.payload() == 7 && t.tag() == 0;
 }
 static_assert(packing_is_constexpr());
-constinit cptr::atomic_ptr<int> global_atomic;
+[[maybe_unused]] constinit cptr::atomic_ptr<int> global_atomic;
 }  // namespace

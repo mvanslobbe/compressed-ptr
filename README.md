@@ -148,8 +148,9 @@ allocator, several independent cages, and containers. No V8 code is used.
 | `cptr/fancy_allocator.hpp` | `cptr::fancy_allocator<T>` with `pointer = cptr::ptr<T>`, for containers that support fancy pointers |
 | `cptr/list.hpp` | `cptr::list<T>`: doubly linked list with 4-byte links and the `std::list` interface |
 | `cptr/ordered_map.hpp` | `cptr::ordered_map<K, V>`: ordered map (red-black tree) with 4-byte links and the `std::map` interface, without node handles |
+| `cptr/user_cage.hpp` | `user_cage<Tag, Allocator, SizeLog2 = 32, Shift = 0>`: a cage whose blocks come from your own allocator; `bump_allocator`; `cptr::vm` commit helpers |
 | `cptr/mapped_cage.hpp` | `mapped_cage<Tag, SizeLog2 = 32>`: a cage whose memory is a file, with a root pointer; POSIX only |
-| `cptr/all.hpp` | All of the above except `mapped_cage.hpp` |
+| `cptr/all.hpp` | All of the above except `user_cage.hpp` and `mapped_cage.hpp` |
 
 Operations that only touch the stored offset are `constexpr`: null,
 pointer arithmetic, comparisons, `bits()` and `from_bits()`, and
@@ -163,6 +164,26 @@ whose last template argument, `Compressed = false`, gives raw links with the
 same code and allocator. The benchmarks use those to separate the effect of
 compression from the effect of the allocator; they are not part of the
 public interface.
+
+The built-in allocator is fast, but you can supply your own. A
+`user_cage` reserves the region and compresses like `cage`; your allocator
+is constructed once with the usable part of the region (reserved, not yet
+committed) and serves `allocate(bytes, align)` and `deallocate(p)`. Commit
+memory with `cptr::vm::commit` as you use it. `cptr::bump_allocator` is a
+ready-made monotonic allocator, and a building block for others:
+
+```cpp
+struct my_allocator {
+  explicit my_allocator(std::span<std::byte> region);
+  void* allocate(std::size_t bytes, std::size_t align);  // nullptr if full
+  void deallocate(void* p);  // no size: the containers do not pass one
+};
+struct my_tag {};
+using my_cage = cptr::user_cage<my_tag, my_allocator>;
+cptr::ordered_map<int, int, std::less<>, my_cage> map;
+```
+
+The allocator must be safe to call from every thread that uses the cage.
 
 A compressed pointer is an offset from the cage's base, so a structure
 built in a `mapped_cage` is still valid when the file is mapped again, by
@@ -204,6 +225,7 @@ Each example is a short, self-contained program in [`examples/`](examples):
 | [`tree.cpp`](examples/tree.cpp) | A hand-written order-statistics tree with `ptr_pair`; 16-byte nodes |
 | [`graph.cpp`](examples/graph.cpp) | BFS over a graph whose edges are 4 bytes and whose adjacency vectors live in the cage |
 | [`std_containers.cpp`](examples/std_containers.cpp) | `std::deque` and `std::pmr` containers in the cage, indexed by `cptr::ptr` |
+| [`custom_allocator.cpp`](examples/custom_allocator.cpp) | Your own allocator behind a cage: a pool of 16-byte slots for list nodes |
 | [`persistent.cpp`](examples/persistent.cpp) | A list kept in a file and reopened at a new address on every run |
 | [`use_after_free.cpp`](examples/use_after_free.cpp) | AddressSanitizer catching a dangling compressed pointer |
 
