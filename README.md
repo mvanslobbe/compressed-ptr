@@ -147,6 +147,8 @@ allocator, several independent cages, and containers. No V8 code is used.
 | `cptr/allocator.hpp` | `cptr::allocator<T>`, so any std container's elements live in the cage |
 | `cptr/fancy_allocator.hpp` | `cptr::fancy_allocator<T>` with `pointer = cptr::ptr<T>`, for containers that support fancy pointers |
 | `cptr/list.hpp` | `cptr::list<T>`: doubly linked list with 4-byte links and the `std::list` interface |
+| `cptr/forward_list.hpp` | `cptr::forward_list<T>`: singly linked list with 4-byte links and the `std::forward_list` interface; 8-byte nodes for 4-byte values |
+| `cptr/unordered_map.hpp` | `cptr::unordered_map<K, V>`: hash map with separate chaining, 4-byte links and buckets, and the `std::unordered_map` interface without node handles and the bucket API |
 | `cptr/ordered_map.hpp` | `cptr::ordered_map<K, V>`: ordered map (red-black tree) with 4-byte links and the `std::map` interface, without node handles |
 | `cptr/user_cage.hpp` | `user_cage<Tag, Allocator, SizeLog2 = 32, Shift = 0>`: a cage whose blocks come from your own allocator; `bump_allocator`; `cptr::vm` commit helpers |
 | `cptr/mapped_cage.hpp` | `mapped_cage<Tag, SizeLog2 = 32>`: a cage whose memory is a file, with a root pointer; POSIX only |
@@ -277,6 +279,7 @@ Measured on an i7-12700H, Linux, GCC 15, `-O2`. Build with
 |---|---:|---:|---:|---:|
 | list of `uint32_t` | 32.0 B/elem | 24.1 B/elem | **16.1 B/elem** | −50% |
 | map `uint32_t → uint32_t` | 48.0 B/elem | 40.1 B/elem | **24.1 B/elem** | −50% |
+| hash map `uint32_t → uint32_t` | 43.8 B/elem | 32.7 B/elem | **20.5 B/elem** | −53% |
 | graph, 16 edges per vertex | 168.0 B/vertex (raw `T*` edges) | — | **88.1 B/vertex** | −48% |
 
 The "cage, raw pointers" column uses the same code and allocator with 8-byte
@@ -371,6 +374,37 @@ one lock served every thread, and 8 threads took 796 ns per operation at
 the median. The 8-thread p99.9 is worse than glibc's: a flush or refill
 waits for the lock while another thread holds it.
 
+**Hash map `uint32_t → uint32_t`**, 4,194,304 random keys; 512 operations
+per epoch, walk 4,096:
+
+| | p50 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
+|---|---:|---:|---:|---:|---:|
+| insert: `cptr::unordered_map` raw links | 82.8 | ref | ref | ref | ref |
+| insert: `cptr::unordered_map` compressed | 80.0 | −3% | −2% | −6% | −22% |
+| insert: `std::unordered_map` | 106 | +29% | +22% | +25% | −21% |
+| find: `cptr::unordered_map` raw links | 42.5 | ref | ref | ref | ref |
+| find: `cptr::unordered_map` compressed | 49.6 | +17% | +16% | +14% | +9% |
+| find: `std::unordered_map` | 27.9 | −34% | −36% | −34% | −18% |
+| walk: `cptr::unordered_map` raw links | 93.9 | ref | ref | ref | ref |
+| walk: `cptr::unordered_map` compressed | 91.4 | −3% | −2% | −3% | −7% |
+| walk: `std::unordered_map` | 19.9 | −79% | −14% | −13% | −13% |
+| erase: `cptr::unordered_map` raw links | 80.8 | ref | ref | ref | ref |
+| erase: `cptr::unordered_map` compressed | 90.2 | +12% | +12% | +12% | +22% |
+| erase: `std::unordered_map` | 105 | +30% | +9% | +13% | +8% |
+
+- The hash map halves memory and inserts and erases faster than
+  `std::unordered_map`, but `std::unordered_map` wins find and walk here.
+  Its find advantage comes from the benchmark: `std::hash<uint32_t>` is the
+  identity, and the keys are exactly 0 to n − 1, so every key gets a bucket
+  of its own. With a mixing hash, `std::unordered_map` finds in 35.2 ns
+  and `cptr::unordered_map` in 34.5 ns (a separate run). Setting
+  `max_load_factor(0.5)` brings `cptr::unordered_map` to 22 ns for 4 more
+  bytes per element.
+- `std::unordered_map` keeps all nodes on one list in allocation order, so
+  walking it reads memory nearly in order. `cptr::unordered_map` walks
+  bucket by bucket, which visits nodes in hash order: a cache miss per
+  element at this size.
+
 **Pointer arithmetic**, `++p` over an array of `uint32_t`, 4,096 elements
 per epoch:
 
@@ -412,7 +446,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build              # unit tests + examples
 ./build/bench_rss                   # memory, one child process per config
-./build/bench_runtime [elements] [epochs] [list|map|arithmetic|conversion|allocator|threads|chase]
+./build/bench_runtime [elements] [epochs] [list|map|hash|arithmetic|conversion|allocator|threads|chase]
 ```
 
 To use an installed copy, `cmake --install build`, then in your project:

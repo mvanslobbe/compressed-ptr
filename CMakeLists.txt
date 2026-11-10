@@ -38,7 +38,8 @@ if(COMPRESSED_PTR_BUILD_TESTS)
   add_executable(compressed_ptr_tests
     tests/test_main.cpp tests/test_cage.cpp tests/test_ptr.cpp
     tests/test_containers.cpp tests/test_list.cpp tests/test_map.cpp
-    tests/test_user_cage.cpp
+    tests/test_user_cage.cpp tests/test_unordered_map.cpp
+    tests/test_forward_list.cpp
     $<$<NOT:$<PLATFORM_ID:Windows>>:tests/test_mapped.cpp>)
   target_link_libraries(compressed_ptr_tests PRIVATE compressed_ptr Threads::Threads)
   add_test(NAME compressed_ptr_tests COMMAND compressed_ptr_tests)
@@ -127,10 +128,12 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr-config.cmake
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/compressed_ptr)
 
 if(COMPRESSED_PTR_BUILD_FUZZERS)
-  add_executable(fuzz_allocator fuzz/fuzz_allocator.cpp)
-  target_link_libraries(fuzz_allocator PRIVATE compressed_ptr)
-  target_compile_options(fuzz_allocator PRIVATE
-    -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all)
-  target_link_options(fuzz_allocator PRIVATE
-    -fsanitize=fuzzer,address,undefined)
+  foreach(fuzzer fuzz_allocator fuzz_containers)
+    add_executable(${fuzzer} fuzz/${fuzzer}.cpp)
+    target_link_libraries(${fuzzer} PRIVATE compressed_ptr)
+    target_compile_options(${fuzzer} PRIVATE
+      -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all)
+    target_link_options(${fuzzer} PRIVATE
+      -fsanitize=fuzzer,address,undefined)
+  endforeach()
 endif()

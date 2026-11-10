@@ -6,6 +6,7 @@
 #include <list>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "common.hpp"
@@ -81,6 +82,13 @@ const config kConfigs[] = {
     {"map/cage-compressed", fill_map<map_c>},
     {"map/cage-raw", fill_map<map_r>},
     {"map/std", fill_map<std::map<std::uint32_t, std::uint32_t>>},
+    {"hash/cage-compressed",
+     fill_map<cptr::unordered_map<std::uint32_t, std::uint32_t>>},
+    {"hash/cage-raw",
+     fill_map<cptr::detail::basic_unordered_map<
+         std::uint32_t, std::uint32_t, std::hash<std::uint32_t>,
+         std::equal_to<std::uint32_t>, cptr::default_cage, false>>},
+    {"hash/std", fill_map<std::unordered_map<std::uint32_t, std::uint32_t>>},
     {"graph16/compressed", fill_graph<graph_vertex_c>},
     {"graph16/raw", fill_graph<graph_vertex_r>},
 };

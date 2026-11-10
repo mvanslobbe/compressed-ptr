@@ -14,7 +14,7 @@
 // of them alike.
 //
 // Usage: bench_runtime [elements] [epochs]
-// [list|map|arithmetic|conversion|allocator|threads|chase]
+// [list|map|hash|arithmetic|conversion|allocator|threads|chase]
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include "third_party/nanobench.h"
 
@@ -28,6 +28,7 @@
 #include <list>
 #include <map>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "common.hpp"
@@ -555,6 +556,28 @@ int main(int argc, char** argv) {
     map_variant<std::map<std::uint32_t, std::uint32_t>> s(keys, lookups);
     const char* names[] = {"`cptr::ordered_map` raw links",
                            "`cptr::ordered_map` compressed", "`std::map`"};
+    bench_containers(names, {&r, &c, &s}, n, epochs, true);
+  }
+
+  std::snprintf(title, sizeof title,
+                "hash map `uint32_t -> uint32_t`, %u random keys, ns per "
+                "element",
+                n);
+  if (wanted("hash")) {
+    print_header(title);
+    auto keys = bench::random_permutation(n, 1);
+    auto lookups = bench::random_permutation(n, 2);
+    map_variant<cptr::detail::basic_unordered_map<
+        std::uint32_t, std::uint32_t, std::hash<std::uint32_t>,
+        std::equal_to<std::uint32_t>, cptr::default_cage, false>>
+        r(keys, lookups);
+    map_variant<cptr::unordered_map<std::uint32_t, std::uint32_t>> c(keys,
+                                                                     lookups);
+    map_variant<std::unordered_map<std::uint32_t, std::uint32_t>> s(keys,
+                                                                    lookups);
+    const char* names[] = {"`cptr::unordered_map` raw links",
+                           "`cptr::unordered_map` compressed",
+                           "`std::unordered_map`"};
     bench_containers(names, {&r, &c, &s}, n, epochs, true);
   }
 

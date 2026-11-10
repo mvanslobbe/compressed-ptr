@@ -74,6 +74,22 @@ jobs:
             bench.md
             rss.txt
 
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          cmake -S . -B build-fuzz -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCOMPRESSED_PTR_BUILD_FUZZERS=ON -DCOMPRESSED_PTR_BUILD_TESTS=OFF \
+            -DCOMPRESSED_PTR_BUILD_EXAMPLES=OFF -DCOMPRESSED_PTR_BUILD_BENCHMARKS=OFF
+          cmake --build build-fuzz --target fuzz_allocator fuzz_containers
+      - name: Fuzz for a minute each
+        run: |
+          mkdir -p corpus-allocator corpus-containers
+          ./build-fuzz/fuzz_allocator -max_total_time=60 -max_len=8192 corpus-allocator
+          ./build-fuzz/fuzz_containers -max_total_time=60 -max_len=4096 corpus-containers
+
   format:
     runs-on: ubuntu-24.04
     steps:
