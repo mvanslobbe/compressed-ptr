@@ -45,13 +45,19 @@ jobs:
           publish_dir: build-docs/site
           destination_dir: reference
           commit_message: "Update the API reference for ${{ github.sha }}"
-      - name: Landing page
+      - name: Render the guide and the benchmarks page
+        run: |
+          pip install --quiet markdown
+          mkdir -p site
+          cp docs/site/index.html site/
+          python3 scripts/render_docs.py site
+      - name: Landing page, guide and benchmarks
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/site
+          publish_dir: site
           keep_files: true
-          commit_message: "Update the landing page for ${{ github.sha }}"
+          commit_message: "Update the documentation pages for ${{ github.sha }}"
 
   coverage:
     needs: reference
