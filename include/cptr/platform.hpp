@@ -139,7 +139,9 @@ inline void decommit(void* p, std::size_t size) noexcept {
 #  ifdef MAP_NORESERVE
   flags |= MAP_NORESERVE;
 #  endif
-  mmap(p, size, PROT_NONE, flags, -1, 0);
+  // If this fails the pages simply stay committed.
+  void* unused = mmap(p, size, PROT_NONE, flags, -1, 0);
+  (void)unused;
 #endif
 }
 

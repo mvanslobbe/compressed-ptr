@@ -80,8 +80,10 @@ FetchContent_MakeAvailable(compressed_ptr)
 target_link_libraries(your_target PRIVATE compressed_ptr::compressed_ptr)
 ```
 
-Or copy `include/cptr` into your tree, or `cmake --install` and
-`find_package(compressed_ptr)`.
+Or drop the single header
+[`single_include/cptr.hpp`](single_include/cptr.hpp) into your tree, or
+`cmake --install` and use `find_package(compressed_ptr)` or
+`pkg-config compressed_ptr`.
 
 ## Is it for you?
 

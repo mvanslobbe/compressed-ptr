@@ -30,7 +30,9 @@ class allocator {
     }
     return static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T)));
   }
-  void deallocate(T* p, std::size_t) noexcept { Cage::deallocate(p); }
+  void deallocate(T* p, std::size_t) noexcept {
+    Cage::deallocate(static_cast<void*>(p));
+  }
 
   template <class U>
   friend bool operator==(const allocator&, const allocator<U, Cage>&) noexcept {

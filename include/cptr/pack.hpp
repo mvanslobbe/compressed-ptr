@@ -119,6 +119,8 @@ class atomic_ptr {
              std::memory_order order = std::memory_order_seq_cst) noexcept {
     bits_.store(Cage::compress(p), order);
   }
+  // Returns the value, like std::atomic<T*>::operator=.
+  // NOLINTNEXTLINE(misc-unconventional-assign-operator)
   T* operator=(T* p) noexcept {
     store(p);
     return p;

@@ -73,3 +73,14 @@ cmake --build build-fuzz --target fuzz_allocator
 
 By contributing, you agree that your contribution is licensed under the
 project's [MIT licence](LICENSE).
+
+## Releasing (maintainers)
+
+1. Set the version in `CMakeLists.txt` (`project(... VERSION x.y.z)`) and
+   in `include/cptr/version.hpp`; CMake fails if they differ.
+2. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [x.y.z] - YYYY-MM-DD`
+   and start a new, empty `## [Unreleased]` above it.
+3. Run `scripts/amalgamate.py` and commit.
+4. Tag and push: `git tag vx.y.z && git push origin vx.y.z`. The Release
+   workflow checks the version, runs the tests and publishes the release
+   with the single header attached.

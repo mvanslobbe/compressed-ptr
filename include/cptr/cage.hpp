@@ -321,6 +321,8 @@ class CPTR_VISIBLE cage {
   static std::pmr::memory_resource* resource() noexcept {
     // Never destroyed, so containers with static storage duration can still
     // free into it during program exit.
+    // Out of memory this early is fatal anyway.
+    // NOLINTNEXTLINE(bugprone-unhandled-exception-at-new)
     static resource_type* r = new resource_type;
     return r;
   }
@@ -579,7 +581,7 @@ class CPTR_VISIBLE cage {
     set_run(first, count, kFreeSpan);
     try {
       state().free_runs.emplace(count, first);
-    } catch (...) {
+    } catch (...) {  // NOLINT(bugprone-empty-catch): leaking is the plan
     }
   }
 

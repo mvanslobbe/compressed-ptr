@@ -1,0 +1,10 @@
+# Relative to this file, so the installation can be moved.
+prefix=${pcfiledir}/../..
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: compressed_ptr
+Description: 4-byte compressed pointers and containers for 64-bit C++20 (header-only)
+URL: https://github.com/mvanslobbe/compressed-ptr
+Version: @PROJECT_VERSION@
+Cflags: -I${includedir}
+Libs: -pthread

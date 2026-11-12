@@ -25,11 +25,18 @@ option(COMPRESSED_PTR_BUILD_FUZZERS "Build the libFuzzer targets (clang)" OFF)
 option(COMPRESSED_PTR_BUILD_BENCHMARKS "Build the benchmarks" ${PROJECT_IS_TOP_LEVEL})
 option(COMPRESSED_PTR_BUILD_EXAMPLES "Build the examples" ${PROJECT_IS_TOP_LEVEL})
 
+option(COMPRESSED_PTR_WERROR "Treat warnings as errors (CI)" OFF)
 if(PROJECT_IS_TOP_LEVEL)
   if(MSVC)
     add_compile_options(/W4 /permissive-)
+    if(COMPRESSED_PTR_WERROR)
+      add_compile_options(/WX)
+    endif()
   else()
     add_compile_options(-Wall -Wextra -Wpedantic)
+    if(COMPRESSED_PTR_WERROR)
+      add_compile_options(-Werror)
+    endif()
   endif()
 endif()
 
@@ -42,6 +49,11 @@ if(COMPRESSED_PTR_BUILD_TESTS)
     tests/test_forward_list.cpp
     $<$<NOT:$<PLATFORM_ID:Windows>>:tests/test_mapped.cpp>)
   target_link_libraries(compressed_ptr_tests PRIVATE compressed_ptr Threads::Threads)
+  if(MSVC)
+    # The tests CHECK constant expressions and pad aligned test types on
+    # purpose.
+    target_compile_options(compressed_ptr_tests PRIVATE /wd4127 /wd4324)
+  endif()
   add_test(NAME compressed_ptr_tests COMMAND compressed_ptr_tests)
   add_executable(compressed_ptr_failure_tests tests/test_main.cpp
     tests/test_failures.cpp)
@@ -53,6 +65,19 @@ if(COMPRESSED_PTR_BUILD_TESTS)
     tests/test_checked.cpp)
   target_link_libraries(compressed_ptr_checked_tests PRIVATE compressed_ptr)
   add_test(NAME compressed_ptr_checked_tests COMMAND compressed_ptr_checked_tests)
+  if(MSVC)
+    target_compile_options(compressed_ptr_failure_tests PRIVATE /wd4127 /wd4324)
+    target_compile_options(compressed_ptr_checked_tests PRIVATE /wd4127 /wd4324)
+  endif()
+
+  # The amalgamated single header, on its own.
+  add_executable(compressed_ptr_single_header_test tests/single_header.cpp)
+  target_include_directories(compressed_ptr_single_header_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/single_include)
+  target_compile_features(compressed_ptr_single_header_test PRIVATE cxx_std_20)
+  target_link_libraries(compressed_ptr_single_header_test PRIVATE Threads::Threads)
+  add_test(NAME compressed_ptr_single_header_test
+    COMMAND compressed_ptr_single_header_test)
 
   # Two shared libraries with hidden visibility must share one cage. Windows
   # DLLs never share one; see the README.
@@ -83,7 +108,7 @@ endif()
 
 if(COMPRESSED_PTR_BUILD_EXAMPLES)
   set(examples minimal linked_list tree graph std_containers custom_allocator
-    expect_gains)
+    expect_gains lru_cache pmr)
   if(NOT WIN32)
     list(APPEND examples persistent)
   endif()
@@ -116,6 +141,10 @@ endif()
 
 include(GNUInstallDirs)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES single_include/cptr.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+configure_file(compressed_ptr.pc.in ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr.pc @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/compressed_ptr.pc
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/pkgconfig)
 install(TARGETS compressed_ptr EXPORT compressed_ptr-targets)
 install(EXPORT compressed_ptr-targets NAMESPACE compressed_ptr::
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/compressed_ptr)

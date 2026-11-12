@@ -214,13 +214,13 @@ class basic_unordered_map {
       link_type* old = buckets_;
       size_type old_count = bucket_count();
       for (size_type i = 0; i < old_count; i++) {
-        node* n = old[i];
-        while (n) {
-          node* next = n->next;
-          link_type& head = fresh[index(n->hash, log2)];
-          n->next = head;
-          head = n;
-          n = next;
+        node* moving = old[i];
+        while (moving) {
+          node* next = moving->next;
+          link_type& head = fresh[index(moving->hash, log2)];
+          moving->next = head;
+          head = moving;
+          moving = next;
         }
       }
       Cage::deallocate(old);

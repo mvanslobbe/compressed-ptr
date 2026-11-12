@@ -1,0 +1,16 @@
+name: Feature request
+description: A container, allocator, platform or API you would like.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you are trying to do
+      description: The data structure or program, and where compressed-ptr gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: The API you have in mind, and any numbers that show the gain.

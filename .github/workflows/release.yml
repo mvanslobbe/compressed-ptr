@@ -1,0 +1,45 @@
+name: Release
+
+# Runs when a version tag such as v0.1.0 is pushed. It checks that the tag
+# matches the version in CMakeLists.txt and that the single header is up to
+# date, then publishes a GitHub release with the single header and a source
+# archive attached, and the CHANGELOG section as the release notes.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the version
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          project=$(sed -n 's/^project(compressed_ptr VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          test "$tag" = "$project" || { echo "tag $tag != CMakeLists.txt $project"; exit 1; }
+          grep -q "^## \[$tag\]" CHANGELOG.md || { echo "CHANGELOG.md has no [$tag] section"; exit 1; }
+          python3 scripts/amalgamate.py --check
+      - name: Test
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCOMPRESSED_PTR_BUILD_BENCHMARKS=OFF
+          cmake --build build
+          ctest --test-dir build --output-on-failure
+          scripts/test_install.sh
+      - name: Assets and notes
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          git archive --prefix "compressed-ptr-$tag/" -o "compressed-ptr-$tag.tar.gz" HEAD
+          sha256sum "compressed-ptr-$tag.tar.gz" single_include/cptr.hpp > SHA256SUMS
+          awk -v v="$tag" '/^## \[/{p = index($0, "[" v "]") > 0; next} p' CHANGELOG.md > notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          gh release create "$GITHUB_REF_NAME" --title "compressed-ptr $tag" \
+            --notes-file notes.md single_include/cptr.hpp \
+            "compressed-ptr-$tag.tar.gz" SHA256SUMS

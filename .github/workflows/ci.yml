@@ -4,6 +4,14 @@ on:
   push:
   pull_request:
 
+# A newer push to the same branch or pull request cancels the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build:
     name: ${{ matrix.name }}
@@ -22,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCOMPRESSED_PTR_WERROR=ON
       - name: Build
         run: cmake --build build --config Release
       - name: Test
@@ -90,10 +98,23 @@ jobs:
           ./build-fuzz/fuzz_allocator -max_total_time=60 -max_len=8192 corpus-allocator
           ./build-fuzz/fuzz_containers -max_total_time=60 -max_len=4096 corpus-containers
 
+  clang-tidy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++-18
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCOMPRESSED_PTR_BUILD_BENCHMARKS=OFF
+      - name: clang-tidy
+        run: scripts/run_tidy.sh build clang-tidy-18
+
   format:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Single header is up to date
+        run: python3 scripts/amalgamate.py --check
       - name: Install clang-format
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
@@ -102,7 +123,7 @@ jobs:
           sudo apt-get install -y -q clang-format-22
       - name: Check formatting
         run: >
-          git ls-files '*.hpp' '*.cpp' ':!bench/third_party'
+          git ls-files '*.hpp' '*.cpp' ':!bench/third_party' ':!single_include'
           | xargs clang-format-22 --dry-run --Werror
 
   install:
