@@ -49,7 +49,7 @@ jobs:
         run: |
           pip install --quiet markdown
           mkdir -p site
-          cp docs/site/index.html site/
+          cp docs/site/*.html site/
           python3 scripts/render_docs.py site
       - name: Landing page, guide and benchmarks
         uses: peaceiris/actions-gh-pages@v4
@@ -76,6 +76,9 @@ jobs:
   benchmark-history:
     needs: coverage
     runs-on: ubuntu-24.04
+    env:
+      # Keep the tree clean: the benchmark action switches to gh-pages.
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Build
@@ -84,16 +87,86 @@ jobs:
           cmake --build build --target bench_runtime
       - name: Run
         run: |
-          ./build/bench_runtime 262144 2000 | tee bench.md
-          python3 scripts/bench_to_json.py bench.md > bench.json
-      # Shared runners vary a lot from run to run, so this records and
-      # plots the history but does not fail on an alert; scripts/check_bench.py
-      # in CI gates on deltas measured within one run instead.
-      - uses: benchmark-action/github-action-benchmark@v1
+          # 10,000 epochs, as on the reference machine: p99.5 is then the
+          # 50th-slowest sample rather than the 10th.
+          BENCH_TSV=bench.tsv ./build/bench_runtime 262144 10000 | tee bench.md
+          python3 scripts/bench_to_json.py bench.tsv bench
+      # One history comparing compressed with raw pointers on the
+      # representative benchmarks (scripts/bench_reps.py), then one history
+      # of absolute times per percentile. Shared runners vary a lot from run
+      # to run, so this records and plots but never fails on an alert;
+      # scripts/check_bench.py in CI gates on deltas measured within one run.
+      - name: Record compressed as % of raw pointers
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: compressed as % of raw pointers
+          tool: customSmallerIsBetter
+          output-file-path: bench-vs-raw.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: "150%"
+          fail-on-alert: false
+          comment-on-alert: false
+      - name: Record bench_runtime p50
+        uses: benchmark-action/github-action-benchmark@v1
         with:
           name: bench_runtime p50
           tool: customSmallerIsBetter
-          output-file-path: bench.json
+          output-file-path: bench-p50.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: "150%"
+          fail-on-alert: false
+          comment-on-alert: false
+      - name: Record bench_runtime p90
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: bench_runtime p90
+          tool: customSmallerIsBetter
+          output-file-path: bench-p90.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: "150%"
+          fail-on-alert: false
+          comment-on-alert: false
+      - name: Record bench_runtime p95
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: bench_runtime p95
+          tool: customSmallerIsBetter
+          output-file-path: bench-p95.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: "150%"
+          fail-on-alert: false
+          comment-on-alert: false
+      - name: Record bench_runtime p99
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: bench_runtime p99
+          tool: customSmallerIsBetter
+          output-file-path: bench-p99.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: "150%"
+          fail-on-alert: false
+          comment-on-alert: false
+      - name: Record bench_runtime p99.5
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: bench_runtime p99.5
+          tool: customSmallerIsBetter
+          output-file-path: bench-p99.5.json
           gh-pages-branch: gh-pages
           benchmark-data-dir-path: bench
           github-token: ${{ secrets.GITHUB_TOKEN }}

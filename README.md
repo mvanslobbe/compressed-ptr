@@ -20,7 +20,8 @@
 Bytes per element (resident memory) and time per operation; i7-12700H,
 GCC 15, `-O2`. **Get your own numbers in one command:**
 `./build/example_expect_gains`. **Full results:
-[benchmark pages](https://mvanslobbe.github.io/compressed-ptr/benchmarks.html).**
+[benchmark pages](https://mvanslobbe.github.io/compressed-ptr/benchmarks.html),
+including [compressed against raw pointers at p50 to p99.5](https://mvanslobbe.github.io/compressed-ptr/benchmarks.html#compressed-against-raw-pointers).**
 
 ## Do this, expect this
 
@@ -65,6 +66,29 @@ auto* h = store::root<history>();  // nullptr in a new file
 ```
 
 Expect: no serialisation code; reopening costs one `mmap`.
+
+**4. Be the allocator for someone else's container.** Containers that take
+their link type from the allocator, such as
+[plf::list](https://github.com/mattreecebentley/plf_list), get 4-byte links
+from `cptr::fancy_allocator` with no change to their code.
+
+```cpp
+#include "cptr/fancy_allocator.hpp"
+#include "plf_list.h"
+
+using list = plf::list<int, cptr::fancy_allocator<int>>;  // was plf::list<int>
+
+int main() {
+  cptr::ptr<list> l = cptr::make<list>();  // the list object lives in the cage
+  for (int i = 0; i < 1000; i++) l->push_back(i);
+  l->sort();
+  cptr::destroy(l);
+}
+```
+
+Expect: plf::list at 12.1 instead of 24.1 bytes per element, walks 15%
+faster, sorts as fast
+([`examples/plf_list_minimal.cpp`](examples/plf_list_minimal.cpp)).
 
 ## Install
 
@@ -115,17 +139,17 @@ needs more than 32 GiB.
 | `cage<Tag>` | 4 GiB (up to 64 GiB) region with a fast thread-caching allocator |
 | `user_cage<Tag, Allocator>` | Same, with your own allocator |
 | `mapped_cage<Tag>` | File-backed cage for persistent structures |
-| `allocator<T>`, `fancy_allocator<T>` | Put std containers in the cage; fancy pointers for containers that support them |
+| `allocator<T>`, `fancy_allocator<T>` | Put std containers in the cage; drop-in allocator with 4-byte `pointer` for containers that use it, such as plf::list |
 
 ## Learn more
 
 - **[Guide](https://mvanslobbe.github.io/compressed-ptr/guide.html):** how it works, every header, allocators,
   persistence, rules and limitations, building and testing.
-- **[Benchmarks](https://mvanslobbe.github.io/compressed-ptr/benchmarks.html):** memory and p50/p95/p99/p99.9
+- **[Benchmarks](https://mvanslobbe.github.io/compressed-ptr/benchmarks.html):** compressed against raw pointers at p50/p90/p95/p99/p99.5, memory, and
   latency tables for every container and the allocator.
 - **[API reference](https://mvanslobbe.github.io/compressed-ptr/reference/)**,
   [coverage report](https://mvanslobbe.github.io/compressed-ptr/coverage/),
-  [benchmark history](https://mvanslobbe.github.io/compressed-ptr/bench/).
+  [benchmark history](https://mvanslobbe.github.io/compressed-ptr/history.html).
 - **[Examples](examples):** minimal programs, from two objects pointing at
   each other to a custom allocator and a persistent list.
 

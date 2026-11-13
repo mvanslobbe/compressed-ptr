@@ -20,13 +20,27 @@ container against its cptr counterpart.
 ## Summary
 
 - **Memory:** the bundled containers use half the memory of the std ones.
-- **Speed:** compressed links are never measurably slower than raw links in
-  the same container; once a structure outgrows the caches they are faster,
-  because more nodes fit in each cache line and page.
+- **Speed:** against raw links in the same container, compressed links are
+  mostly equal or faster, most of all in the tail once a structure outgrows
+  the caches, because more nodes fit in each cache line and page. The
+  exceptions: `unordered_map` find, about 17% slower here, and pointer chases
+  that fit in L1 or L2.
 - **Where it costs:** a compressed pointer is decompressed with an add (and
   a conditional move for null). On a pointer chase that fits in L1, that
   shows; `nonnull_ptr` removes most of it. Pointer arithmetic over arrays
   does not vectorise: convert to `T*` once for hot loops.
+
+## Compressed against raw pointers
+
+The same container or loop with 4-byte compressed pointers against raw
+8-byte pointers, at five points of the latency distribution. Bars left of
+zero are faster than raw pointers. Hover a bar for its value.
+
+{{versus}}
+
+Tails matter as much as medians: the p99 and p99.5 bars show the slowest
+1% and 0.5% of epochs. Compression helps most there for structures that
+outgrow the caches, because half as much memory is touched.
 
 ## Memory
 
@@ -40,14 +54,14 @@ effect of compression from the effect of the header-less allocator.
 
 `bench_runtime` uses [nanobench](https://github.com/martinus/nanobench).
 Each benchmark runs thousands of short epochs of a few hundred operations on
-a structure that stays large for the whole run, and reports the 50th, 95th,
-99th and 99.9th percentile of the time per element. Each variant is compared
+a structure that stays large for the whole run, and reports the 50th, 90th,
+95th, 99th and 99.5th percentile of the time per element. Each variant is compared
 with a reference at the same percentile: Δp99 = +10% means its p99 is 10%
 slower than the reference's p99. The reference is the same container with
 raw 8-byte links, or a raw `T*`. Variants run interleaved, in bursts of 8
 epochs, so frequency changes and other drift affect all of them alike. Up to
-p99 two runs agree within a few percent; p99.9 is the tenth-slowest of
-10,000 samples and moves by up to ±20%.
+p99 two runs agree within a few percent; p99.5 is the 50th-slowest of
+10,000 samples and moves more.
 
 ## Linked list
 

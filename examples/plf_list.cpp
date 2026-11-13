@@ -10,20 +10,6 @@
 #include <memory>
 
 #include "cptr/fancy_allocator.hpp"
-#include "plf_tools.h"
-
-// plf passes the allocator's pointer type to allocator_traits::construct and
-// destroy, which take raw pointers. Convert it first, as the standard
-// containers do.
-#undef PLF_CONSTRUCT
-#undef PLF_DESTROY
-#define PLF_CONSTRUCT(the_allocator, allocator_instance, location, ...) \
-  std::allocator_traits<the_allocator>::construct(                      \
-      allocator_instance, std::to_address(location), __VA_ARGS__)
-#define PLF_DESTROY(the_allocator, allocator_instance, location)    \
-  std::allocator_traits<the_allocator>::destroy(allocator_instance, \
-                                                std::to_address(location))
-
 #include "plf_list.h"
 
 #include <chrono>

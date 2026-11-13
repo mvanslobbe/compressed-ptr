@@ -184,14 +184,8 @@ cptr::ptr<compressed_list> l = cptr::make<compressed_list>();
 l->push_back(1);
 ```
 
-Two details:
-
-* plf::list passes the allocator's pointer to
-  `std::allocator_traits::construct` and `destroy`, which take raw pointers.
-  The example redefines plf's `PLF_CONSTRUCT` and `PLF_DESTROY` macros to
-  convert with `std::to_address` first, as the standard containers do. The
-  same change in `plf_tools.h` would make this unnecessary.
-* The list object must live in the cage (see above).
+The list object must live in the cage (see above). No other change is
+needed: plf::list takes its node pointer type from the allocator.
 
 4,000,000 random `uint32_t`, GCC 15 `-O2`, i7-12700H, best of 3:
 
@@ -201,7 +195,9 @@ Two details:
 | `plf::list` with `cptr::fancy_allocator` | **12.1** | 25 ms | 57 ms | 530 ms |
 
 Build it with `-DCOMPRESSED_PTR_PLF_LIST_DIR=/path/to/plf_list`; see
-[`examples/plf_list.cpp`](../examples/plf_list.cpp).
+[`examples/plf_list_minimal.cpp`](../examples/plf_list_minimal.cpp) for the
+smallest program and [`examples/plf_list.cpp`](../examples/plf_list.cpp) for
+the measurements.
 
 ## Rules and limitations
 

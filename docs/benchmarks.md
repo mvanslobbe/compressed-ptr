@@ -20,13 +20,42 @@ container against its cptr counterpart.
 ## Summary
 
 - **Memory:** the bundled containers use half the memory of the std ones.
-- **Speed:** compressed links are never measurably slower than raw links in
-  the same container; once a structure outgrows the caches they are faster,
-  because more nodes fit in each cache line and page.
+- **Speed:** against raw links in the same container, compressed links are
+  mostly equal or faster, most of all in the tail once a structure outgrows
+  the caches, because more nodes fit in each cache line and page. The
+  exceptions: `unordered_map` find, about 17% slower here, and pointer chases
+  that fit in L1 or L2.
 - **Where it costs:** a compressed pointer is decompressed with an add (and
   a conditional move for null). On a pointer chase that fits in L1, that
   shows; `nonnull_ptr` removes most of it. Pointer arithmetic over arrays
   does not vectorise: convert to `T*` once for hot loops.
+
+## Compressed against raw pointers
+
+The same container or loop with 4-byte compressed pointers against raw
+8-byte pointers, at five points of the latency distribution. Bars left of
+zero are faster than raw pointers. Hover a bar for its value.
+
+<p class="legend"><span><i class="s0"></i>p50</span><span><i class="s1"></i>p90</span><span><i class="s2"></i>p95</span><span><i class="s3"></i>p99</span><span><i class="s4"></i>p99.5</span></p>
+<svg class="versus" viewBox="0 0 760 679" role="img" aria-label="Compressed against raw pointers, change at each percentile"><line class="grid" x1="230.0" y1="22" x2="230.0" y2="657"/><text class="tick" x="230.0" y="673" text-anchor="middle">−60%</text><line class="grid" x1="315.0" y1="22" x2="315.0" y2="657"/><text class="tick" x="315.0" y="673" text-anchor="middle">−40%</text><line class="grid" x1="400.0" y1="22" x2="400.0" y2="657"/><text class="tick" x="400.0" y="673" text-anchor="middle">−20%</text><line class="zero" x1="485.0" y1="22" x2="485.0" y2="657"/><text class="tick" x="485.0" y="673" text-anchor="middle">0</text><line class="grid" x1="570.0" y1="22" x2="570.0" y2="657"/><text class="tick" x="570.0" y="673" text-anchor="middle">+20%</text><line class="grid" x1="655.0" y1="22" x2="655.0" y2="657"/><text class="tick" x="655.0" y="673" text-anchor="middle">+40%</text><line class="grid" x1="740.0" y1="22" x2="740.0" y2="657"/><text class="tick" x="740.0" y="673" text-anchor="middle">+60%</text><text class="tick" x="230.0" y="16">← faster than raw pointers</text><text class="tick" x="740.0" y="16" text-anchor="end">slower →</text><text class="label" x="220" y="53.5" text-anchor="end">list push_back</text><rect class="s0" x="425.5" y="28" width="59.5" height="7" rx="2"><title>list push_back, p50: -14% against raw pointers</title></rect><rect class="s1" x="429.8" y="37" width="55.2" height="7" rx="2"><title>list push_back, p90: -13% against raw pointers</title></rect><rect class="s2" x="425.5" y="46" width="59.5" height="7" rx="2"><title>list push_back, p95: -14% against raw pointers</title></rect><rect class="s3" x="438.2" y="55" width="46.8" height="7" rx="2"><title>list push_back, p99: -11% against raw pointers</title></rect><rect class="s4" x="455.2" y="64" width="29.8" height="7" rx="2"><title>list push_back, p99.5: -7% against raw pointers</title></rect><text class="label" x="220" y="110.5" text-anchor="end">list walk</text><rect class="s0" x="446.8" y="85" width="38.2" height="7" rx="2"><title>list walk, p50: -9% against raw pointers</title></rect><rect class="s1" x="425.5" y="94" width="59.5" height="7" rx="2"><title>list walk, p90: -14% against raw pointers</title></rect><rect class="s2" x="417.0" y="103" width="68.0" height="7" rx="2"><title>list walk, p95: -16% against raw pointers</title></rect><rect class="s3" x="446.8" y="112" width="38.2" height="7" rx="2"><title>list walk, p99: -9% against raw pointers</title></rect><rect class="s4" x="485.0" y="121" width="123.2" height="7" rx="2"><title>list walk, p99.5: +29% against raw pointers</title></rect><text class="label" x="220" y="167.5" text-anchor="end">ordered_map insert</text><rect class="s0" x="463.8" y="142" width="21.2" height="7" rx="2"><title>ordered_map insert, p50: -5% against raw pointers</title></rect><rect class="s1" x="472.2" y="151" width="12.8" height="7" rx="2"><title>ordered_map insert, p90: -3% against raw pointers</title></rect><rect class="s2" x="472.2" y="160" width="12.8" height="7" rx="2"><title>ordered_map insert, p95: -3% against raw pointers</title></rect><rect class="s3" x="472.2" y="169" width="12.8" height="7" rx="2"><title>ordered_map insert, p99: -3% against raw pointers</title></rect><rect class="s4" x="468.0" y="178" width="17.0" height="7" rx="2"><title>ordered_map insert, p99.5: -4% against raw pointers</title></rect><text class="label" x="220" y="224.5" text-anchor="end">ordered_map find</text><rect class="s0" x="455.2" y="199" width="29.8" height="7" rx="2"><title>ordered_map find, p50: -7% against raw pointers</title></rect><rect class="s1" x="455.2" y="208" width="29.8" height="7" rx="2"><title>ordered_map find, p90: -7% against raw pointers</title></rect><rect class="s2" x="455.2" y="217" width="29.8" height="7" rx="2"><title>ordered_map find, p95: -7% against raw pointers</title></rect><rect class="s3" x="459.5" y="226" width="25.5" height="7" rx="2"><title>ordered_map find, p99: -6% against raw pointers</title></rect><rect class="s4" x="446.8" y="235" width="38.2" height="7" rx="2"><title>ordered_map find, p99.5: -9% against raw pointers</title></rect><text class="label" x="220" y="281.5" text-anchor="end">unordered_map insert</text><rect class="s0" x="480.8" y="256" width="4.2" height="7" rx="2"><title>unordered_map insert, p50: -1% against raw pointers</title></rect><rect class="s1" x="485.0" y="265" width="1.0" height="7" rx="2"><title>unordered_map insert, p90: +0% against raw pointers</title></rect><rect class="s2" x="480.8" y="274" width="4.2" height="7" rx="2"><title>unordered_map insert, p95: -1% against raw pointers</title></rect><rect class="s3" x="476.5" y="283" width="8.5" height="7" rx="2"><title>unordered_map insert, p99: -2% against raw pointers</title></rect><rect class="s4" x="480.8" y="292" width="4.2" height="7" rx="2"><title>unordered_map insert, p99.5: -1% against raw pointers</title></rect><text class="label" x="220" y="338.5" text-anchor="end">unordered_map find</text><rect class="s0" x="485.0" y="313" width="72.2" height="7" rx="2"><title>unordered_map find, p50: +17% against raw pointers</title></rect><rect class="s1" x="485.0" y="322" width="72.2" height="7" rx="2"><title>unordered_map find, p90: +17% against raw pointers</title></rect><rect class="s2" x="485.0" y="331" width="72.2" height="7" rx="2"><title>unordered_map find, p95: +17% against raw pointers</title></rect><rect class="s3" x="485.0" y="340" width="59.5" height="7" rx="2"><title>unordered_map find, p99: +14% against raw pointers</title></rect><rect class="s4" x="485.0" y="349" width="29.8" height="7" rx="2"><title>unordered_map find, p99.5: +7% against raw pointers</title></rect><text class="label" x="220" y="395.5" text-anchor="end">pointer chase, L1</text><rect class="s0" x="485.0" y="370" width="238.0" height="7" rx="2"><title>pointer chase, L1, p50: +56% against raw pointers</title></rect><rect class="s1" x="485.0" y="379" width="144.5" height="7" rx="2"><title>pointer chase, L1, p90: +34% against raw pointers</title></rect><rect class="s2" x="485.0" y="388" width="127.5" height="7" rx="2"><title>pointer chase, L1, p95: +30% against raw pointers</title></rect><rect class="s3" x="485.0" y="397" width="136.0" height="7" rx="2"><title>pointer chase, L1, p99: +32% against raw pointers</title></rect><rect class="s4" x="485.0" y="406" width="157.2" height="7" rx="2"><title>pointer chase, L1, p99.5: +37% against raw pointers</title></rect><text class="label" x="220" y="452.5" text-anchor="end">pointer chase, L1, nonnull_ptr</text><rect class="s0" x="485.0" y="427" width="72.2" height="7" rx="2"><title>pointer chase, L1, nonnull_ptr, p50: +17% against raw pointers</title></rect><rect class="s1" x="485.0" y="436" width="17.0" height="7" rx="2"><title>pointer chase, L1, nonnull_ptr, p90: +4% against raw pointers</title></rect><rect class="s2" x="485.0" y="445" width="1.0" height="7" rx="2"><title>pointer chase, L1, nonnull_ptr, p95: +0% against raw pointers</title></rect><rect class="s3" x="485.0" y="454" width="4.2" height="7" rx="2"><title>pointer chase, L1, nonnull_ptr, p99: +1% against raw pointers</title></rect><rect class="s4" x="485.0" y="463" width="25.5" height="7" rx="2"><title>pointer chase, L1, nonnull_ptr, p99.5: +6% against raw pointers</title></rect><text class="label" x="220" y="509.5" text-anchor="end">pointer chase, L2</text><rect class="s0" x="485.0" y="484" width="42.5" height="7" rx="2"><title>pointer chase, L2, p50: +10% against raw pointers</title></rect><rect class="s1" x="485.0" y="493" width="38.2" height="7" rx="2"><title>pointer chase, L2, p90: +9% against raw pointers</title></rect><rect class="s2" x="485.0" y="502" width="34.0" height="7" rx="2"><title>pointer chase, L2, p95: +8% against raw pointers</title></rect><rect class="s3" x="468.0" y="511" width="17.0" height="7" rx="2"><title>pointer chase, L2, p99: -4% against raw pointers</title></rect><rect class="s4" x="459.5" y="520" width="25.5" height="7" rx="2"><title>pointer chase, L2, p99.5: -6% against raw pointers</title></rect><text class="label" x="220" y="566.5" text-anchor="end">pointer chase, L3</text><rect class="s0" x="468.0" y="541" width="17.0" height="7" rx="2"><title>pointer chase, L3, p50: -4% against raw pointers</title></rect><rect class="s1" x="336.2" y="550" width="148.8" height="7" rx="2"><title>pointer chase, L3, p90: -35% against raw pointers</title></rect><rect class="s2" x="302.2" y="559" width="182.8" height="7" rx="2"><title>pointer chase, L3, p95: -43% against raw pointers</title></rect><rect class="s3" x="353.2" y="568" width="131.8" height="7" rx="2"><title>pointer chase, L3, p99: -31% against raw pointers</title></rect><rect class="s4" x="349.0" y="577" width="136.0" height="7" rx="2"><title>pointer chase, L3, p99.5: -32% against raw pointers</title></rect><text class="label" x="220" y="623.5" text-anchor="end">pointer chase, DRAM</text><rect class="s0" x="451.0" y="598" width="34.0" height="7" rx="2"><title>pointer chase, DRAM, p50: -8% against raw pointers</title></rect><rect class="s1" x="472.2" y="607" width="12.8" height="7" rx="2"><title>pointer chase, DRAM, p90: -3% against raw pointers</title></rect><rect class="s2" x="468.0" y="616" width="17.0" height="7" rx="2"><title>pointer chase, DRAM, p95: -4% against raw pointers</title></rect><rect class="s3" x="468.0" y="625" width="17.0" height="7" rx="2"><title>pointer chase, DRAM, p99: -4% against raw pointers</title></rect><rect class="s4" x="472.2" y="634" width="12.8" height="7" rx="2"><title>pointer chase, DRAM, p99.5: -3% against raw pointers</title></rect></svg>
+
+| Benchmark | raw p50 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+|---|---:|---:|---:|---:|---:|---:|
+| list push_back | 10.29 | −14% | −13% | −14% | −11% | −7% |
+| list walk | 1.69 | −9% | −14% | −16% | −9% | +29% |
+| ordered_map insert | 800.70 | −5% | −3% | −3% | −3% | −4% |
+| ordered_map find | 856.51 | −7% | −7% | −7% | −6% | −9% |
+| unordered_map insert | 84.54 | −1% | +0% | −1% | −2% | −1% |
+| unordered_map find | 42.52 | +17% | +17% | +17% | +14% | +7% |
+| pointer chase, L1 | 1.20 | +56% | +34% | +30% | +32% | +37% |
+| pointer chase, L1, nonnull_ptr | 1.20 | +17% | +4% | +0% | +1% | +6% |
+| pointer chase, L2 | 3.15 | +10% | +9% | +8% | −4% | −6% |
+| pointer chase, L3 | 14.19 | −4% | −35% | −43% | −31% | −32% |
+| pointer chase, DRAM | 87.53 | −8% | −3% | −4% | −4% | −3% |
+
+Tails matter as much as medians: the p99 and p99.5 bars show the slowest
+1% and 0.5% of epochs. Compression helps most there for structures that
+outgrow the caches, because half as much memory is touched.
 
 ## Memory
 
@@ -45,30 +74,30 @@ effect of compression from the effect of the header-less allocator.
 
 `bench_runtime` uses [nanobench](https://github.com/martinus/nanobench).
 Each benchmark runs thousands of short epochs of a few hundred operations on
-a structure that stays large for the whole run, and reports the 50th, 95th,
-99th and 99.9th percentile of the time per element. Each variant is compared
+a structure that stays large for the whole run, and reports the 50th, 90th,
+95th, 99th and 99.5th percentile of the time per element. Each variant is compared
 with a reference at the same percentile: Δp99 = +10% means its p99 is 10%
 slower than the reference's p99. The reference is the same container with
 raw 8-byte links, or a raw `T*`. Variants run interleaved, in bursts of 8
 epochs, so frequency changes and other drift affect all of them alike. Up to
-p99 two runs agree within a few percent; p99.9 is the tenth-slowest of
-10,000 samples and moves by up to ±20%.
+p99 two runs agree within a few percent; p99.5 is the 50th-slowest of
+10,000 samples and moves more.
 
 ## Linked list
 
 *list of `uint32_t`, 4194304 elements, ns per element (chunks of 512, walk 4096)*
 
-|  | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| grow: `cptr::list` raw links | 10.5 | 377 | ref | ref | ref | ref |
-| grow: `cptr::list` compressed | 9.12 | 65.2 | −13% | −12% | −13% | −83% |
-| grow: `std::list` | 19.4 | 394 | +84% | +72% | +37% | +5% |
-| walk: `cptr::list` raw links | 1.7 | 7.77 | ref | ref | ref | ref |
-| walk: `cptr::list` compressed | 1.54 | 7.54 | −10% | −14% | −13% | −3% |
-| walk: `std::list` | 2.08 | 8.34 | +22% | +26% | +29% | +7% |
-| shrink: `cptr::list` raw links | 7.62 | 63.3 | ref | ref | ref | ref |
-| shrink: `cptr::list` compressed | 7.9 | 62.1 | +4% | −1% | +6% | −2% |
-| shrink: `std::list` | 5.48 | 60.3 | −28% | −63% | −54% | −5% |
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| grow: `cptr::list` raw links | 10.3 | 58 | ref | ref | ref | ref | ref |
+| grow: `cptr::list` compressed | 8.82 | 53.7 | −14% | −13% | −14% | −11% | −7% |
+| grow: `std::list` | 18.9 | 65.9 | +83% | +79% | +76% | +49% | +14% |
+| walk: `cptr::list` raw links | 1.69 | 3.83 | ref | ref | ref | ref | ref |
+| walk: `cptr::list` compressed | 1.53 | 4.92 | −9% | −14% | −16% | −9% | +29% |
+| walk: `std::list` | 2.05 | 7.31 | +21% | +25% | +28% | +38% | +91% |
+| shrink: `cptr::list` raw links | 7.38 | 42.6 | ref | ref | ref | ref | ref |
+| shrink: `cptr::list` compressed | 7.64 | 52.8 | +3% | −29% | −2% | +10% | +24% |
+| shrink: `std::list` | 5.35 | 32.4 | −28% | −60% | −60% | −37% | −24% |
 
 The compressed list grows faster than the raw one because it commits and
 touches half as much memory, and walks faster because twice as many nodes
@@ -79,20 +108,20 @@ than the cage allocator's `deallocate`.
 
 *map `uint32_t -> uint32_t`, 4194304 random keys, ns per element*
 
-|  | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| grow: `cptr::ordered_map` raw links | 784 | 1721 | ref | ref | ref | ref |
-| grow: `cptr::ordered_map` compressed | 739 | 1619 | −6% | −3% | +1% | −6% |
-| grow: `std::map` | 843 | 1895 | +8% | +8% | +13% | +10% |
-| find: `cptr::ordered_map` raw links | 979 | 1817 | ref | ref | ref | ref |
-| find: `cptr::ordered_map` compressed | 931 | 1712 | −5% | −7% | −5% | −6% |
-| find: `std::map` | 1036 | 1999 | +6% | +8% | +8% | +10% |
-| walk: `cptr::ordered_map` raw links | 106 | 193 | ref | ref | ref | ref |
-| walk: `cptr::ordered_map` compressed | 103 | 174 | −3% | −5% | −5% | −10% |
-| walk: `std::map` | 107 | 196 | +1% | +2% | +3% | +1% |
-| shrink: `cptr::ordered_map` raw links | 961 | 1780 | ref | ref | ref | ref |
-| shrink: `cptr::ordered_map` compressed | 958 | 1637 | −0% | +0% | −3% | −8% |
-| shrink: `std::map` | 925 | 1642 | −4% | −3% | −4% | −8% |
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| grow: `cptr::ordered_map` raw links | 801 | 1289 | ref | ref | ref | ref | ref |
+| grow: `cptr::ordered_map` compressed | 759 | 1237 | −5% | −3% | −3% | −3% | −4% |
+| grow: `std::map` | 869 | 1443 | +8% | +8% | +8% | +11% | +12% |
+| find: `cptr::ordered_map` raw links | 857 | 1416 | ref | ref | ref | ref | ref |
+| find: `cptr::ordered_map` compressed | 793 | 1295 | −7% | −7% | −7% | −6% | −9% |
+| find: `std::map` | 895 | 1514 | +5% | +3% | +3% | +8% | +7% |
+| walk: `cptr::ordered_map` raw links | 103 | 130 | ref | ref | ref | ref | ref |
+| walk: `cptr::ordered_map` compressed | 99.8 | 126 | −3% | −3% | −2% | −3% | −3% |
+| walk: `std::map` | 104 | 131 | +2% | +2% | +2% | +1% | +1% |
+| shrink: `cptr::ordered_map` raw links | 927 | 1507 | ref | ref | ref | ref | ref |
+| shrink: `cptr::ordered_map` compressed | 895 | 1427 | −4% | −2% | −1% | −6% | −5% |
+| shrink: `std::map` | 877 | 1325 | −5% | −6% | −5% | −10% | −12% |
 
 `cptr::ordered_map` is a red-black tree like `std::map`, with 24-byte
 instead of 48-byte nodes for 4-byte keys and values.
@@ -101,20 +130,20 @@ instead of 48-byte nodes for 4-byte keys and values.
 
 *hash map `uint32_t -> uint32_t`, 4194304 random keys, ns per element*
 
-|  | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| grow: `cptr::unordered_map` raw links | 85.7 | 473 | ref | ref | ref | ref |
-| grow: `cptr::unordered_map` compressed | 83.8 | 454 | −2% | −1% | +2% | −4% |
-| grow: `std::unordered_map` | 111 | 550 | +30% | +28% | +33% | +16% |
-| find: `cptr::unordered_map` raw links | 43.9 | 105 | ref | ref | ref | ref |
-| find: `cptr::unordered_map` compressed | 51.1 | 130 | +16% | +20% | +11% | +24% |
-| find: `std::unordered_map` | 28.6 | 86.2 | −35% | −32% | −18% | −18% |
-| walk: `cptr::unordered_map` raw links | 100 | 159 | ref | ref | ref | ref |
-| walk: `cptr::unordered_map` compressed | 96.9 | 147 | −3% | −3% | −5% | −7% |
-| walk: `std::unordered_map` | 20.9 | 128 | −79% | −24% | −21% | −19% |
-| shrink: `cptr::unordered_map` raw links | 82.7 | 203 | ref | ref | ref | ref |
-| shrink: `cptr::unordered_map` compressed | 93.8 | 243 | +13% | +12% | +11% | +20% |
-| shrink: `std::unordered_map` | 110 | 207 | +33% | +11% | +7% | +2% |
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| grow: `cptr::unordered_map` raw links | 84.5 | 149 | ref | ref | ref | ref | ref |
+| grow: `cptr::unordered_map` compressed | 83.5 | 147 | −1% | +0% | −1% | −2% | −1% |
+| grow: `std::unordered_map` | 106 | 196 | +26% | +29% | +33% | +29% | +32% |
+| find: `cptr::unordered_map` raw links | 42.5 | 88.8 | ref | ref | ref | ref | ref |
+| find: `cptr::unordered_map` compressed | 49.7 | 95.2 | +17% | +17% | +17% | +14% | +7% |
+| find: `std::unordered_map` | 28 | 62.1 | −34% | −35% | −34% | −32% | −30% |
+| walk: `cptr::unordered_map` raw links | 93.7 | 120 | ref | ref | ref | ref | ref |
+| walk: `cptr::unordered_map` compressed | 91.2 | 116 | −3% | −3% | −3% | −3% | −3% |
+| walk: `std::unordered_map` | 20.2 | 97.3 | −78% | −20% | −16% | −18% | −19% |
+| shrink: `cptr::unordered_map` raw links | 82 | 148 | ref | ref | ref | ref | ref |
+| shrink: `cptr::unordered_map` compressed | 155 | 295 | +89% | +117% | +115% | +107% | +100% |
+| shrink: `std::unordered_map` | 106 | 161 | +29% | +12% | +10% | +15% | +9% |
 
 These keys are 0 to n − 1. `std::hash<uint32_t>` is the identity, so
 `std::unordered_map` gives every such key a bucket of its own, which favours
@@ -128,23 +157,23 @@ walks bucket by bucket.
 
 *Allocator: free a random block of 65,536 and allocate 16 to 256 bytes, ns per free and allocate*
 
-|  | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `malloc` / `free` | 17.8 | 85.8 | ref | ref | ref | ref |
-| cage `allocate` / `deallocate` | 12.2 | 71.4 | −32% | −56% | −36% | −17% |
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `malloc` / `free` | 16.7 | 52.2 | ref | ref | ref | ref | ref |
+| cage `allocate` / `deallocate` | 12 | 41.9 | −28% | −35% | −49% | −41% | −20% |
 
 *Allocator churn on several threads, ns per free and allocate on each thread*
 
-|  | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 threads, `malloc` / `free` | 10.5 | 36.5 | ref | ref | ref | ref |
-| 1 threads, cage | 9.77 | 42.9 | −7% | −12% | −30% | +17% |
-| 2 threads, `malloc` / `free` | 11.5 | 38.3 | ref | ref | ref | ref |
-| 2 threads, cage | 10.7 | 32.8 | −7% | −28% | −37% | −14% |
-| 4 threads, `malloc` / `free` | 13.4 | 38.5 | ref | ref | ref | ref |
-| 4 threads, cage | 12.7 | 47.4 | −5% | −16% | −33% | +23% |
-| 8 threads, `malloc` / `free` | 26.8 | 84 | ref | ref | ref | ref |
-| 8 threads, cage | 21.9 | 173 | −18% | −31% | −52% | +106% |
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 threads, `malloc` / `free` | 10.2 | 25.5 | ref | ref | ref | ref | ref |
+| 1 threads, cage | 9.53 | 14.9 | −6% | −8% | −10% | −44% | −41% |
+| 2 threads, `malloc` / `free` | 10.7 | 26.1 | ref | ref | ref | ref | ref |
+| 2 threads, cage | 10.2 | 16.6 | −4% | −30% | −31% | −40% | −36% |
+| 4 threads, `malloc` / `free` | 12.2 | 36.6 | ref | ref | ref | ref | ref |
+| 4 threads, cage | 12 | 20.2 | −2% | −11% | −12% | −37% | −45% |
+| 8 threads, `malloc` / `free` | 25.1 | 59.8 | ref | ref | ref | ref | ref |
+| 8 threads, cage | 20 | 35.8 | −20% | −22% | −25% | −49% | −40% |
 
 Each thread keeps a cache of up to 32 freed blocks per size class and takes
 the cage's lock only to refill or flush half of it.
@@ -156,37 +185,37 @@ on the critical path of every load.
 
 *Pointer chasing, random cycle, 4 B payload (node 8 B compressed, 16 B raw), ns per step*
 
-|  | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1024 nodes, raw `T*` | 1.24 | 3.03 | ref | ref | ref | ref |
-| 1024 nodes, `ptr` | 1.92 | 4.13 | +55% | +29% | +44% | +36% |
-| 1024 nodes, `nonnull_ptr` | 1.43 | 3.25 | +16% | +1% | +5% | +7% |
-| 16384 nodes, raw `T*` | 3.29 | 16.6 | ref | ref | ref | ref |
-| 16384 nodes, `ptr` | 3.64 | 9.95 | +11% | +10% | +5% | −40% |
-| 16384 nodes, `nonnull_ptr` | 3.17 | 10.9 | −4% | −4% | −9% | −34% |
-| 262144 nodes, raw `T*` | 14.5 | 77 | ref | ref | ref | ref |
-| 262144 nodes, `ptr` | 13.7 | 63.5 | −5% | −32% | −21% | −18% |
-| 262144 nodes, `nonnull_ptr` | 13.3 | 64.2 | −8% | −34% | −20% | −17% |
-| 4194304 nodes, raw `T*` | 90.4 | 138 | ref | ref | ref | ref |
-| 4194304 nodes, `ptr` | 86.9 | 132 | −4% | −2% | −3% | −4% |
-| 4194304 nodes, `nonnull_ptr` | 86.5 | 138 | −4% | −3% | −2% | +0% |
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1024 nodes, raw `T*` | 1.2 | 1.87 | ref | ref | ref | ref | ref |
+| 1024 nodes, `ptr` | 1.87 | 2.56 | +56% | +34% | +30% | +32% | +37% |
+| 1024 nodes, `nonnull_ptr` | 1.4 | 1.98 | +17% | +4% | +0% | +1% | +6% |
+| 16384 nodes, raw `T*` | 3.15 | 5.35 | ref | ref | ref | ref | ref |
+| 16384 nodes, `ptr` | 3.47 | 5.05 | +10% | +9% | +8% | −4% | −6% |
+| 16384 nodes, `nonnull_ptr` | 3.03 | 4.34 | −4% | −5% | −6% | −18% | −19% |
+| 262144 nodes, raw `T*` | 14.2 | 61.2 | ref | ref | ref | ref | ref |
+| 262144 nodes, `ptr` | 13.6 | 41.9 | −4% | −35% | −43% | −31% | −32% |
+| 262144 nodes, `nonnull_ptr` | 13.2 | 41.8 | −7% | −37% | −44% | −34% | −32% |
+| 4194304 nodes, raw `T*` | 87.5 | 120 | ref | ref | ref | ref | ref |
+| 4194304 nodes, `ptr` | 80.9 | 116 | −8% | −3% | −4% | −4% | −3% |
+| 4194304 nodes, `nonnull_ptr` | 80.6 | 116 | −8% | −3% | −4% | −4% | −3% |
 
 *Pointer chasing, random cycle, 56 B payload (node 60 B compressed, 64 B raw), ns per step*
 
-|  | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1024 nodes, raw `T*` | 3.43 | 6.71 | ref | ref | ref | ref |
-| 1024 nodes, `ptr` | 3.95 | 7.97 | +15% | +15% | +15% | +19% |
-| 1024 nodes, `nonnull_ptr` | 3.49 | 7.18 | +2% | +2% | +4% | +7% |
-| 16384 nodes, raw `T*` | 14.1 | 63.4 | ref | ref | ref | ref |
-| 16384 nodes, `ptr` | 14.1 | 65.5 | −0% | −1% | −9% | +3% |
-| 16384 nodes, `nonnull_ptr` | 13.7 | 52 | −3% | −4% | −13% | −18% |
-| 262144 nodes, raw `T*` | 88.8 | 131 | ref | ref | ref | ref |
-| 262144 nodes, `ptr` | 88.2 | 135 | −1% | −1% | +0% | +3% |
-| 262144 nodes, `nonnull_ptr` | 87.6 | 132 | −1% | −1% | −1% | +1% |
-| 4194304 nodes, raw `T*` | 102 | 164 | ref | ref | ref | ref |
-| 4194304 nodes, `ptr` | 102 | 166 | +0% | −0% | +1% | +1% |
-| 4194304 nodes, `nonnull_ptr` | 102 | 160 | −0% | −0% | −1% | −2% |
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1024 nodes, raw `T*` | 3.29 | 4.25 | ref | ref | ref | ref | ref |
+| 1024 nodes, `ptr` | 3.79 | 4.83 | +15% | +16% | +15% | +16% | +14% |
+| 1024 nodes, `nonnull_ptr` | 3.34 | 4.35 | +2% | +3% | +2% | +1% | +2% |
+| 16384 nodes, raw `T*` | 14.4 | 35.7 | ref | ref | ref | ref | ref |
+| 16384 nodes, `ptr` | 14.3 | 36.7 | −0% | −4% | −5% | +1% | +3% |
+| 16384 nodes, `nonnull_ptr` | 13.8 | 34.7 | −4% | −20% | −27% | −13% | −3% |
+| 262144 nodes, raw `T*` | 80.2 | 114 | ref | ref | ref | ref | ref |
+| 262144 nodes, `ptr` | 78.1 | 114 | −3% | −1% | −2% | −3% | −1% |
+| 262144 nodes, `nonnull_ptr` | 76.1 | 113 | −5% | −2% | −2% | −2% | −1% |
+| 4194304 nodes, raw `T*` | 100 | 146 | ref | ref | ref | ref | ref |
+| 4194304 nodes, `ptr` | 100 | 140 | +0% | −0% | −2% | −2% | −4% |
+| 4194304 nodes, `nonnull_ptr` | 99.9 | 144 | −0% | −0% | −1% | −2% | −2% |
 
 In L1 and L2 the add and the null check show; `nonnull_ptr` has no null
 check and costs much less. From L3 on, the smaller nodes win.
@@ -195,12 +224,12 @@ check and costs much less. From L3 on, the smaller nodes win.
 
 *Pointer arithmetic: `++p` over an array of `uint32_t`, ns per element*
 
-|  | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 65536 elements, raw `T*` | 0.1 | 0.63 | ref | ref | ref | ref |
-| 65536 elements, `ptr` | 0.32 | 1.19 | +233% | +195% | +161% | +88% |
-| 4194304 elements, raw `T*` | 0.19 | 6.75 | ref | ref | ref | ref |
-| 4194304 elements, `ptr` | 0.32 | 1.95 | +66% | +29% | −65% | −71% |
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 65536 elements, raw `T*` | 0.09 | 0.22 | ref | ref | ref | ref | ref |
+| 65536 elements, `ptr` | 0.31 | 0.41 | +236% | +228% | +202% | +109% | +81% |
+| 4194304 elements, raw `T*` | 0.16 | 1.79 | ref | ref | ref | ref | ref |
+| 4194304 elements, `ptr` | 0.31 | 0.39 | +96% | +45% | +36% | −16% | −78% |
 
 The raw loop is vectorised. A 32-bit offset that may wrap is not an
 induction variable the compiler can turn into a pointer, so the `ptr` loop
@@ -209,8 +238,8 @@ stays scalar. In a hot loop over an array, convert to `T*` once with
 
 *Conversion of 4,096 `ptr<int>`, ns per conversion*
 
-|  | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| copy to `ptr<int>` | 0.09 | 0.14 | ref | ref | ref | ref |
-| to `ptr<const int>` | 0.09 | 0.15 | +0% | −1% | −1% | +4% |
-| to `ptr<void>` | 0.1 | 0.14 | +2% | +1% | −1% | −2% |
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| copy to `ptr<int>` | 0.09 | 0.11 | ref | ref | ref | ref | ref |
+| to `ptr<const int>` | 0.09 | 0.11 | +0% | +0% | +1% | +1% | −1% |
+| to `ptr<void>` | 0.09 | 0.11 | +3% | +1% | +3% | +2% | −1% |

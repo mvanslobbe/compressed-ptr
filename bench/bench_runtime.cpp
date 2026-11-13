@@ -3,8 +3,8 @@
 //
 // Every benchmark runs many short epochs (a few hundred to a few thousand
 // operations each) on a structure that stays large for the whole run, and
-// reports the 50th, 95th, 99th and 99.9th percentile of the per-epoch time
-// per element. Each candidate is compared with a reference at the same
+// reports the 50th, 90th, 95th, 99th and 99.5th percentile of the per-epoch
+// time per element. Each candidate is compared with a reference at the same
 // percentile: "+10%" means the candidate's p99 is 10% slower than the
 // reference's p99. The reference is the same code with raw 8-byte links, or
 // a raw T* for the pointer loops.
@@ -27,6 +27,7 @@
 #include <functional>
 #include <list>
 #include <map>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -49,7 +50,7 @@ struct distribution {
   }
 };
 
-constexpr double kPercentiles[] = {0.50, 0.95, 0.99, 0.999};
+constexpr double kPercentiles[] = {0.50, 0.90, 0.95, 0.99, 0.995};
 
 constexpr std::size_t kBurst = 8;
 
@@ -86,16 +87,35 @@ std::vector<distribution> measure(
   return out;
 }
 
+// With BENCH_TSV=file in the environment, every row is also written there
+// as "title<TAB>name<TAB>p50<TAB>p90<TAB>p95<TAB>p99<TAB>p99.5" (ns), for the
+// benchmark history on GitHub Pages.
+std::FILE* tsv_file() {
+  static std::FILE* f = [] {
+    const char* path = std::getenv("BENCH_TSV");
+    return path ? std::fopen(path, "w") : nullptr;
+  }();
+  return f;
+}
+std::string current_title;
+
 void print_header(const char* title) {
+  current_title = title;
   std::printf("\n%s\n\n", title);
   std::printf(
-      "| | p50 ns | p99.9 ns | Δp50 | Δp95 | Δp99 | Δp99.9 |\n"
-      "|---|---:|---:|---:|---:|---:|---:|\n");
+      "| | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |\n"
+      "|---|---:|---:|---:|---:|---:|---:|---:|\n");
 }
 
 void print_row(const char* name, const distribution& d,
                const distribution* reference) {
-  std::printf("| %s | %.2f | %.2f |", name, d.at(0.50), d.at(0.999));
+  if (std::FILE* f = tsv_file()) {
+    std::fprintf(f, "%s\t%s\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\n",
+                 current_title.c_str(), name, d.at(0.50), d.at(0.90),
+                 d.at(0.95), d.at(0.99), d.at(0.995));
+    std::fflush(f);
+  }
+  std::printf("| %s | %.2f | %.2f |", name, d.at(0.50), d.at(0.995));
   for (double q : kPercentiles) {
     if (reference == nullptr) {
       std::printf(" ref |");

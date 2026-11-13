@@ -57,7 +57,7 @@ cmake --build build-fuzz --target fuzz_allocator
   A new feature comes with tests of its interface and, for containers, a
   random differential test against the standard container.
 - **Performance changes come with numbers.** Use `bench_runtime`, which
-  reports p50, p95, p99 and p99.9 against a reference measured in the
+  reports p50, p90, p95, p99 and p99.5 against a reference measured in the
   same run. Give the numbers before and after the change, built with the
   same compiler and flags, and say what machine they come from.
 - **Format** with clang-format 22 and the repository's `.clang-format`.

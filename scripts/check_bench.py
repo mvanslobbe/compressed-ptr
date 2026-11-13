@@ -32,7 +32,7 @@ def main():
     rows = {}
     for line in text.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) == 7 and cells[3] not in ("ref", "Δp50"):
+        if len(cells) == 8 and cells[3] not in ("ref", "Δp50"):
             m = re.fullmatch(r"([+-]?\d+)%", cells[3])
             if m:
                 rows[cells[0]] = int(m.group(1))

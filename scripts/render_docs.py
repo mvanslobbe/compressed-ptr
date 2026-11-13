@@ -51,6 +51,29 @@ TEMPLATE = """<!doctype html>
           margin: 1em 0; font-variant-numeric: tabular-nums; }}
   th, td {{ border: 1px solid var(--line); padding: 4px 10px; }}
   th {{ background: var(--code); }}
+  /* Percentile ramp for the comparison chart: one hue, p50 lightest. */
+  :root {{ --s0: #86b6ef; --s1: #5598e7; --s2: #2a78d6; --s3: #1c5cab;
+          --s4: #0d366b; }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{ --s0: #cde2fb; --s1: #86b6ef; --s2: #3987e5; --s3: #256abf;
+            --s4: #184f95; }}
+  }}
+  .s0 {{ fill: var(--s0); background: var(--s0); }}
+  .s1 {{ fill: var(--s1); background: var(--s1); }}
+  .s2 {{ fill: var(--s2); background: var(--s2); }}
+  .s3 {{ fill: var(--s3); background: var(--s3); }}
+  .s4 {{ fill: var(--s4); background: var(--s4); }}
+  svg.versus {{ width: 100%; height: auto; display: block; margin: 8px 0 16px; }}
+  svg.versus text {{ fill: var(--fg); font: 12px system-ui, sans-serif; }}
+  svg.versus text.tick {{ fill: var(--muted); font-size: 11px; }}
+  svg.versus line.grid {{ stroke: var(--line); stroke-width: 1; }}
+  svg.versus line.zero {{ stroke: var(--muted); stroke-width: 1.5; }}
+  svg.versus rect:hover {{ opacity: 0.75; }}
+  .legend {{ display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted);
+            font-size: 14px; margin: 0; }}
+  .legend span {{ display: inline-flex; align-items: center; gap: 6px; }}
+  .legend i {{ display: inline-block; width: 12px; height: 12px;
+              border-radius: 3px; }}
 </style>
 </head>
 <body>
@@ -60,7 +83,7 @@ TEMPLATE = """<!doctype html>
   <a href="benchmarks.html">Benchmarks</a>
   <a href="reference/index.html">API reference</a>
   <a href="coverage/index.html">Coverage</a>
-  <a href="bench/index.html">History</a>
+  <a href="history.html">History</a>
   <a href="https://github.com/mvanslobbe/compressed-ptr">GitHub</a>
 </nav>
 <main>
@@ -86,7 +109,8 @@ def main():
         src = open(os.path.join(DOCS, name), encoding="utf-8").read()
         body = markdown.markdown(
             fix_links(src),
-            extensions=["tables", "fenced_code", "toc", "sane_lists"])
+            extensions=["tables", "fenced_code", "toc", "sane_lists",
+                        "md_in_html"])
         page = TEMPLATE.format(title=html.escape(title), body=body)
         dest = os.path.join(out, name.replace(".md", ".html"))
         open(dest, "w", encoding="utf-8").write(page)
