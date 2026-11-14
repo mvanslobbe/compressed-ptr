@@ -327,7 +327,9 @@ class basic_list {
   }
 
   /// Merge sorted `other` into this sorted list. Stable: of equal elements,
-  /// this list's come first.
+  /// this list's come first. If `comp` throws, the elements moved so far
+  /// stay here, the rest stay in `other`, both sizes are right, and the
+  /// exception propagates.
   template <class Compare = std::less<>>
   void merge(basic_list& other, Compare comp = Compare()) {
     if (&other == this || other.empty()) {
@@ -336,15 +338,23 @@ class basic_list {
     position(end());
     node_base* a = sentinel()->next;
     node_base* b = other.sentinel()->next;
-    while (a != sentinel() && b != other.sentinel()) {
-      if (comp(value_of(b), value_of(a))) {
-        node_base* next = b->next;
-        unlink(b);
-        link_before(a, b);
-        b = next;
-      } else {
-        a = a->next;
+    size_type moved = 0;
+    try {
+      while (a != sentinel() && b != other.sentinel()) {
+        if (comp(value_of(b), value_of(a))) {
+          node_base* next = b->next;
+          unlink(b);
+          link_before(a, b);
+          b = next;
+          moved++;
+        } else {
+          a = a->next;
+        }
       }
+    } catch (...) {
+      size_ += moved;
+      other.size_ -= moved;
+      throw;
     }
     if (b != other.sentinel()) {
       transfer(sentinel(), b, other.sentinel());
@@ -390,16 +400,24 @@ class basic_list {
     } while (n != sentinel());
   }
 
+  /// Erase the elements equal to `value` and return how many. Unlinked
+  /// nodes are destroyed only at the end, so `value` may refer to an
+  /// element of this list. If a comparison throws, the elements already
+  /// found are erased, the rest are kept, and the exception propagates.
   size_type remove(const T& value) {
-    // Unlinked nodes are destroyed only at the end, so |value| may refer to
-    // an element of this list.
     return remove_if_impl([&](const T& v) { return v == value; });
   }
+  /// Erase the elements for which `pred` is true and return how many. If
+  /// `pred` throws, the elements already found are erased, the rest are
+  /// kept, and the exception propagates.
   template <class Pred>
   size_type remove_if(Pred pred) {
     return remove_if_impl(pred);
   }
 
+  /// Erase all but the first of each run of consecutive elements for which
+  /// `pred` is true, and return how many were erased. If `pred` throws, the
+  /// elements already found are erased and the exception propagates.
   template <class Pred = std::equal_to<>>
   size_type unique(Pred pred = Pred()) {
     if (size_ < 2) {
@@ -409,17 +427,23 @@ class basic_list {
     size_type removed = 0;
     node_base* kept = sentinel()->next;
     node_base* n = kept->next;
-    while (n != sentinel()) {
-      node_base* next = n->next;
-      if (pred(value_of(kept), value_of(n))) {
-        unlink(n);
-        n->next = doomed;
-        doomed = n;
-        removed++;
-      } else {
-        kept = n;
+    try {
+      while (n != sentinel()) {
+        node_base* next = n->next;
+        if (pred(value_of(kept), value_of(n))) {
+          unlink(n);
+          n->next = doomed;
+          doomed = n;
+          removed++;
+        } else {
+          kept = n;
+        }
+        n = next;
       }
-      n = next;
+    } catch (...) {
+      destroy_chain(doomed);
+      size_ -= removed;
+      throw;
     }
     destroy_chain(doomed);
     size_ -= removed;
@@ -659,15 +683,21 @@ class basic_list {
     node_base* doomed = nullptr;
     size_type removed = 0;
     node_base* n = sentinel()->next;
-    while (n != sentinel()) {
-      node_base* next = n->next;
-      if (pred(value_of(n))) {
-        unlink(n);
-        n->next = doomed;
-        doomed = n;
-        removed++;
+    try {
+      while (n != sentinel()) {
+        node_base* next = n->next;
+        if (pred(value_of(n))) {
+          unlink(n);
+          n->next = doomed;
+          doomed = n;
+          removed++;
+        }
+        n = next;
       }
-      n = next;
+    } catch (...) {
+      destroy_chain(doomed);
+      size_ -= removed;
+      throw;
     }
     destroy_chain(doomed);
     size_ -= removed;

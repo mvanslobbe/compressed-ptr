@@ -113,20 +113,35 @@ class basic_unordered_map {
   using iterator = basic_iterator<false>;
   using const_iterator = basic_iterator<true>;
 
+  /// An empty map; allocates nothing.
   basic_unordered_map() noexcept = default;
+  /// An empty map with at least `buckets` buckets.
   explicit basic_unordered_map(size_type buckets, const Hash& hash = Hash(),
                                const KeyEqual& eq = KeyEqual())
       : hash_(hash), eq_(eq) {
     rehash(buckets);
   }
+  // The constructors that insert delegate to another one, so that the
+  // destructor frees what was inserted if an element, the hash or an
+  // allocation throws.
+  /// The elements of [first, last); of equal keys, the first is kept.
   template <std::input_iterator It>
-  basic_unordered_map(It first, It last) {
+  basic_unordered_map(It first, It last, size_type buckets = 0,
+                      const Hash& hash = Hash(),
+                      const KeyEqual& eq = KeyEqual())
+      : basic_unordered_map(buckets, hash, eq) {
     insert(first, last);
   }
-  basic_unordered_map(std::initializer_list<value_type> values)
-      : basic_unordered_map(values.begin(), values.end()) {}
+  /// The elements of `values`; of equal keys, the first is kept.
+  basic_unordered_map(std::initializer_list<value_type> values,
+                      size_type buckets = 0, const Hash& hash = Hash(),
+                      const KeyEqual& eq = KeyEqual())
+      : basic_unordered_map(values.begin(), values.end(), buckets, hash, eq) {}
+  /// Copies the elements, the hash function, the key comparison and the
+  /// maximum load factor.
   basic_unordered_map(const basic_unordered_map& other)
-      : hash_(other.hash_), eq_(other.eq_), max_load_(other.max_load_) {
+      : basic_unordered_map(0, other.hash_, other.eq_) {
+    max_load_ = other.max_load_;
     reserve(other.size_);
     for (const auto& kv : other) {
       emplace(kv.first, kv.second);
@@ -308,16 +323,24 @@ class basic_unordered_map {
   V& operator[](const K& key) { return try_emplace(key).first->second; }
   V& operator[](K&& key) { return try_emplace(std::move(key)).first->second; }
 
+  /// Build the element from `args`, then insert it unless its key is
+  /// present. If the hash, the key comparison or a rehash throws, the
+  /// element is destroyed and the map is unchanged.
   template <class... Args>
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
-    std::uint32_t h = hash_of(n->kv.first);
-    if (node* existing = find_node(n->kv.first, h)) {
+    try {
+      std::uint32_t h = hash_of(n->kv.first);
+      if (node* existing = find_node(n->kv.first, h)) {
+        delete_node(n);
+        return {make_iterator(existing), false};
+      }
+      n->hash = h;
+      link_node(n);
+    } catch (...) {
       delete_node(n);
-      return {make_iterator(existing), false};
+      throw;
     }
-    n->hash = h;
-    link_node(n);
     return {make_iterator(n), true};
   }
   template <class... Args>

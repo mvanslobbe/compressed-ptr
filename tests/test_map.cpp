@@ -250,3 +250,57 @@ TEST(map_end_stays_valid) {
   CHECK(end == m.end());
   CHECK(std::prev(end)->first == 2);
 }
+
+namespace {
+
+struct map_leak_tag {};
+using leak_cage = cptr::cage<map_leak_tag, 24>;
+
+inline int g_countdown = -1;
+
+struct throwing_less {
+  bool operator()(int a, int b) const {
+    if (g_countdown >= 0 && g_countdown-- == 0) {
+      throw std::runtime_error("comparison failed");
+    }
+    return a < b;
+  }
+};
+
+}  // namespace
+
+TEST(map_emplace_does_not_leak_when_comparison_throws) {
+  // Before the fix emplace built the node and leaked it when finding its
+  // place threw.
+  std::size_t before = leak_cage::allocated_bytes();
+  for (int at = 0; at < 40; at++) {
+    cptr::ordered_map<int, int, throwing_less, leak_cage> m;
+    for (int i = 0; i < 8; i++) {
+      m.emplace(i * 2, i);
+    }
+    g_countdown = at;
+    try {
+      for (int i = 0; i < 8; i++) {
+        m.emplace(i * 2 + 1, i);
+        m.emplace_hint(m.end(), i * 2, i);
+      }
+    } catch (const std::runtime_error&) {
+    }
+    g_countdown = -1;
+    CHECK(m.valid());
+  }
+  CHECK(leak_cage::allocated_bytes() == before);
+}
+
+TEST(map_copies_a_moved_from_map) {
+  // Found by the container fuzzer: the copy constructor read the root
+  // through the header, which a moved-from map does not have.
+  cptr::ordered_map<int, int> a{{1, 1}};
+  cptr::ordered_map<int, int> b = std::move(a);
+  cptr::ordered_map<int, int> c = a;
+  CHECK(c.empty() && c.valid());
+  b = a;
+  CHECK(b.empty() && b.valid());
+  b[2] = 2;
+  CHECK(b.size() == 1 && b.valid());
+}

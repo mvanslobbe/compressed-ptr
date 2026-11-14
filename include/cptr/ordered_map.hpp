@@ -129,10 +129,11 @@ class basic_ordered_map {
   basic_ordered_map(std::initializer_list<value_type> values,
                     const Compare& comp = Compare())
       : basic_ordered_map(values.begin(), values.end(), comp) {}
-  /// Copies the tree's shape, in linear time.
+  /// Copies the tree's shape, in linear time. `other` may be a moved-from
+  /// map, which has no header.
   basic_ordered_map(const basic_ordered_map& other)
       : basic_ordered_map(other.comp_) {
-    if (node_base* root = other.root()) {
+    if (node_base* root = other.header() ? other.root() : nullptr) {
       node_base* copy = clone(root, header());
       header()->parent = copy;
       header()->left = minimum(copy);
@@ -293,16 +294,24 @@ class basic_ordered_map {
   V& operator[](K&& key) { return try_emplace(std::move(key)).first->second; }
 
   /// Insertion. As std::map: emplace builds the element first, try_emplace
-  /// only builds the mapped value if the key is new.
+  /// only builds the mapped value if the key is new. If the comparison or
+  /// an allocation throws, the element is destroyed and the map is
+  /// unchanged.
   template <class... Args>
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
-    auto [parent, left, existing] = find_slot(n->kv.first);
-    if (existing) {
+    slot s;
+    try {
+      s = find_slot(n->kv.first);
+    } catch (...) {
       delete_node(n);
-      return {iterator(existing), false};
+      throw;
     }
-    attach(n, parent, left);
+    if (s.existing) {
+      delete_node(n);
+      return {iterator(s.existing), false};
+    }
+    attach(n, s.parent, s.left);
     return {iterator(n), true};
   }
   /// The hint is not used; the result is the same as emplace's.

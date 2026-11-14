@@ -327,3 +327,85 @@ TEST(list_sort_with_throwing_comparison_keeps_every_node) {
   }
   CHECK(leak_cage::allocated_bytes() == before);
 }
+
+TEST(list_merge_with_throwing_comparison_keeps_sizes_right) {
+  // Before the fix the nodes moved before the throw were not counted, so
+  // size() disagreed with the elements in both lists.
+  std::size_t before = leak_cage::allocated_bytes();
+  for (int at = 0; at < 8; at++) {
+    leak_list a{1, 3, 5}, b{2, 4, 6};
+    int countdown = at;
+    try {
+      a.merge(b, throwing_less{&countdown});
+    } catch (const std::runtime_error&) {
+    }
+    CHECK(consistent(a) && consistent(b));
+    CHECK(a.size() + b.size() == 6);
+    CHECK(std::is_sorted(a.begin(), a.end()));
+  }
+  CHECK(leak_cage::allocated_bytes() == before);
+}
+
+TEST(list_remove_if_and_unique_with_throwing_predicate_do_not_leak) {
+  // Before the fix the elements already unlinked were neither freed nor
+  // subtracted from size() when the predicate threw.
+  std::size_t before = leak_cage::allocated_bytes();
+  for (int at = 0; at < 8; at++) {
+    leak_list l{1, 1, 2, 2, 3, 3};
+    int countdown = at;
+    auto pred = [&](int v) {
+      if (countdown-- == 0) {
+        throw std::runtime_error("predicate failed");
+      }
+      return v < 3;
+    };
+    std::size_t removed = 0;
+    try {
+      removed = l.remove_if(pred);
+    } catch (const std::runtime_error&) {
+    }
+    CHECK(consistent(l));
+    CHECK(at < 6 || (removed == 4 && l.size() == 2));
+    // Every element erased was one the predicate chose.
+    CHECK(std::count(l.begin(), l.end(), 3) == 2);
+
+    leak_list u{1, 1, 2, 2, 3, 3};
+    countdown = at;
+    try {
+      u.unique([&](int x, int y) {
+        if (countdown-- == 0) {
+          throw std::runtime_error("predicate failed");
+        }
+        return x == y;
+      });
+    } catch (const std::runtime_error&) {
+    }
+    CHECK(consistent(u));
+    CHECK(sorted_values(u).size() == u.size());
+    CHECK(u.size() >= 3 && u.size() <= 6);
+
+    std::size_t removed_before = 0;
+    struct throws_on_compare {
+      int v;
+      int* countdown;
+      bool operator==(const throws_on_compare& o) const {
+        if ((*countdown)-- == 0) {
+          throw std::runtime_error("comparison failed");
+        }
+        return v == o.v;
+      }
+    };
+    cptr::list<throws_on_compare, leak_cage> t;
+    for (int i = 0; i < 4; i++) {
+      t.push_back({i % 2, &countdown});
+    }
+    countdown = at;
+    try {
+      removed_before = t.remove(t.front());
+    } catch (const std::runtime_error&) {
+    }
+    CHECK(t.size() == std::size_t(std::distance(t.begin(), t.end())));
+    CHECK(at < 4 || (removed_before == 2 && t.size() == 2));
+  }
+  CHECK(leak_cage::allocated_bytes() == before);
+}

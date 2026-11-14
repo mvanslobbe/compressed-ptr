@@ -261,3 +261,88 @@ TEST(unordered_map_too_many_buckets_throws_length_error) {
   CHECK(std::has_single_bit(int_map::max_bucket_count()));
   CHECK(int_map::max_bucket_count() * 4 <= cptr::default_cage::usable_end);
 }
+
+namespace {
+
+struct umap_leak_tag {};
+using leak_cage = cptr::cage<umap_leak_tag, 24>;
+
+inline int g_countdown = -1;
+// Throws when the global countdown reaches zero; -1 never throws.
+inline void tick() {
+  if (g_countdown >= 0 && g_countdown-- == 0) {
+    throw std::runtime_error("countdown");
+  }
+}
+
+struct throwing_hash {
+  std::size_t operator()(int k) const {
+    tick();
+    return std::size_t(k);
+  }
+};
+
+struct throwing_value {
+  int v;
+  throwing_value(int x) : v(x) {}
+  throwing_value(const throwing_value& o) : v(o.v) { tick(); }
+  throwing_value& operator=(const throwing_value&) = default;
+  bool operator==(const throwing_value&) const = default;
+};
+
+}  // namespace
+
+TEST(unordered_map_emplace_and_constructors_do_not_leak_on_throw) {
+  // Before the fix emplace leaked the node when the hash threw, and the
+  // copy and range constructors, which did not delegate, leaked every
+  // element made before one threw.
+  std::size_t before = leak_cage::allocated_bytes();
+  using hash_map = cptr::unordered_map<int, int, throwing_hash,
+                                       std::equal_to<int>, leak_cage>;
+  for (int at = 0; at < 20; at++) {
+    hash_map m;
+    for (int i = 0; i < 8; i++) {
+      m.emplace(i, i);
+    }
+    g_countdown = at;
+    try {
+      for (int i = 0; i < 16; i++) {
+        m.emplace(i, i);
+      }
+    } catch (const std::runtime_error&) {
+    }
+    g_countdown = -1;
+    for (const auto& [k, v] : m) {
+      CHECK(k == v && m.find(k)->second == v);
+    }
+  }
+  CHECK(leak_cage::allocated_bytes() == before);
+
+  using value_map = cptr::unordered_map<int, throwing_value, std::hash<int>,
+                                        std::equal_to<int>, leak_cage>;
+  std::vector<std::pair<int, throwing_value>> pairs;
+  for (int i = 0; i < 10; i++) {
+    pairs.emplace_back(i, i);
+  }
+  value_map source;
+  for (int i = 0; i < 10; i++) {
+    source.emplace(i, i);
+  }
+  std::size_t with_source = leak_cage::allocated_bytes();
+  for (int at = 0; at < 12; at++) {
+    g_countdown = at;
+    try {
+      value_map copy = source;
+      CHECK(copy == source);
+    } catch (const std::runtime_error&) {
+    }
+    g_countdown = at;
+    try {
+      value_map range(pairs.begin(), pairs.end());
+      CHECK(range == source);
+    } catch (const std::runtime_error&) {
+    }
+    g_countdown = -1;
+    CHECK(leak_cage::allocated_bytes() == with_source);
+  }
+}

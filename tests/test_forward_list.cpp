@@ -309,3 +309,82 @@ TEST(forward_list_sort_with_throwing_comparison_keeps_every_node) {
   }
   CHECK(leak_cage::allocated_bytes() == before);
 }
+
+TEST(forward_list_remove_if_and_unique_with_throwing_predicate_do_not_leak) {
+  // Before the fix the elements already unlinked leaked when the
+  // predicate threw.
+  std::size_t before = leak_cage::allocated_bytes();
+  for (int at = 0; at < 8; at++) {
+    leak_list l{1, 1, 2, 2, 3, 3};
+    int countdown = at;
+    try {
+      l.remove_if([&](int v) {
+        if (countdown-- == 0) {
+          throw std::runtime_error("predicate failed");
+        }
+        return v < 3;
+      });
+    } catch (const std::runtime_error&) {
+    }
+    CHECK(std::count(l.begin(), l.end(), 3) == 2);
+
+    leak_list u{1, 1, 2, 2, 3, 3};
+    countdown = at;
+    try {
+      u.unique([&](int x, int y) {
+        if (countdown-- == 0) {
+          throw std::runtime_error("predicate failed");
+        }
+        return x == y;
+      });
+    } catch (const std::runtime_error&) {
+    }
+    CHECK(std::is_sorted(u.begin(), u.end()));
+  }
+  CHECK(leak_cage::allocated_bytes() == before);
+}
+
+namespace {
+// Its third construction or copy throws.
+struct throws_third {
+  static inline int made = 0;
+  int v = 0;
+  throws_third() {
+    if (++made == 3) {
+      throw std::runtime_error("constructor failed");
+    }
+  }
+  throws_third(const throws_third&) {
+    if (++made == 3) {
+      throw std::runtime_error("copy failed");
+    }
+  }
+};
+}  // namespace
+
+TEST(forward_list_constructors_free_elements_when_one_throws) {
+  // Before the fix forward_list(n) did not delegate to the default
+  // constructor, so when the n-th element threw the destructor never ran
+  // and the earlier elements leaked.
+  using L = cptr::forward_list<throws_third, leak_cage>;
+  std::size_t before = leak_cage::allocated_bytes();
+  bool threw = false;
+  try {
+    L l(5);
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  CHECK(threw);
+  CHECK(leak_cage::allocated_bytes() == before);
+  std::vector<throws_third> v(2);
+  throws_third::made = 0;
+  threw = false;
+  try {
+    L l(v.begin(), v.end());
+    l.push_front(v[0]);
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  CHECK(threw);
+  CHECK(leak_cage::allocated_bytes() == before);
+}

@@ -90,12 +90,14 @@ class basic_forward_list {
   using const_iterator = basic_iterator<true>;
 
   basic_forward_list() noexcept = default;
-  explicit basic_forward_list(size_type n) { resize(n); }
-  basic_forward_list(size_type n, const T& value) {
+  // The constructors that insert delegate to the default one, so that the
+  // destructor frees what was inserted if an element throws.
+  explicit basic_forward_list(size_type n) : basic_forward_list() { resize(n); }
+  basic_forward_list(size_type n, const T& value) : basic_forward_list() {
     insert_after(before_begin(), n, value);
   }
   template <std::input_iterator It>
-  basic_forward_list(It first, It last) {
+  basic_forward_list(It first, It last) : basic_forward_list() {
     insert_after(before_begin(), first, last);
   }
   basic_forward_list(std::initializer_list<T> values)
@@ -323,29 +325,42 @@ class basic_forward_list {
     head_.next = prev;
   }
 
-  /// Unlinked nodes are destroyed only at the end, so `value` may refer to
-  /// an element of this list.
+  /// Erase the elements equal to `value` and return how many. Unlinked
+  /// nodes are destroyed only at the end, so `value` may refer to an
+  /// element of this list. If a comparison throws, the elements already
+  /// found are erased, the rest are kept, and the exception propagates.
   size_type remove(const T& value) {
     return remove_if([&](const T& v) { return v == value; });
   }
+  /// Erase the elements for which `pred` is true and return how many. If
+  /// `pred` throws, the elements already found are erased, the rest are
+  /// kept, and the exception propagates.
   template <class Pred>
   size_type remove_if(Pred pred) {
     node_base* doomed = nullptr;
     size_type removed = 0;
     node_base* prev = &head_;
-    while (node_base* n = prev->next) {
-      if (pred(value_of(n))) {
-        prev->next = n->next;
-        n->next = doomed;
-        doomed = n;
-        removed++;
-      } else {
-        prev = n;
+    try {
+      while (node_base* n = prev->next) {
+        if (pred(value_of(n))) {
+          prev->next = n->next;
+          n->next = doomed;
+          doomed = n;
+          removed++;
+        } else {
+          prev = n;
+        }
       }
+    } catch (...) {
+      destroy_chain(doomed);
+      throw;
     }
     destroy_chain(doomed);
     return removed;
   }
+  /// Erase all but the first of each run of consecutive elements for which
+  /// `pred` is true, and return how many were erased. If `pred` throws, the
+  /// elements already found are erased and the exception propagates.
   template <class Pred = std::equal_to<>>
   size_type unique(Pred pred = Pred()) {
     node_base* doomed = nullptr;
@@ -354,15 +369,20 @@ class basic_forward_list {
     if (!kept) {
       return 0;
     }
-    while (node_base* n = kept->next) {
-      if (pred(value_of(kept), value_of(n))) {
-        kept->next = n->next;
-        n->next = doomed;
-        doomed = n;
-        removed++;
-      } else {
-        kept = n;
+    try {
+      while (node_base* n = kept->next) {
+        if (pred(value_of(kept), value_of(n))) {
+          kept->next = n->next;
+          n->next = doomed;
+          doomed = n;
+          removed++;
+        } else {
+          kept = n;
+        }
       }
+    } catch (...) {
+      destroy_chain(doomed);
+      throw;
     }
     destroy_chain(doomed);
     return removed;
