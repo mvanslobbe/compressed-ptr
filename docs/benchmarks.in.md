@@ -23,10 +23,10 @@ container against its cptr counterpart.
 - **Speed:** against raw links in the same container, compressed links are
   mostly equal or faster once a structure outgrows the caches, because more
   nodes fit in each cache line and page. The exceptions: `unordered_map`
-  find and erase, pointer chases that fit in L1 or L2, and the slowest
-  0.5% of list walks and shrinks. The tables below give every case.
+  find (about 14% slower here), pointer chases that fit in L1 or L2, and
+  the slowest 1% of list shrinks. The tables below give every case.
 - **Where it costs:** a compressed pointer is decompressed with an add (and
-  a conditional move for null). On a pointer chase that fits in L1, that
+  a conditional move or branch for null). On a pointer chase that fits in L1, that
   shows; `nonnull_ptr` removes most of it. Pointer arithmetic over arrays
   does not vectorise: convert to `T*` once for hot loops.
 

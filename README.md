@@ -19,9 +19,9 @@
 
 | 1,000,000 `uint32_t` elements | `std::` | `cptr::` | memory | speed |
 |---|---:|---:|---:|---:|
-| `list`, walk | 32.1 B · 1.9 ns | **16.0 B · 1.3 ns** | **−50%** | **−31%** |
-| `map` / `ordered_map`, find | 48.0 B · 405 ns | **24.0 B · 271 ns** | **−50%** | **−33%** |
-| `unordered_map`, find | 43.6 B · 16.6 ns | **20.3 B · 7.9 ns** | **−53%** | **−52%** |
+| `list`, walk | 32.1 B · 1.9 ns | **16.0 B · 1.3 ns** | **−50%** | **−28%** |
+| `map` / `ordered_map`, find | 48.0 B · 404 ns | **24.0 B · 268 ns** | **−50%** | **−35%** |
+| `unordered_map`, find | 43.6 B · 16.5 ns | **20.3 B · 8.4 ns** | **−53%** | **−49%** |
 
 Bytes per element (resident memory) and time per operation; i7-12700H,
 GCC 15, `-O2`. **Get your own numbers in one command:**
@@ -183,7 +183,7 @@ needs more than 64 GiB.
   containers, `cptr::allocator`). Compressing any other pointer is a bug,
   caught by assertions in debug builds.
 - Decompression is one add. On a pointer chase that fits in L1 it costs
-  up to 57% (17% with `nonnull_ptr`); from L3 on, compressed is faster.
+  up to 54% (16% with `nonnull_ptr`); from L3 on, compressed is faster.
 - Pointer arithmetic on `ptr` does not vectorise. Convert to `T*` once
   for hot loops over arrays.
 - Each Windows DLL gets its own cage; keep a cage's users in one module.

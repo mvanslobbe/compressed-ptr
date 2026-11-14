@@ -62,9 +62,9 @@ With a million 4-byte elements on an i7-12700H (GCC 15, `-O2`):
 
 | | `std::` | `cptr::` | time |
 |---|---:|---:|---:|
-| list, walk | 32.1 B | **16.0 B** | **−31%** |
-| map, find | 48.0 B | **24.0 B** | **−33%** |
-| unordered_map, find | 43.6 B | **20.3 B** | **−52%** |
+| list, walk | 32.1 B | **16.0 B** | **−28%** |
+| map, find | 48.0 B | **24.0 B** | **−35%** |
+| unordered_map, find | 43.6 B | **20.3 B** | **−49%** |
 
 The memory halves because the links halve. The time drops because half the
 memory means half the cache lines: once a structure is larger than your
@@ -79,9 +79,9 @@ Nothing here is free, and the [benchmarks page](benchmarks.md) says where it
 loses:
 
 - **Decompression is an add, plus a null check.** When a pointer chase fits
-  in L1, that add is visible: up to 57% slower than raw pointers at the
+  in L1, that add is visible: up to 54% slower than raw pointers at the
   median. `cptr::nonnull_ptr` drops the null check and the gap to about
-  17%. From L3 outwards the smaller nodes win.
+  16%. From L3 outwards the smaller nodes win.
 - **Everything you compress must live in the cage.** Allocate with
   `cptr::make`, the bundled containers, or `cptr::allocator`. Compressing a
   pointer from elsewhere is a bug; debug builds assert, and
