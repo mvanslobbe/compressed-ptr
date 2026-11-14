@@ -7,6 +7,7 @@
 #include <random>
 #include <set>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #include "check.hpp"
@@ -512,4 +513,64 @@ TEST(allocated_bytes_never_wraps) {
     std::printf("  %ld readings wrapped\n", wrapped);
   }
   CHECK(wrapped == 0);
+}
+
+// The size class is computed in closed form. Check it against the search
+// it replaced: the smallest class of at least `bytes` that is a multiple of
+// `align`, for every alignment and every small size.
+TEST(size_class_matches_a_search) {
+  using cptr::detail::kClassSizes;
+  auto search = [](std::size_t bytes, std::size_t align) {
+    for (std::size_t i = 0; i < kClassSizes.size(); i++) {
+      if (kClassSizes[i] >= bytes && kClassSizes[i] % align == 0) {
+        return int(i);
+      }
+    }
+    return -1;
+  };
+  long mismatches = 0;
+  for (std::size_t align = 1; align <= cptr::detail::kMaxSmall; align *= 2) {
+    for (std::size_t bytes = 1; bytes <= cptr::detail::kMaxSmall; bytes++) {
+      mismatches +=
+          cptr::detail::size_class(bytes, align) != search(bytes, align);
+    }
+  }
+  CHECK(mismatches == 0);
+}
+
+// Size classes, compress() and decompress() work in constant expressions,
+// the latter two for null only.
+static_assert(cptr::detail::size_class(1, 1) == 0);
+static_assert(cptr::detail::size_class(300, 16) == 24);   // 320
+static_assert(cptr::detail::size_class(300, 128) == 25);  // 384
+static_assert(cptr::detail::size_class(32768, 4096) ==
+              int(cptr::detail::kClassSizes.size()) - 1);
+static_assert(cptr::default_cage::compress(nullptr) == 0);
+static_assert(cptr::default_cage::decompress(0) == nullptr);
+static_assert(wide_cage::compress(nullptr) == 0);
+
+namespace {
+inline constexpr int some_object = 0;
+template <class Cage>
+concept compresses_nonnull_at_compile_time = requires {
+  typename std::integral_constant<std::uint32_t, Cage::compress(&some_object)>;
+};
+template <class Cage>
+concept decompresses_nonzero_at_compile_time = requires {
+  typename std::integral_constant<bool, Cage::decompress(16) != nullptr>;
+};
+}  // namespace
+static_assert(!compresses_nonnull_at_compile_time<cptr::default_cage>);
+static_assert(!decompresses_nonzero_at_compile_time<cptr::default_cage>);
+
+// compress() is a mask of the low bits, which relies on every cage being
+// aligned to its own size.
+TEST(compress_is_the_offset) {
+  void* p = wide_cage::allocate(64, 8);
+  std::uintptr_t offset =
+      reinterpret_cast<std::uintptr_t>(p) - wide_cage::base();
+  CHECK(wide_cage::base() % wide_cage::size == 0);
+  CHECK(wide_cage::compress(p) == offset >> 3);
+  CHECK(wide_cage::decompress(wide_cage::compress(p)) == p);
+  wide_cage::deallocate(p);
 }

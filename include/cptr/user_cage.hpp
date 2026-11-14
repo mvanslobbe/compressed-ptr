@@ -110,7 +110,7 @@ class CPTR_VISIBLE user_cage {
       detail::release(p, size);
       return false;
     }
-    base_ = reinterpret_cast<std::uintptr_t>(p);
+    base_ = detail::base_address(reinterpret_cast<std::uintptr_t>(p));
     ready_.store(true, std::memory_order_release);
     return true;
   }
@@ -121,32 +121,43 @@ class CPTR_VISIBLE user_cage {
     return *std::launder(reinterpret_cast<Allocator*>(storage_));
   }
 
-  static std::uintptr_t base() noexcept { return base_; }
+  static std::uintptr_t base() noexcept { return std::uintptr_t(base_); }
 
   static bool contains(const void* p) noexcept {
-    return base_ != 0 && reinterpret_cast<std::uintptr_t>(p) - base_ < size;
+    return base() != 0 && reinterpret_cast<std::uintptr_t>(p) - base() < size;
   }
 
-  static std::uint32_t compress(const void* p) noexcept {
-    if (!p) {
-      return 0;
+  /// The cage is aligned to its own size, so a pointer's offset is its low
+  /// SizeLog2 bits: compressing is a mask and a shift, and nullptr maps to
+  /// 0 with no branch. A pointer from outside the cage is caught only by
+  /// CPTR_CHECK. In a constant expression only nullptr can be compressed.
+  static constexpr std::uint32_t compress(const void* p) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::compress_constant(p);
     }
-    CPTR_CHECK(contains(p), "pointer is outside the cage");
-    std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
+    CPTR_CHECK(!p || contains(p), "pointer is outside the cage");
+    std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) & (size - 1);
     CPTR_CHECK((offset & (granularity - 1)) == 0,
                "pointer is not aligned to the cage granularity");
     return static_cast<std::uint32_t>(offset >> Shift);
   }
 
-  static void* decompress(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(bits == 0 || base_ != 0, "the cage is not initialised");
-    std::uintptr_t full = base_ + (std::uintptr_t(bits) << Shift);
+  /// Zero maps back to nullptr. Clang turns the null check into a
+  /// conditional move; GCC into a branch, which is cheap while it predicts
+  /// well, as it does when most pointers are not null. In a constant
+  /// expression only 0 can be decompressed.
+  static constexpr void* decompress(std::uint32_t bits) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::decompress_constant(bits);
+    }
+    CPTR_ASSERT(bits == 0 || base() != 0, "the cage is not initialised");
+    std::uintptr_t full = base() + (std::uintptr_t(bits) << Shift);
     return reinterpret_cast<void*>(bits ? full : std::uintptr_t(0));
   }
 
   static void* decompress_nonnull(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(base_ != 0, "the cage is not initialised");
-    return reinterpret_cast<void*>(base_ + (std::uintptr_t(bits) << Shift));
+    CPTR_ASSERT(base() != 0, "the cage is not initialised");
+    return reinterpret_cast<void*>(base() + (std::uintptr_t(bits) << Shift));
   }
 
   /// Throws std::bad_alloc when the allocator returns nullptr.
@@ -172,7 +183,7 @@ class CPTR_VISIBLE user_cage {
     void* p =
         allocator().allocate(bytes, align < granularity ? granularity : align);
     CPTR_CHECK(!p || (contains(p) &&
-                      reinterpret_cast<std::uintptr_t>(p) - base_ + bytes <=
+                      reinterpret_cast<std::uintptr_t>(p) - base() + bytes <=
                           usable_end),
                "the allocator returned memory outside its region");
     return p;
@@ -191,7 +202,7 @@ class CPTR_VISIBLE user_cage {
  private:
   static inline std::atomic<bool> ready_{false};
   static inline detail::spin_lock init_lock_;
-  static inline std::uintptr_t base_ = 0;
+  inline static detail::base_address base_{};
   alignas(Allocator) static inline std::byte storage_[sizeof(Allocator)];
 };
 

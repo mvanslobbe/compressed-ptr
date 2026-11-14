@@ -319,3 +319,6 @@ TEST(mapped_cage_failed_creation_leaves_no_file) {
   small_store::close();
   std::filesystem::remove(path);
 }
+
+static_assert(store::compress(nullptr) == 0);
+static_assert(store::decompress(0) == nullptr);

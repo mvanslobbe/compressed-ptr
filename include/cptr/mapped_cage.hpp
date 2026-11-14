@@ -85,7 +85,7 @@ class CPTR_VISIBLE mapped_cage {
   /// open() takes time in proportion to the number of free blocks. Tag is
   /// not recorded in the file: any mapped_cage of the same SizeLog2 opens it.
   static bool open(const char* path) noexcept {
-    if (base_ != 0) {
+    if (base() != 0) {
       return false;
     }
     void* p = detail::reserve_aligned(size, size);
@@ -96,32 +96,32 @@ class CPTR_VISIBLE mapped_cage {
       munmap(p, size);
       return false;
     }
-    base_ = reinterpret_cast<std::uintptr_t>(p);
+    base_ = detail::base_address(reinterpret_cast<std::uintptr_t>(p));
     return true;
   }
 
   /// Write the file's changed pages back and unmap it. Pointers into the
   /// cage are invalid afterwards.
   static void close() noexcept {
-    if (base_ == 0) {
+    if (base() == 0) {
       return;
     }
-    void* p = reinterpret_cast<void*>(base_);
+    void* p = reinterpret_cast<void*>(base());
     msync(p, size, MS_SYNC);
     munmap(p, size);
-    base_ = 0;
+    base_ = detail::base_address(0);
   }
 
   /// Write changed pages back to the file without unmapping it.
   static bool flush() noexcept {
-    return base_ != 0 &&
-           msync(reinterpret_cast<void*>(base_), size, MS_SYNC) == 0;
+    return base() != 0 &&
+           msync(reinterpret_cast<void*>(base()), size, MS_SYNC) == 0;
   }
 
-  static bool is_open() noexcept { return base_ != 0; }
+  static bool is_open() noexcept { return base() != 0; }
 
   /// Zero while no file is open.
-  static std::uintptr_t base() noexcept { return base_; }
+  static std::uintptr_t base() noexcept { return std::uintptr_t(base_); }
 
   /// Where the file was mapped the last time before this open(), or 0 for a
   /// new file.
@@ -131,38 +131,44 @@ class CPTR_VISIBLE mapped_cage {
   /// also while no file is open.
   template <class T>
   static T* root() noexcept {
-    return base_ ? static_cast<T*>(decompress(hdr()->root.load())) : nullptr;
+    return base() ? static_cast<T*>(decompress(hdr()->root.load())) : nullptr;
   }
   /// Designate the object root() returns. Does nothing while no file is
   /// open.
   static void set_root(const void* p) noexcept {
-    if (base_) {
+    if (base()) {
       hdr()->root.store(compress(p));
     }
   }
 
   static bool contains(const void* p) noexcept {
-    return base_ != 0 && reinterpret_cast<std::uintptr_t>(p) - base_ < size;
+    return base() != 0 && reinterpret_cast<std::uintptr_t>(p) - base() < size;
   }
 
-  static std::uint32_t compress(const void* p) noexcept {
-    if (!p) {
-      return 0;
+  /// A mask, as the mapping is aligned to the cage size; see
+  /// cage::compress().
+  static constexpr std::uint32_t compress(const void* p) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::compress_constant(p);
     }
-    CPTR_CHECK(contains(p), "pointer is outside the cage");
-    return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(p) -
-                                      base_);
+    CPTR_CHECK(!p || contains(p), "pointer is outside the cage");
+    return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(p) &
+                                      (size - 1));
   }
 
-  static void* decompress(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(bits == 0 || base_ != 0, "the mapped cage is not open");
-    std::uintptr_t full = base_ + bits;
+  /// See cage::decompress().
+  static constexpr void* decompress(std::uint32_t bits) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::decompress_constant(bits);
+    }
+    CPTR_ASSERT(bits == 0 || base() != 0, "the mapped cage is not open");
+    std::uintptr_t full = base() + bits;
     return reinterpret_cast<void*>(bits ? full : std::uintptr_t(0));
   }
 
   static void* decompress_nonnull(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(base_ != 0, "the mapped cage is not open");
-    return reinterpret_cast<void*>(base_ + bits);
+    CPTR_ASSERT(base() != 0, "the mapped cage is not open");
+    return reinterpret_cast<void*>(base() + bits);
   }
 
   static void* allocate(std::size_t bytes,
@@ -178,7 +184,7 @@ class CPTR_VISIBLE mapped_cage {
   static void* try_allocate(std::size_t bytes, std::size_t align = alignof(
                                                    std::max_align_t)) noexcept {
     CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
-    if (base_ == 0 || align > span_size) {
+    if (base() == 0 || align > span_size) {
       return nullptr;
     }
     header* h = hdr();
@@ -239,7 +245,7 @@ class CPTR_VISIBLE mapped_cage {
 
   /// Bytes handed out and not yet freed, rounded up to the size class.
   static std::size_t allocated_bytes() noexcept {
-    return base_ ? std::size_t(hdr()->allocated) : 0;
+    return base() ? std::size_t(hdr()->allocated) : 0;
   }
 
  private:
@@ -450,28 +456,26 @@ class CPTR_VISIBLE mapped_cage {
     return true;
   }
 
-  static header* hdr() noexcept { return reinterpret_cast<header*>(base_); }
+  static header* hdr() noexcept { return reinterpret_cast<header*>(base()); }
   static std::uint32_t* table() noexcept {
-    return reinterpret_cast<std::uint32_t*>(base_ + span_size);
+    return reinterpret_cast<std::uint32_t*>(base() + span_size);
   }
   static void* at(std::uint64_t off) noexcept {
-    return reinterpret_cast<void*>(base_ + off);
+    return reinterpret_cast<void*>(base() + off);
   }
 
   /// The smallest class that fits `bytes` and is a multiple of `align`, or
   /// -1 for a large allocation.
-  static int size_class(std::size_t bytes, std::size_t align) noexcept {
-    for (std::size_t i = 0; i < kClasses; i++) {
-      std::uint32_t s = detail::kClassSizes[i];
-      if (s >= bytes && s % align == 0) {
-        return int(i);
-      }
+  static constexpr int size_class(std::size_t bytes,
+                                  std::size_t align) noexcept {
+    if (bytes > detail::kMaxSmall || align > detail::kMaxSmall) {
+      return -1;
     }
-    return -1;
+    return detail::size_class(bytes, align);
   }
 
   /// Enough spans for at least 8 blocks.
-  static std::uint32_t slab_spans(std::uint32_t block) noexcept {
+  static constexpr std::uint32_t slab_spans(std::uint32_t block) noexcept {
     return std::uint32_t((std::size_t(block) * 8 + span_size - 1) / span_size);
   }
 
@@ -524,7 +528,7 @@ class CPTR_VISIBLE mapped_cage {
     return at(first * std::uint64_t(span_size));
   }
 
-  static inline std::uintptr_t base_ = 0;
+  inline static detail::base_address base_{};
   static inline std::uintptr_t previous_base_ = 0;
 };
 

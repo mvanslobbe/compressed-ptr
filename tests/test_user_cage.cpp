@@ -219,3 +219,6 @@ TEST(bump_allocator_survives_fork) {
   CHECK(stuck == 0);
 #endif
 }
+
+static_assert(counting_cage::compress(nullptr) == 0);
+static_assert(counting_cage::decompress(0) == nullptr);

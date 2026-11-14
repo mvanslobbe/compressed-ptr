@@ -17,6 +17,7 @@
 #include <memory_resource>
 #include <new>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #include "cptr/platform.hpp"
@@ -97,7 +98,57 @@ constexpr std::array<std::uint32_t, class_count()> make_class_sizes() {
 }
 
 inline constexpr auto kClassSizes = make_class_sizes();
+
+/// A cage's base address. An enum rather than a std::uintptr_t, so that
+/// type-based alias analysis knows stores through a std::uintptr_t* or
+/// std::size_t* cannot change it, and compilers keep it in a register
+/// across such stores, as in a loop that follows pointers and counts.
+enum class base_address : std::uintptr_t {};
+
+// Not constexpr: reaching it in a constant expression fails to compile.
+inline void nonnull_pointer_in_constant_expression() noexcept {}
+
+constexpr std::uint32_t compress_constant(const void* p) noexcept {
+  if (p) {
+    nonnull_pointer_in_constant_expression();
+  }
+  return 0;
+}
+
+constexpr void* decompress_constant(std::uint32_t bits) noexcept {
+  if (bits) {
+    nonnull_pointer_in_constant_expression();
+  }
+  return nullptr;
+}
 static_assert(kClassSizes.back() == kMaxSmall && kMaxSmall % 4096 == 0);
+
+/// The smallest class of at least `bytes` (1 to kMaxSmall) whose size is a
+/// multiple of `align` (a power of two up to kMaxSmall). Above 256 bytes
+/// there are four classes per power of two p, p + p/4 ... 2p, so the class
+/// follows from the top three bits of bytes - 1, and as they are multiples
+/// of p/4 >= 64, only alignments above 64 need a short search from there.
+constexpr int size_class(std::size_t bytes, std::size_t align) noexcept {
+  // No class smaller than this can be a multiple of align. Up to 256 the
+  // class of r is itself a multiple of align.
+  std::size_t r = (bytes + align - 1) & ~(align - 1);
+  if (r <= 128) {
+    return static_cast<int>((r + 7) / 8 - 1);
+  }
+  if (r <= 256) {
+    return static_cast<int>(16 + (r - 129) / 16);
+  }
+  std::size_t b = r - 1;
+  auto e = static_cast<unsigned>(std::bit_width(b)) - 1;  // 2^e < r <= 2^(e+1)
+  std::size_t i = 24 + (e - 8) * 4 + ((b >> (e - 2)) & 3);
+  if (align > 64) {
+    // kMaxSmall is a multiple of every alignment allowed, so this stops.
+    while (kClassSizes[i] & (align - 1)) {
+      i++;
+    }
+  }
+  return static_cast<int>(i);
+}
 
 }  // namespace detail
 
@@ -165,7 +216,7 @@ class CPTR_VISIBLE cage {
 #endif
       st->bump = span_size;
       st->commit_end = span_size;
-      base_ = reinterpret_cast<std::uintptr_t>(p);
+      base_ = detail::base_address(reinterpret_cast<std::uintptr_t>(p));
       ready_.store(true, std::memory_order_release);
     }
     return true;
@@ -173,34 +224,43 @@ class CPTR_VISIBLE cage {
 
   /// Zero until init() succeeds. Any thread that obtained a pointer into the
   /// cage is ordered after init(), so reading the base needs no atomics.
-  static std::uintptr_t base() noexcept { return base_; }
+  static std::uintptr_t base() noexcept { return std::uintptr_t(base_); }
 
   static bool contains(const void* p) noexcept {
-    return base_ != 0 && reinterpret_cast<std::uintptr_t>(p) - base_ < size;
+    return base() != 0 && reinterpret_cast<std::uintptr_t>(p) - base() < size;
   }
 
-  static std::uint32_t compress(const void* p) noexcept {
-    if (!p) {
-      return 0;
+  /// The cage is aligned to its own size, so a pointer's offset is its low
+  /// SizeLog2 bits: compressing is a mask and a shift, and nullptr maps to
+  /// 0 with no branch. A pointer from outside the cage is caught only by
+  /// CPTR_CHECK. In a constant expression only nullptr can be compressed.
+  static constexpr std::uint32_t compress(const void* p) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::compress_constant(p);
     }
-    CPTR_CHECK(contains(p), "pointer is outside the cage");
-    std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
+    CPTR_CHECK(!p || contains(p), "pointer is outside the cage");
+    std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) & (size - 1);
     CPTR_CHECK((offset & (granularity - 1)) == 0,
                "pointer is not aligned to the cage granularity");
     return static_cast<std::uint32_t>(offset >> Shift);
   }
 
-  /// Zero maps back to nullptr. Compilers turn this into a conditional move,
-  /// which keeps the null check off the critical path of a pointer chase.
-  static void* decompress(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(bits == 0 || base_ != 0, kUninitialised);
-    std::uintptr_t full = base_ + (std::uintptr_t(bits) << Shift);
+  /// Zero maps back to nullptr. Clang turns the null check into a
+  /// conditional move; GCC into a branch, which is cheap while it predicts
+  /// well, as it does when most pointers are not null. In a constant
+  /// expression only 0 can be decompressed.
+  static constexpr void* decompress(std::uint32_t bits) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::decompress_constant(bits);
+    }
+    CPTR_ASSERT(bits == 0 || base() != 0, kUninitialised);
+    std::uintptr_t full = base() + (std::uintptr_t(bits) << Shift);
     return reinterpret_cast<void*>(bits ? full : std::uintptr_t(0));
   }
 
   static void* decompress_nonnull(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(base_ != 0, kUninitialised);
-    return reinterpret_cast<void*>(base_ + (std::uintptr_t(bits) << Shift));
+    CPTR_ASSERT(base() != 0, kUninitialised);
+    return reinterpret_cast<void*>(base() + (std::uintptr_t(bits) << Shift));
   }
 
   /// Allocate memory inside the cage. Throws std::bad_alloc when the cage is
@@ -258,7 +318,7 @@ class CPTR_VISIBLE cage {
     }
     CPTR_CHECK(contains(p), "pointer was not allocated from this cage");
     state_type& st = state();
-    std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
+    std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base();
     std::uint32_t span = static_cast<std::uint32_t>(offset / span_size);
     // A live block's span entry does not change, so it can be read without
     // the lock.
@@ -522,7 +582,7 @@ class CPTR_VISIBLE cage {
 
   /// Blocks a thread keeps per class: up to kRecent, and up to 32 KiB of
   /// them, but at least 4 (so up to 128 KiB for the largest classes).
-  static std::uint32_t cache_capacity(int cls) noexcept {
+  static constexpr std::uint32_t cache_capacity(int cls) noexcept {
     std::uint32_t n = 32768 / detail::kClassSizes[cls];
     return n < 4 ? 4 : n > kRecent ? kRecent : n;
   }
@@ -597,26 +657,14 @@ class CPTR_VISIBLE cage {
   static void unlock_after_fork() noexcept { state().lock.unlock(); }
 #endif
 
-  static int size_class(std::size_t bytes, std::size_t align) noexcept {
-    if (bytes <= 128 && align <= 8) {
-      return static_cast<int>((bytes + 7) / 8 - 1);
-    }
-    if (bytes <= 256 && align <= 16) {
-      if (bytes <= 128) {
-        return static_cast<int>((bytes + 15) / 16 * 2 - 1);
-      }
-      return static_cast<int>(16 + (bytes - 129) / 16);
-    }
+  /// The size class for a request, or -1 for a large one: above kMaxSmall
+  /// bytes, or aligned to more than 4096 (large runs are 64 KiB aligned).
+  static constexpr int size_class(std::size_t bytes,
+                                  std::size_t align) noexcept {
     if (bytes > detail::kMaxSmall || align > 4096) {
       return -1;
     }
-    // The largest class is a multiple of every alignment up to 4096, so
-    // this always stops.
-    std::size_t i = 0;
-    while (detail::kClassSizes[i] < bytes || detail::kClassSizes[i] % align) {
-      i++;
-    }
-    return static_cast<int>(i);
+    return detail::size_class(bytes, align);
   }
 
   static void set_run(std::uint32_t first, std::uint32_t count,
@@ -721,7 +769,7 @@ class CPTR_VISIBLE cage {
       std::uint32_t first = run->second;
       std::uint32_t have = run->first;
       void* p =
-          reinterpret_cast<void*>(base_ + std::uintptr_t(first) * span_size);
+          reinterpret_cast<void*>(base() + std::uintptr_t(first) * span_size);
       if (!detail::commit(p, std::size_t(count) * span_size)) {
         return 0;
       }
@@ -744,7 +792,7 @@ class CPTR_VISIBLE cage {
       if (st.commit_end + grow > usable_end) {
         grow = usable_end - st.commit_end;
       }
-      if (!detail::commit(reinterpret_cast<void*>(base_ + st.commit_end),
+      if (!detail::commit(reinterpret_cast<void*>(base() + st.commit_end),
                           grow)) {
         return 0;
       }
@@ -756,7 +804,7 @@ class CPTR_VISIBLE cage {
   }
 
   /// Spans per slab: a whole number holding at least 16 blocks.
-  static std::uint32_t slab_spans(std::uint32_t block_size) noexcept {
+  static constexpr std::uint32_t slab_spans(std::uint32_t block_size) noexcept {
     return static_cast<std::uint32_t>(
         (std::size_t(block_size) * 16 + span_size - 1) / span_size);
   }
@@ -785,7 +833,7 @@ class CPTR_VISIBLE cage {
         return pop_free(m, block_size);
       }
       if (st.slab_cursor[cls] + block_size <= st.slab_end[cls]) {
-        void* p = reinterpret_cast<void*>(base_ + st.slab_cursor[cls]);
+        void* p = reinterpret_cast<void*>(base() + st.slab_cursor[cls]);
         CPTR_UNPOISON(p, block_size);
         st.slab_cursor[cls] += block_size;
         m.live++;
@@ -816,7 +864,7 @@ class CPTR_VISIBLE cage {
     st.current[cls] = first;
     st.slab_cursor[cls] = std::size_t(first) * span_size;
     st.slab_end[cls] = st.slab_cursor[cls] + std::size_t(spans) * span_size;
-    CPTR_POISON(reinterpret_cast<void*>(base_ + st.slab_cursor[cls]),
+    CPTR_POISON(reinterpret_cast<void*>(base() + st.slab_cursor[cls]),
                 std::size_t(spans) * span_size);
     return allocate_from_slab(cls);
   }
@@ -835,7 +883,7 @@ class CPTR_VISIBLE cage {
   static void return_to_slab(void* p, int cls) noexcept {
     state_type& st = state();
     std::uint32_t block_size = detail::kClassSizes[cls];
-    std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
+    std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base();
     std::uint32_t slab =
         st.slabs[static_cast<std::uint32_t>(offset / span_size)].start;
     slab_meta& m = st.slabs[slab];
@@ -878,7 +926,7 @@ class CPTR_VISIBLE cage {
     set_run(first, spans, kLargeSpan);
     state().allocated += std::size_t(spans) * span_size;
     void* p =
-        reinterpret_cast<void*>(base_ + std::uintptr_t(first) * span_size);
+        reinterpret_cast<void*>(base() + std::uintptr_t(first) * span_size);
     // The spans may have held a slab whose free blocks were poisoned.
     CPTR_UNPOISON(p, std::size_t(spans) * span_size);
     return p;
@@ -900,7 +948,7 @@ class CPTR_VISIBLE cage {
                           bool purge = false) noexcept {
     state_type& st = state();
     void* p =
-        reinterpret_cast<void*>(base_ + std::uintptr_t(first) * span_size);
+        reinterpret_cast<void*>(base() + std::uintptr_t(first) * span_size);
     if (purge) {
       detail::purge(p, std::size_t(count) * span_size);
     } else {
@@ -927,7 +975,7 @@ class CPTR_VISIBLE cage {
       "decompressing in a cage that was never initialised in this module; "
       "is this a separate copy of the cage, such as in another Windows DLL?";
 
-  inline static std::uintptr_t base_ = 0;
+  inline static detail::base_address base_{};
   inline static std::atomic<bool> ready_{false};
 };
 
