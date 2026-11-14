@@ -129,19 +129,19 @@ cptr::unordered_map&lt;int, int&gt; h;      // was std::unordered_map&lt;int, in
 <td>list, walk</td>
 <td style="text-align: right;">32.1 B</td>
 <td style="text-align: right;"><strong>16.0 B</strong></td>
-<td style="text-align: right;"><strong>−31%</strong></td>
+<td style="text-align: right;"><strong>−28%</strong></td>
 </tr>
 <tr>
 <td>map, find</td>
 <td style="text-align: right;">48.0 B</td>
 <td style="text-align: right;"><strong>24.0 B</strong></td>
-<td style="text-align: right;"><strong>−33%</strong></td>
+<td style="text-align: right;"><strong>−35%</strong></td>
 </tr>
 <tr>
 <td>unordered_map, find</td>
 <td style="text-align: right;">43.6 B</td>
 <td style="text-align: right;"><strong>20.3 B</strong></td>
-<td style="text-align: right;"><strong>−52%</strong></td>
+<td style="text-align: right;"><strong>−49%</strong></td>
 </tr>
 </tbody>
 </table>
@@ -156,9 +156,9 @@ fewer misses. You can check this on your own machine with one program,
 loses:</p>
 <ul>
 <li><strong>Decompression is an add, plus a null check.</strong> When a pointer chase fits
-  in L1, that add is visible: up to 57% slower than raw pointers at the
+  in L1, that add is visible: up to 54% slower than raw pointers at the
   median. <code>cptr::nonnull_ptr</code> drops the null check and the gap to about
-  17%. From L3 outwards the smaller nodes win.</li>
+  16%. From L3 outwards the smaller nodes win.</li>
 <li><strong>Everything you compress must live in the cage.</strong> Allocate with
   <code>cptr::make</code>, the bundled containers, or <code>cptr::allocator</code>. Compressing a
   pointer from elsewhere is a bug; debug builds assert, and
