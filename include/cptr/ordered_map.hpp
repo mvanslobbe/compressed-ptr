@@ -11,6 +11,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <tuple>
@@ -22,8 +23,8 @@
 namespace cptr {
 namespace detail {
 
-/// The class behind cptr::ordered_map; use that alias. Its members behave like
-/// those of `std::map`.
+/// The class behind cptr::ordered_map; use that alias. Its members behave
+/// like those of `std::map`; the alias lists the differences.
 ///
 /// The map behind cptr::ordered_map. Compressed = false gives the same tree
 /// with raw 8-byte links, which the benchmarks compare against.
@@ -45,12 +46,39 @@ class basic_ordered_map {
     std::uint8_t color;
   };
   struct node : node_base {
+    /// Direct-initialises the element, as std's allocator_traits::construct
+    /// does.
+    template <class... Args>
+    explicit node(std::in_place_t, Args&&... args)
+        : node_base{nullptr, nullptr, nullptr, kRed},
+          kv(std::forward<Args>(args)...) {}
     std::pair<const K, V> kv;
   };
 
   template <class Key>
   static constexpr bool kTransparent =
       requires { typename Compare::is_transparent; };
+
+  /// std's synth-three-way: `<=>` where the element has it, otherwise an
+  /// ordering built from `<`, so that elements with only `operator<` can
+  /// be compared too.
+  struct synth_three_way {
+    template <class U>
+    constexpr auto operator()(const U& a, const U& b) const {
+      if constexpr (std::three_way_comparable<U>) {
+        return a <=> b;
+      } else {
+        return a < b   ? std::weak_ordering::less
+               : b < a ? std::weak_ordering::greater
+                       : std::weak_ordering::equivalent;
+      }
+    }
+  };
+  template <class U>
+  static constexpr bool kSynthComparable =
+      std::three_way_comparable<U> || requires(const U& a) {
+        { a < a } -> std::convertible_to<bool>;
+      };
 
  public:
   using key_type = K;
@@ -81,7 +109,7 @@ class basic_ordered_map {
       return static_cast<node*>(node_)->kv;
     }
     pointer operator->() const noexcept {
-      return &static_cast<node*>(node_)->kv;
+      return std::addressof(static_cast<node*>(node_)->kv);
     }
     basic_iterator& operator++() noexcept {
       node_ = successor(node_);
@@ -293,11 +321,14 @@ class basic_ordered_map {
   V& operator[](const K& key) { return try_emplace(key).first->second; }
   V& operator[](K&& key) { return try_emplace(std::move(key)).first->second; }
 
-  /// Insertion. As std::map: emplace builds the element first, try_emplace
-  /// only builds the mapped value if the key is new. If the comparison or
-  /// an allocation throws, the element is destroyed and the map is
-  /// unchanged.
+  /// Build the element from `args`, then insert it unless its key is
+  /// present; returns the element with that key and whether it was
+  /// inserted. As for std::map, the element is built first, even when the
+  /// key turns out to be present (try_emplace avoids that). If the
+  /// comparison or an allocation throws, the element is destroyed and the
+  /// map is unchanged.
   template <class... Args>
+    requires std::constructible_from<value_type, Args...>
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
     slot s;
@@ -314,23 +345,39 @@ class basic_ordered_map {
     attach(n, s.parent, s.left);
     return {iterator(n), true};
   }
-  /// The hint is not used; the result is the same as emplace's.
+  /// As emplace(). The hint is accepted for compatibility with std::map
+  /// and generic code such as std::inserter, but not used: the search
+  /// always starts at the root.
   template <class... Args>
+    requires std::constructible_from<value_type, Args...>
   iterator emplace_hint(const_iterator, Args&&... args) {
     return emplace(std::forward<Args>(args)...).first;
   }
+  /// If `key` is absent, insert it with a value built from `args`;
+  /// otherwise do nothing, and leave `args` untouched. Returns the element
+  /// with that key and whether it was inserted. Strong guarantee.
   template <class... Args>
   std::pair<iterator, bool> try_emplace(const K& key, Args&&... args) {
     return try_emplace_impl(key, std::forward<Args>(args)...);
   }
+  /// As above, moving `key` into the map only if it is inserted, so
+  /// move-only keys work.
   template <class... Args>
   std::pair<iterator, bool> try_emplace(K&& key, Args&&... args) {
     return try_emplace_impl(std::move(key), std::forward<Args>(args)...);
   }
+  /// try_emplace() with a hint, which is not used.
   template <class... Args>
   iterator try_emplace(const_iterator, const K& key, Args&&... args) {
     return try_emplace(key, std::forward<Args>(args)...).first;
   }
+  /// try_emplace() with a hint, which is not used, moving `key`.
+  template <class... Args>
+  iterator try_emplace(const_iterator, K&& key, Args&&... args) {
+    return try_emplace(std::move(key), std::forward<Args>(args)...).first;
+  }
+  /// Insert `key` with `value`, or assign `value` to the element that has
+  /// `key`. Returns the element and whether it was inserted.
   template <class M>
   std::pair<iterator, bool> insert_or_assign(const K& key, M&& value) {
     auto result = try_emplace(key, std::forward<M>(value));
@@ -339,21 +386,50 @@ class basic_ordered_map {
     }
     return result;
   }
+  /// As above, moving `key` into the map only if it is inserted.
+  template <class M>
+  std::pair<iterator, bool> insert_or_assign(K&& key, M&& value) {
+    auto result = try_emplace(std::move(key), std::forward<M>(value));
+    if (!result.second) {
+      result.first->second = std::forward<M>(value);
+    }
+    return result;
+  }
+  /// insert_or_assign() with a hint, which is not used.
   template <class M>
   iterator insert_or_assign(const_iterator, const K& key, M&& value) {
     return insert_or_assign(key, std::forward<M>(value)).first;
   }
+  /// insert_or_assign() with a hint, which is not used, moving `key`.
+  template <class M>
+  iterator insert_or_assign(const_iterator, K&& key, M&& value) {
+    return insert_or_assign(std::move(key), std::forward<M>(value)).first;
+  }
+  /// Insert a copy of `kv` unless its key is present. Strong guarantee.
   std::pair<iterator, bool> insert(const value_type& kv) {
     return try_emplace(kv.first, kv.second);
   }
+  /// Insert an element built from `kv` (such as a moved pair) unless its
+  /// key is present.
   template <class P>
     requires std::is_constructible_v<value_type, P&&>
   std::pair<iterator, bool> insert(P&& kv) {
     return emplace(std::forward<P>(kv));
   }
+  /// insert() with a hint, which is not used; returns the element with
+  /// the key.
   iterator insert(const_iterator, const value_type& kv) {
     return insert(kv).first;
   }
+  /// insert() with a hint, which is not used; returns the element with
+  /// the key.
+  template <class P>
+    requires std::is_constructible_v<value_type, P&&>
+  iterator insert(const_iterator, P&& kv) {
+    return emplace(std::forward<P>(kv)).first;
+  }
+  /// Insert each element of [first, last) whose key is not present yet.
+  /// If one throws, the elements inserted before it stay.
   template <std::input_iterator It>
   void insert(It first, It last) {
     for (; first != last; ++first) {
@@ -419,12 +495,15 @@ class basic_ordered_map {
                          const basic_ordered_map& b) {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
   }
+  /// Lexicographical over the (key, value) pairs, with std's
+  /// synth-three-way: types that have only `operator<` give a
+  /// std::weak_ordering.
   friend auto operator<=>(const basic_ordered_map& a,
                           const basic_ordered_map& b)
-    requires std::three_way_comparable<value_type>
+    requires kSynthComparable<value_type>
   {
     return std::lexicographical_compare_three_way(a.begin(), a.end(), b.begin(),
-                                                  b.end());
+                                                  b.end(), synth_three_way());
   }
 
   /// Checks the red-black and ordering invariants and the header; for tests.
@@ -477,8 +556,7 @@ class basic_ordered_map {
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
     try {
-      return ::new (mem) node{{nullptr, nullptr, nullptr, kRed},
-                              value_type(std::forward<Args>(args)...)};
+      return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
     } catch (...) {
       Cage::deallocate(mem);
       throw;
@@ -908,10 +986,13 @@ class basic_ordered_map {
 /// parameter and node handles.
 ///
 /// A red-black tree whose nodes are allocated in `Cage`: 24 bytes per
-/// element for 4-byte keys and values, against 48 for `std::map`. Every
-/// member behaves like its `std::map` counterpart; see
-/// @ref detail::basic_ordered_map for the full member list. Lookup is
-/// heterogeneous when `Compare::is_transparent` exists.
+/// element for 4-byte keys and values, against 48 for `std::map`. The
+/// members behave like those of `std::map`, with these differences: there
+/// is no allocator parameter, no node handles (extract, merge, insert of a
+/// node) and no get_allocator(); hints are accepted but not used, so a
+/// hinted insertion costs a full search; and copy assignment gives the
+/// strong guarantee. See @ref detail::basic_ordered_map for the full member
+/// list. Lookup is heterogeneous when `Compare::is_transparent` exists.
 ///
 /// @code
 /// #include "cptr/ordered_map.hpp"

@@ -12,6 +12,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <tuple>
@@ -24,7 +25,7 @@ namespace cptr {
 namespace detail {
 
 /// The class behind cptr::unordered_map; use that alias. Its members behave
-/// like those of `std::unordered_map`.
+/// like those of `std::unordered_map`; the alias lists the differences.
 ///
 /// The map behind cptr::unordered_map. Compressed = false gives the same
 /// table with raw 8-byte links, which the benchmarks compare against.
@@ -41,6 +42,11 @@ class basic_unordered_map {
   struct node;
   using link_type = link<node, Cage, Compressed>;
   struct node {
+    /// Direct-initialises the element, as std's allocator_traits::construct
+    /// does.
+    template <class... Args>
+    explicit node(std::in_place_t, Args&&... args)
+        : next(nullptr), hash(0), kv(std::forward<Args>(args)...) {}
     link_type next;
     std::uint32_t hash;
     std::pair<const K, V> kv;
@@ -86,7 +92,7 @@ class basic_unordered_map {
           log2_buckets_(other.log2_buckets_) {}
 
     reference operator*() const noexcept { return node_->kv; }
-    pointer operator->() const noexcept { return &node_->kv; }
+    pointer operator->() const noexcept { return std::addressof(node_->kv); }
     basic_iterator& operator++() noexcept {
       node_ = next_node(node_, buckets_, log2_buckets_);
       return *this;
@@ -153,7 +159,8 @@ class basic_unordered_map {
         size_(std::exchange(other.size_, 0)),
         hash_(other.hash_),
         eq_(other.eq_),
-        max_load_(other.max_load_) {}
+        max_load_(other.max_load_),
+        first_(std::exchange(other.first_, 0)) {}
   basic_unordered_map& operator=(const basic_unordered_map& other) {
     if (this != &other) {
       basic_unordered_map(other).swap(*this);
@@ -178,14 +185,21 @@ class basic_unordered_map {
     std::swap(hash_, other.hash_);
     std::swap(eq_, other.eq_);
     std::swap(max_load_, other.max_load_);
+    std::swap(first_, other.first_);
   }
   friend void swap(basic_unordered_map& a, basic_unordered_map& b) noexcept {
     a.swap(b);
   }
 
-  iterator begin() noexcept { return make_iterator(first_from(0)); }
+  /// The first element. Constant time on average: the map keeps a lower
+  /// bound on its first non-empty bucket, which insertion lowers and
+  /// erase(iterator) raises, so `while (!m.empty()) m.erase(m.begin());` is
+  /// linear. begin() itself writes nothing, so concurrent calls are safe.
+  iterator begin() noexcept { return make_iterator(first_from(first_)); }
   iterator end() noexcept { return make_iterator(nullptr); }
-  const_iterator begin() const noexcept { return make_iterator(first_from(0)); }
+  const_iterator begin() const noexcept {
+    return make_iterator(first_from(first_));
+  }
   const_iterator end() const noexcept { return make_iterator(nullptr); }
   const_iterator cbegin() const noexcept { return begin(); }
   const_iterator cend() const noexcept { return end(); }
@@ -254,14 +268,17 @@ class basic_unordered_map {
     for (size_type i = 0; i < count; i++) {
       ::new (&fresh[i]) link_type(nullptr);
     }
+    size_type first = count;
     if (buckets_) {
       link_type* old = buckets_;
       size_type old_count = bucket_count();
-      for (size_type i = 0; i < old_count; i++) {
+      for (size_type i = first_; i < old_count; i++) {
         node* moving = old[i];
         while (moving) {
           node* next = moving->next;
-          link_type& head = fresh[index(moving->hash, log2)];
+          size_type at = index(moving->hash, log2);
+          first = std::min(first, at);
+          link_type& head = fresh[at];
           moving->next = head;
           head = moving;
           moving = next;
@@ -271,6 +288,7 @@ class basic_unordered_map {
     }
     buckets_ = fresh;
     log2_buckets_ = log2;
+    first_ = std::uint32_t(first);
   }
 
   // Lookup. The template overloads take any key type when both Hash and
@@ -309,6 +327,20 @@ class basic_unordered_map {
     const_iterator it = find(key);
     return {it, it == end() ? it : std::next(it)};
   }
+  /// Heterogeneous equal_range(), as in C++20.
+  template <class Key>
+    requires kTransparent<Key>
+  std::pair<iterator, iterator> equal_range(const Key& key) {
+    iterator it = find(key);
+    return {it, it == end() ? it : std::next(it)};
+  }
+  /// Heterogeneous equal_range(), as in C++20.
+  template <class Key>
+    requires kTransparent<Key>
+  std::pair<const_iterator, const_iterator> equal_range(const Key& key) const {
+    const_iterator it = find(key);
+    return {it, it == end() ? it : std::next(it)};
+  }
 
   V& at(const K& key) {
     node* n = find_node(key);
@@ -324,9 +356,13 @@ class basic_unordered_map {
   V& operator[](K&& key) { return try_emplace(std::move(key)).first->second; }
 
   /// Build the element from `args`, then insert it unless its key is
-  /// present. If the hash, the key comparison or a rehash throws, the
-  /// element is destroyed and the map is unchanged.
+  /// present; returns the element with that key and whether it was
+  /// inserted. As for std::unordered_map, the element is built first, even
+  /// when the key turns out to be present (try_emplace avoids that). If the
+  /// hash, the key comparison or a rehash throws, the element is destroyed
+  /// and the map is unchanged.
   template <class... Args>
+    requires std::constructible_from<value_type, Args...>
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
     try {
@@ -343,14 +379,38 @@ class basic_unordered_map {
     }
     return {make_iterator(n), true};
   }
+  /// As emplace(). The hint is accepted for compatibility with
+  /// std::unordered_map and generic code, but not used.
+  template <class... Args>
+    requires std::constructible_from<value_type, Args...>
+  iterator emplace_hint(const_iterator, Args&&... args) {
+    return emplace(std::forward<Args>(args)...).first;
+  }
+  /// If `key` is absent, insert it with a value built from `args`;
+  /// otherwise do nothing, and leave `args` untouched. Returns the element
+  /// with that key and whether it was inserted. Strong guarantee.
   template <class... Args>
   std::pair<iterator, bool> try_emplace(const K& key, Args&&... args) {
     return try_emplace_impl(key, std::forward<Args>(args)...);
   }
+  /// As above, moving `key` into the map only if it is inserted, so
+  /// move-only keys work.
   template <class... Args>
   std::pair<iterator, bool> try_emplace(K&& key, Args&&... args) {
     return try_emplace_impl(std::move(key), std::forward<Args>(args)...);
   }
+  /// try_emplace() with a hint, which is not used.
+  template <class... Args>
+  iterator try_emplace(const_iterator, const K& key, Args&&... args) {
+    return try_emplace(key, std::forward<Args>(args)...).first;
+  }
+  /// try_emplace() with a hint, which is not used, moving `key`.
+  template <class... Args>
+  iterator try_emplace(const_iterator, K&& key, Args&&... args) {
+    return try_emplace(std::move(key), std::forward<Args>(args)...).first;
+  }
+  /// Insert `key` with `value`, or assign `value` to the element that has
+  /// `key`. Returns the element and whether it was inserted.
   template <class M>
   std::pair<iterator, bool> insert_or_assign(const K& key, M&& value) {
     auto result = try_emplace(key, std::forward<M>(value));
@@ -359,14 +419,50 @@ class basic_unordered_map {
     }
     return result;
   }
+  /// As above, moving `key` into the map only if it is inserted.
+  template <class M>
+  std::pair<iterator, bool> insert_or_assign(K&& key, M&& value) {
+    auto result = try_emplace(std::move(key), std::forward<M>(value));
+    if (!result.second) {
+      result.first->second = std::forward<M>(value);
+    }
+    return result;
+  }
+  /// insert_or_assign() with a hint, which is not used.
+  template <class M>
+  iterator insert_or_assign(const_iterator, const K& key, M&& value) {
+    return insert_or_assign(key, std::forward<M>(value)).first;
+  }
+  /// insert_or_assign() with a hint, which is not used, moving `key`.
+  template <class M>
+  iterator insert_or_assign(const_iterator, K&& key, M&& value) {
+    return insert_or_assign(std::move(key), std::forward<M>(value)).first;
+  }
+  /// Insert a copy of `kv` unless its key is present. Strong guarantee.
   std::pair<iterator, bool> insert(const value_type& kv) {
     return try_emplace(kv.first, kv.second);
   }
+  /// Insert an element built from `kv` (such as a moved pair) unless its
+  /// key is present.
   template <class P>
     requires std::is_constructible_v<value_type, P&&>
   std::pair<iterator, bool> insert(P&& kv) {
     return emplace(std::forward<P>(kv));
   }
+  /// insert() with a hint, which is not used; returns the element with
+  /// the key. With these, std::inserter(m, m.end()) works.
+  iterator insert(const_iterator, const value_type& kv) {
+    return insert(kv).first;
+  }
+  /// insert() with a hint, which is not used; returns the element with
+  /// the key.
+  template <class P>
+    requires std::is_constructible_v<value_type, P&&>
+  iterator insert(const_iterator, P&& kv) {
+    return emplace(std::forward<P>(kv)).first;
+  }
+  /// Insert each element of [first, last) whose key is not present yet.
+  /// If one throws, the elements inserted before it stay.
   template <std::input_iterator It>
   void insert(It first, It last) {
     for (; first != last; ++first) {
@@ -377,12 +473,19 @@ class basic_unordered_map {
     insert(values.begin(), values.end());
   }
 
-  /// Returns the element after the erased one, in iteration order.
+  /// Erase the element at `pos`; returns the element after it, in
+  /// iteration order. Finding that element may step over empty buckets.
   iterator erase(const_iterator pos) noexcept {
     node* n = pos.node_;
     node* next = next_node(n, buckets_, log2_buckets_);
+    std::size_t at = index(n->hash, log2_buckets_);
     unlink_node(n);
     delete_node(n);
+    if (at == first_ && !buckets_[at]) {
+      // The first bucket is now empty, and |next| is the new first element.
+      first_ = std::uint32_t(next ? index(next->hash, log2_buckets_)
+                                  : bucket_count());
+    }
     return make_iterator(next);
   }
   iterator erase(iterator pos) noexcept { return erase(const_iterator(pos)); }
@@ -404,7 +507,7 @@ class basic_unordered_map {
 
   void clear() noexcept {
     size_type count = bucket_count();
-    for (size_type i = 0; i < count && size_; i++) {
+    for (size_type i = first_; i < count && size_; i++) {
       node* n = buckets_[i];
       buckets_[i] = nullptr;
       while (n) {
@@ -415,6 +518,7 @@ class basic_unordered_map {
       }
     }
     size_ = 0;
+    first_ = std::uint32_t(count);
   }
 
   /// Equal if both hold the same keys with equal values.
@@ -513,10 +617,12 @@ class basic_unordered_map {
     if (double(size_ + 1) > double(bucket_count()) * double(max_load_)) {
       rehash(std::max<size_type>(bucket_count() * 2, 8));
     }
-    link_type& head = buckets_[index(n->hash, log2_buckets_)];
+    std::size_t at = index(n->hash, log2_buckets_);
+    link_type& head = buckets_[at];
     n->next = head;
     head = n;
     size_++;
+    first_ = std::min(first_, std::uint32_t(at));
   }
 
   void unlink_node(node* n) noexcept {
@@ -551,8 +657,7 @@ class basic_unordered_map {
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
     try {
-      return ::new (mem)
-          node{nullptr, 0, value_type(std::forward<Args>(args)...)};
+      return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
     } catch (...) {
       Cage::deallocate(mem);
       throw;
@@ -577,6 +682,8 @@ class basic_unordered_map {
   [[no_unique_address]] KeyEqual eq_{};
 #endif
   float max_load_ = 1.0f;
+  /// No bucket below this one holds an element; see begin().
+  std::uint32_t first_ = 0;
 };
 
 }  // namespace detail
@@ -586,9 +693,14 @@ class basic_unordered_map {
 ///
 /// Separate chaining; nodes and buckets are allocated in `Cage`: about 20
 /// bytes per element for 4-byte keys and values, against 44 for
-/// `std::unordered_map`. Every member behaves like its
-/// `std::unordered_map` counterpart; see @ref detail::basic_unordered_map
-/// for the full member list. Lookup is heterogeneous when both `Hash` and
+/// `std::unordered_map`. The members behave like those of
+/// `std::unordered_map`, with these differences: there is no allocator
+/// parameter, no node handles (extract, merge, insert of a node), no bucket
+/// interface (bucket(), bucket_size(), local iterators) and no
+/// get_allocator(); bucket counts are powers of two, at most
+/// max_bucket_count(); hints are accepted but not used; and the iteration
+/// order is that of the buckets. See @ref detail::basic_unordered_map for
+/// the full member list. Lookup is heterogeneous when both `Hash` and
 /// `KeyEqual` are transparent.
 ///
 /// @code

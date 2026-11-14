@@ -1,7 +1,9 @@
 // cptr::unordered_map against std::unordered_map: the interface, node size,
 // and a long random sequence of operations compared step by step.
+#include <algorithm>
 #include <bit>
 #include <cstdint>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <random>
@@ -66,6 +68,7 @@ struct string_hash {
 using string_map =
     cptr::unordered_map<std::string, int, string_hash, std::equal_to<>>;
 static_assert(requires(const string_map& m, std::string_view key) {
+  m.equal_range(key);
   m.find(key);
   m.contains(key);
   m.count(key);
@@ -345,4 +348,85 @@ TEST(unordered_map_emplace_and_constructors_do_not_leak_on_throw) {
     g_countdown = -1;
     CHECK(leak_cage::allocated_bytes() == with_source);
   }
+}
+
+namespace {
+
+struct move_only_key {
+  int v;
+  explicit move_only_key(int x) : v(x) {}
+  move_only_key(move_only_key&&) = default;
+  move_only_key(const move_only_key&) = delete;
+  bool operator==(const move_only_key& o) const { return v == o.v; }
+};
+struct move_only_hash {
+  std::size_t operator()(const move_only_key& k) const noexcept {
+    return std::size_t(k.v);
+  }
+};
+
+static_assert(requires(int_map& m, int_map::const_iterator cit,
+                       const std::pair<const int, int>& kv) {
+  { m.insert(cit, kv) } -> std::same_as<int_map::iterator>;
+  {
+    m.insert(cit, std::pair<int, int>(1, 2))
+  } -> std::same_as<int_map::iterator>;
+  { m.emplace_hint(cit, 1, 2) } -> std::same_as<int_map::iterator>;
+  { m.try_emplace(cit, 1, 2) } -> std::same_as<int_map::iterator>;
+  { m.insert_or_assign(cit, 1, 2) } -> std::same_as<int_map::iterator>;
+});
+
+}  // namespace
+
+TEST(unordered_map_hinted_insertion_and_move_only_keys) {
+  // Before the fix there was no hinted insert, so std::inserter did not
+  // compile, and insert_or_assign copied its key.
+  std::vector<std::pair<int, int>> v{{1, 2}, {3, 4}, {1, 5}};
+  int_map m;
+  std::copy(v.begin(), v.end(), std::inserter(m, m.end()));
+  CHECK(m.size() == 2 && m.at(1) == 2 && m.at(3) == 4);
+  CHECK(m.emplace_hint(m.begin(), 5, 6)->second == 6);
+  CHECK(m.try_emplace(m.end(), 5, 7)->second == 6);
+  CHECK(m.insert_or_assign(m.end(), 5, 8)->second == 8);
+
+  cptr::unordered_map<move_only_key, int, move_only_hash> k;
+  CHECK(k.insert_or_assign(move_only_key(1), 1).second);
+  CHECK(!k.insert_or_assign(move_only_key(1), 2).second);
+  CHECK(k.try_emplace(k.end(), move_only_key(2), 3)->second == 3);
+  CHECK(k.insert_or_assign(k.end(), move_only_key(3), 4)->second == 4);
+  CHECK(k.size() == 3 && k.find(move_only_key(1))->second == 2);
+}
+
+TEST(unordered_map_erase_begin_until_empty_matches_std) {
+  // begin() starts from a lower bound on the first non-empty bucket, which
+  // erase(begin()) keeps tight; before, every begin() scanned from bucket
+  // 0, so this loop was quadratic (5.3 s for 160k elements).
+  int_map m;
+  std::unordered_map<int, int> r;
+  std::mt19937 rng(11);
+  for (int i = 0; i < 20000; i++) {
+    m[i * 7919] = i;
+    r[i * 7919] = i;
+  }
+  m.reserve(100000);
+  int round = 0;
+  while (!m.empty()) {
+    auto it = m.begin();
+    CHECK(r.erase(it->first) == 1);
+    m.erase(it);
+    if (++round % 997 == 0) {
+      // Inserting into a low bucket must lower the bound again.
+      int key = int(rng() % 1000);
+      m[key] = key;
+      r[key] = key;
+    }
+  }
+  CHECK(r.empty());
+  m[1] = 1;
+  CHECK(m.begin()->first == 1);
+  m.clear();
+  CHECK(m.begin() == m.end());
+  m[2] = 2;
+  int_map moved = std::move(m);
+  CHECK(moved.begin()->first == 2 && m.begin() == m.end());
 }

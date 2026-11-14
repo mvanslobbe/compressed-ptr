@@ -2,6 +2,7 @@
 // red-black invariants, and a long random sequence of operations compared
 // step by step.
 #include <compare>
+#include <iterator>
 #include <map>
 #include <random>
 #include <stdexcept>
@@ -303,4 +304,47 @@ TEST(map_copies_a_moved_from_map) {
   CHECK(b.empty() && b.valid());
   b[2] = 2;
   CHECK(b.size() == 1 && b.valid());
+}
+
+namespace {
+
+struct only_less {
+  int v;
+  bool operator<(const only_less& o) const { return v < o.v; }
+  bool operator==(const only_less&) const = default;
+};
+
+struct move_only {
+  int v;
+  explicit move_only(int x) : v(x) {}
+  move_only(move_only&&) = default;
+  move_only(const move_only&) = delete;
+  move_only& operator=(move_only&&) = default;
+  bool operator<(const move_only& o) const { return v < o.v; }
+};
+
+}  // namespace
+
+TEST(map_move_only_keys_and_only_operator_less) {
+  // Before the fix insert_or_assign and the hinted try_emplace took the
+  // key only by const reference and copied it, so move-only keys did not
+  // compile.
+  cptr::ordered_map<move_only, int> m;
+  CHECK(m.insert_or_assign(move_only(1), 2).second);
+  CHECK(!m.insert_or_assign(move_only(1), 3).second);
+  CHECK(m.try_emplace(m.end(), move_only(2), 4)->second == 4);
+  CHECK(m.insert_or_assign(m.begin(), move_only(3), 5)->second == 5);
+  CHECK(m.try_emplace(move_only(0), 1).second);
+  CHECK(m.size() == 4 && m.begin()->first.v == 0 && m.valid());
+  CHECK(m.find(move_only(1))->second == 3);
+
+  cptr::ordered_map<only_less, int> a{{{1}, 1}}, b{{{2}, 1}};
+  static_assert(std::same_as<decltype(a <=> b), std::weak_ordering>);
+  CHECK(a < b && (a <=> a) == std::weak_ordering::equivalent);
+
+  // Hinted insertion of a moved pair, as std::inserter does.
+  cptr::ordered_map<int, std::string> s;
+  std::vector<std::pair<int, std::string>> v{{2, "b"}, {1, "a"}, {2, "c"}};
+  std::copy(v.begin(), v.end(), std::inserter(s, s.end()));
+  CHECK(s.size() == 2 && s.at(2) == "b");
 }

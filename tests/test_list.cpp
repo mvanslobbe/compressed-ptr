@@ -2,6 +2,7 @@
 // random sequence of every operation compared step by step.
 #include <algorithm>
 #include <compare>
+#include <iterator>
 #include <list>
 #include <random>
 #include <stdexcept>
@@ -408,4 +409,53 @@ TEST(list_remove_if_and_unique_with_throwing_predicate_do_not_leak) {
     CHECK(at < 4 || (removed_before == 2 && t.size() == 2));
   }
   CHECK(leak_cage::allocated_bytes() == before);
+}
+
+namespace {
+
+// Has only operator<, as many pre-C++20 types do.
+struct only_less {
+  int v;
+  bool operator<(const only_less& o) const { return v < o.v; }
+  bool operator==(const only_less&) const = default;
+};
+
+// Hides operator&, so a container must use std::addressof.
+struct no_address {
+  int v;
+  void operator&() const = delete;
+};
+
+// emplace direct-initialises like std::list: no reinterpret_cast from an
+// integer, and no const_cast.
+template <class L, class... A>
+concept can_emplace_back =
+    requires(L& l, A&&... a) { l.emplace_back(std::forward<A>(a)...); };
+template <class L, class... A>
+concept can_emplace_front =
+    requires(L& l, A&&... a) { l.emplace_front(std::forward<A>(a)...); };
+static_assert(!can_emplace_back<cptr::list<int*>, long>);
+static_assert(!can_emplace_front<cptr::list<char*>, const char*>);
+static_assert(can_emplace_back<cptr::list<long>, int>);
+static_assert(can_emplace_back<cptr::list<const char*>, char*>);
+
+}  // namespace
+
+TEST(list_compares_types_with_only_operator_less) {
+  // Before the fix <=> required three_way_comparable elements, so lists of
+  // a type with only operator< could not be ordered, unlike std::list.
+  cptr::list<only_less> a{{1}, {2}}, b{{1}, {3}};
+  static_assert(std::same_as<decltype(a <=> b), std::weak_ordering>);
+  CHECK((a <=> b) == std::weak_ordering::less);
+  CHECK(a < b && !(b < a) && a != b);
+  b.back().v = 2;
+  CHECK((a <=> b) == std::weak_ordering::equivalent && a == b);
+  CHECK((int_list{1, 2} <=> int_list{1, 2}) == std::strong_ordering::equal);
+}
+
+TEST(list_arrow_uses_addressof) {
+  cptr::list<no_address> l;
+  l.push_back({7});
+  CHECK(l.begin()->v == 7);
+  CHECK(std::as_const(l).begin()->v == 7);
 }

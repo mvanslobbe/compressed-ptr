@@ -917,7 +917,7 @@ void fuzz_unordered_map(FuzzedDataProvider& in, bool throwing) {
     T value = in.ConsumeIntegralInRange(-1000, 1000);
     bool strong = true;
     bool threw = false;
-    switch (in.ConsumeIntegralInRange(0, 17)) {
+    switch (in.ConsumeIntegralInRange(0, 18)) {
       case 0: {
         bool inserted = false;
         threw = attempt(in, throwing,
@@ -1082,6 +1082,36 @@ void fuzz_unordered_map(FuzzedDataProvider& in, bool throwing) {
             attempt(in, throwing, [&] { m.insert(src.begin(), src.end()); });
         if (!threw) {
           r.insert(src.begin(), src.end());
+        }
+        break;
+      }
+      case 18: {
+        // Hinted insertions and std::inserter; the hint is not used.
+        int form = in.ConsumeIntegralInRange(0, 4);
+        threw = attempt(in, throwing, [&] {
+          typename M::iterator it;
+          if (form == 0) {
+            it = m.emplace_hint(m.end(), key, value);
+          } else if (form == 1) {
+            it = m.insert(m.cbegin(), std::pair<const T, T>(key, value));
+          } else if (form == 2) {
+            it = m.try_emplace(m.end(), key, value);
+          } else if (form == 3) {
+            it = m.insert_or_assign(m.begin(), T(ikey), value);
+          } else {
+            std::pair<T, T> one[] = {{key, value}};
+            std::copy(std::begin(one), std::end(one),
+                      std::inserter(m, m.end()));
+            return;
+          }
+          FUZZ_CHECK(val(it->first) == ikey);
+        });
+        if (!threw) {
+          if (form == 3) {
+            r.insert_or_assign(key, value);
+          } else {
+            r.try_emplace(key, value);
+          }
         }
         break;
       }

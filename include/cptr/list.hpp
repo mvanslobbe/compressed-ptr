@@ -9,6 +9,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -20,7 +21,7 @@ namespace cptr {
 namespace detail {
 
 /// The class behind cptr::list; use that alias. Its members behave like
-/// those of `std::list`.
+/// those of `std::list`; the alias lists the differences.
 ///
 /// The list behind cptr::list. Compressed = false gives the same list with
 /// raw 8-byte links, which the benchmarks compare against.
@@ -48,8 +49,34 @@ class basic_list {
   }
 
   struct node : node_base {
+    /// Direct-initialises the value, as std's allocator_traits::construct
+    /// does, so that only the conversions std allows are accepted.
+    template <class... Args>
+    explicit node(std::in_place_t, Args&&... args)
+        : node_base{}, value(std::forward<Args>(args)...) {}
     T value;
   };
+
+  /// std's synth-three-way: `<=>` where the element has it, otherwise an
+  /// ordering built from `<`, so that elements with only `operator<` can
+  /// be compared too.
+  struct synth_three_way {
+    template <class U>
+    constexpr auto operator()(const U& a, const U& b) const {
+      if constexpr (std::three_way_comparable<U>) {
+        return a <=> b;
+      } else {
+        return a < b   ? std::weak_ordering::less
+               : b < a ? std::weak_ordering::greater
+                       : std::weak_ordering::equivalent;
+      }
+    }
+  };
+  template <class U>
+  static constexpr bool kSynthComparable =
+      std::three_way_comparable<U> || requires(const U& a) {
+        { a < a } -> std::convertible_to<bool>;
+      };
 
  public:
   using value_type = T;
@@ -77,7 +104,7 @@ class basic_list {
       return static_cast<node*>(node_)->value;
     }
     pointer operator->() const noexcept {
-      return &static_cast<node*>(node_)->value;
+      return std::addressof(static_cast<node*>(node_)->value);
     }
     basic_iterator& operator++() noexcept {
       node_ = follow(node_->next);
@@ -205,7 +232,11 @@ class basic_list {
   T& back() noexcept { return *std::prev(end()); }
   const T& back() const noexcept { return *std::prev(end()); }
 
+  /// Construct an element from `args` before `pos`. Like std, it
+  /// direct-initialises the element, so only the conversions std accepts
+  /// compile.
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   iterator emplace(const_iterator pos, Args&&... args) {
     node_base* at = position(pos);
     node* n = new_node(std::forward<Args>(args)...);
@@ -214,10 +245,12 @@ class basic_list {
     return iterator(n);
   }
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   T& emplace_back(Args&&... args) {
     return *emplace(end(), std::forward<Args>(args)...);
   }
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   T& emplace_front(Args&&... args) {
     return *emplace(begin(), std::forward<Args>(args)...);
   }
@@ -453,11 +486,13 @@ class basic_list {
   friend bool operator==(const basic_list& a, const basic_list& b) {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
   }
+  /// Lexicographical, with std's synth-three-way: elements that have only
+  /// `operator<` give a std::weak_ordering.
   friend auto operator<=>(const basic_list& a, const basic_list& b)
-    requires std::three_way_comparable<T>
+    requires kSynthComparable<T>
   {
     return std::lexicographical_compare_three_way(a.begin(), a.end(), b.begin(),
-                                                  b.end());
+                                                  b.end(), synth_three_way());
   }
 
   /// Bytes per element, including the links: what the cage hands out.
@@ -486,8 +521,7 @@ class basic_list {
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
     try {
-      return ::new (mem)
-          node{{nullptr, nullptr}, T(std::forward<Args>(args)...)};
+      return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
     } catch (...) {
       Cage::deallocate(mem);
       throw;
@@ -725,8 +759,11 @@ class basic_list {
 /// A doubly linked list with 4-byte links, like `std::list` without the
 /// allocator parameter.
 ///
-/// Nodes are allocated in `Cage`. Every member behaves like its `std::list`
-/// counterpart; see @ref detail::basic_list for the full member list.
+/// Nodes are allocated in `Cage`. The members are those of `std::list` and
+/// behave like them, including the exception guarantees; the differences
+/// are that there is no allocator parameter (and so no get_allocator()),
+/// and that a moved-from list allocates a new sentinel when it is next
+/// inserted into. See @ref detail::basic_list for the full member list.
 ///
 /// @code
 /// #include "cptr/list.hpp"

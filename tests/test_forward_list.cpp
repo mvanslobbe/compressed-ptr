@@ -388,3 +388,34 @@ TEST(forward_list_constructors_free_elements_when_one_throws) {
   CHECK(threw);
   CHECK(leak_cage::allocated_bytes() == before);
 }
+
+namespace {
+
+struct only_less {
+  int v;
+  bool operator<(const only_less& o) const { return v < o.v; }
+  bool operator==(const only_less&) const = default;
+};
+
+struct no_address {
+  int v;
+  void operator&() const = delete;
+};
+
+template <class L, class... A>
+concept can_emplace_front =
+    requires(L& l, A&&... a) { l.emplace_front(std::forward<A>(a)...); };
+static_assert(!can_emplace_front<cptr::forward_list<int*>, long>);
+static_assert(!can_emplace_front<cptr::forward_list<char*>, const char*>);
+static_assert(can_emplace_front<cptr::forward_list<long>, int>);
+
+}  // namespace
+
+TEST(forward_list_compares_types_with_only_operator_less_and_uses_addressof) {
+  cptr::forward_list<only_less> a{{1}, {2}}, b{{1}, {3}};
+  static_assert(std::same_as<decltype(a <=> b), std::weak_ordering>);
+  CHECK((a <=> b) == std::weak_ordering::less && a < b);
+  cptr::forward_list<no_address> c;
+  c.push_front({3});
+  CHECK(c.begin()->v == 3);
+}

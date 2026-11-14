@@ -9,6 +9,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -18,8 +19,8 @@
 namespace cptr {
 namespace detail {
 
-/// The class behind cptr::forward_list; use that alias. Its members behave like
-/// those of `std::forward_list`.
+/// The class behind cptr::forward_list; use that alias. Its members behave
+/// like those of `std::forward_list`; the alias lists the differences.
 ///
 /// The list behind cptr::forward_list. Compressed = false gives the same
 /// list with raw 8-byte links, for the benchmarks.
@@ -35,8 +36,34 @@ class basic_forward_list {
     link_type next;
   };
   struct node : node_base {
+    /// Direct-initialises the value, as std's allocator_traits::construct
+    /// does, so that only the conversions std allows are accepted.
+    template <class... Args>
+    explicit node(std::in_place_t, Args&&... args)
+        : node_base{}, value(std::forward<Args>(args)...) {}
     T value;
   };
+
+  /// std's synth-three-way: `<=>` where the element has it, otherwise an
+  /// ordering built from `<`, so that elements with only `operator<` can
+  /// be compared too.
+  struct synth_three_way {
+    template <class U>
+    constexpr auto operator()(const U& a, const U& b) const {
+      if constexpr (std::three_way_comparable<U>) {
+        return a <=> b;
+      } else {
+        return a < b   ? std::weak_ordering::less
+               : b < a ? std::weak_ordering::greater
+                       : std::weak_ordering::equivalent;
+      }
+    }
+  };
+  template <class U>
+  static constexpr bool kSynthComparable =
+      std::three_way_comparable<U> || requires(const U& a) {
+        { a < a } -> std::convertible_to<bool>;
+      };
 
  public:
   using value_type = T;
@@ -64,7 +91,7 @@ class basic_forward_list {
       return static_cast<node*>(node_)->value;
     }
     pointer operator->() const noexcept {
-      return &static_cast<node*>(node_)->value;
+      return std::addressof(static_cast<node*>(node_)->value);
     }
     basic_iterator& operator++() noexcept {
       node_ = node_->next;
@@ -164,13 +191,18 @@ class basic_forward_list {
   T& front() noexcept { return *begin(); }
   const T& front() const noexcept { return *begin(); }
 
+  /// Construct an element from `args` after `pos`. Like std, it
+  /// direct-initialises the element, so only the conversions std accepts
+  /// compile.
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   iterator emplace_after(const_iterator pos, Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
     link_after(pos.node_, n);
     return iterator(n);
   }
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   T& emplace_front(Args&&... args) {
     return *emplace_after(before_begin(), std::forward<Args>(args)...);
   }
@@ -392,12 +424,14 @@ class basic_forward_list {
                          const basic_forward_list& b) {
     return std::equal(a.begin(), a.end(), b.begin(), b.end());
   }
+  /// Lexicographical, with std's synth-three-way: elements that have only
+  /// `operator<` give a std::weak_ordering.
   friend auto operator<=>(const basic_forward_list& a,
                           const basic_forward_list& b)
-    requires std::three_way_comparable<T>
+    requires kSynthComparable<T>
   {
     return std::lexicographical_compare_three_way(a.begin(), a.end(), b.begin(),
-                                                  b.end());
+                                                  b.end(), synth_three_way());
   }
 
   /// Bytes per element, including the link: what the cage hands out.
@@ -408,7 +442,7 @@ class basic_forward_list {
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
     try {
-      return ::new (mem) node{{nullptr}, T(std::forward<Args>(args)...)};
+      return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
     } catch (...) {
       Cage::deallocate(mem);
       throw;
@@ -559,8 +593,10 @@ class basic_forward_list {
 /// A singly linked list with 4-byte links, like `std::forward_list` without
 /// the allocator parameter.
 ///
-/// Nodes are allocated in `Cage`; an empty list allocates nothing. Every
-/// member behaves like its `std::forward_list` counterpart; see
+/// Nodes are allocated in `Cage`; an empty list allocates nothing. The
+/// members are those of `std::forward_list` and behave like them, including
+/// the exception guarantees; the only difference is that there is no
+/// allocator parameter (and so no get_allocator()). See
 /// @ref detail::basic_forward_list for the full member list.
 ///
 /// @code
