@@ -401,3 +401,104 @@ constexpr bool packing_is_constexpr() {
 static_assert(packing_is_constexpr());
 [[maybe_unused]] constinit cptr::atomic_ptr<int> global_atomic;
 }  // namespace
+
+// Only a null pointer constant converts to ptr, as for a raw pointer. An
+// integer variable, a bool or a non-zero literal used to convert silently to
+// null (and compare equal to null), with only a debug-build assertion.
+namespace {
+template <class P>
+concept from_int_variable = requires(int i) { P(i); };
+template <class P>
+concept from_bool_variable = requires(bool b) { P(b); };
+template <class P>
+concept from_five = requires { P(5); };
+template <class P>
+concept from_true = requires { P(true); };
+template <class P>
+concept from_char = requires { P('a'); };
+template <class P>
+concept equals_int_variable = requires(P p, int i) { p == i; };
+template <class P>
+concept equals_five = requires(P p) { p == 5; };
+template <class P>
+concept assign_int_variable = requires(P p, int i) { p = i; };
+template <class P>
+concept assign_five = requires(P p) { p = 5; };
+template <class P>
+concept rejects_non_null_integers =
+    !from_int_variable<P> && !from_bool_variable<P> && !from_five<P> &&
+    !from_true<P> && !from_char<P> && !equals_int_variable<P> &&
+    !equals_five<P> && !assign_int_variable<P> && !assign_five<P> &&
+    !std::is_convertible_v<int, P> && !std::is_convertible_v<bool, P> &&
+    !std::is_convertible_v<char, P>;
+static_assert(rejects_non_null_integers<cptr::ptr<int>>);
+static_assert(rejects_non_null_integers<cptr::strict_ptr<int>>);
+static_assert(rejects_non_null_integers<cptr::ptr<const void>>);
+
+template <class P>
+constexpr bool null_pointer_constants_convert() {
+  P a = 0;
+  P b = NULL;  // NOLINT(modernize-use-nullptr)
+  P c = nullptr;
+  P d = 0L;
+  P e(0);
+  a = 0;
+  a = NULL;  // NOLINT(modernize-use-nullptr)
+  a = nullptr;
+  return !a && !b && !c && !d && !e && a == 0 && 0 == a && !(a != 0) &&
+         a == NULL && a == nullptr && nullptr == b && a == c;
+}
+static_assert(null_pointer_constants_convert<cptr::ptr<int>>());
+static_assert(null_pointer_constants_convert<cptr::strict_ptr<int>>());
+static_assert(null_pointer_constants_convert<cptr::ptr<const void>>());
+
+// A literal 0 in a constructor's member initialiser list, as plf::list
+// writes it.
+struct holds_null {
+  cptr::ptr<int> p;
+  cptr::strict_ptr<int> s;
+  constexpr holds_null() : p(0), s(NULL) {}  // NOLINT(modernize-use-nullptr)
+};
+static_assert(!holds_null().p && !holds_null().s);
+}  // namespace
+
+// std::to_address and std::pointer_traits see a null ptr as null. Without a
+// pointer_traits specialisation, std::to_address fell back to operator->,
+// which skips the null check and returned the cage base.
+static_assert(
+    std::is_same_v<std::pointer_traits<cptr::ptr<const int>>::rebind<void>,
+                   cptr::ptr<void>>);
+static_assert(
+    std::is_same_v<std::pointer_traits<cptr::ptr<int>>::element_type, int>);
+static_assert(
+    std::is_same_v<std::pointer_traits<cptr::strict_ptr<int>>::rebind<long>,
+                   cptr::strict_ptr<long>>);
+static_assert(std::contiguous_iterator<cptr::ptr<int>>);
+static_assert(std::contiguous_iterator<cptr::ptr<const int>>);
+static_assert(std::contiguous_iterator<cptr::strict_ptr<int>>);
+
+TEST(to_address_of_null_is_null) {
+  auto one = cptr::make<int>(1);  // the cage is initialised
+  cptr::ptr<int> null;
+  CHECK(std::to_address(null) == nullptr);
+  CHECK(std::to_address(one) == one.get());
+  CHECK(std::pointer_traits<cptr::ptr<int>>::to_address(null) == nullptr);
+  CHECK(std::pointer_traits<cptr::ptr<int>>::pointer_to(*one) == one);
+  std::vector<int, cptr::fancy_allocator<int>> empty;
+  CHECK(empty.data() == nullptr);
+  cptr::destroy(one);
+}
+
+TEST(contiguous_copy_over_ptr_range) {
+  cptr::fancy_allocator<int> alloc;
+  cptr::ptr<int> block = alloc.allocate(100);
+  for (int i = 0; i < 100; i++) {
+    block[i] = i;
+  }
+  std::vector<int> out(100);
+  std::copy(block, block + 100, out.begin());
+  CHECK(out[0] == 0 && out[99] == 99);
+  std::ranges::copy(out.rbegin(), out.rend(), block);
+  CHECK(block[0] == 99 && block[99] == 0);
+  alloc.deallocate(block, 100);
+}

@@ -52,6 +52,14 @@
 /// Guide, benchmarks and examples: https://mvanslobbe.github.io/compressed-ptr/
 namespace cptr {
 
+namespace detail {
+struct null_literal_tag;
+/// The parameter type that accepts a literal `0` or `NULL` and nothing else
+/// of integer type: only a null pointer constant converts to a pointer to
+/// member, and no one can name a member of an incomplete struct.
+using null_literal = int null_literal_tag::*;
+}  // namespace detail
+
 /// A nullable pointer to a T inside `Cage`, stored in 4 bytes. Use it as
 /// ptr<T> or strict_ptr<T>, declared below.
 ///
@@ -69,27 +77,49 @@ class basic_ptr {
   using element_type = T;
   /// The cage the pointer is compressed against.
   using cage_type = Cage;
-  /// The iterator and std::pointer_traits types below let ptr serve as an
-  /// allocator's pointer type, which must be a random access iterator.
+  /// The signed distance between two pointers, in elements. Together with
+  /// the iterator types below, it lets ptr serve as an allocator's pointer
+  /// type, which must be a random access iterator.
   using difference_type = std::ptrdiff_t;
   /// The same kind of pointer to a `U`, for std::pointer_traits.
   template <class U>
   using rebind = basic_ptr<U, Cage, Strict>;
   /// The pointee type without cv-qualifiers, as for an iterator.
   using value_type = std::remove_cv_t<T>;
+  /// The raw pointer type, as for an iterator.
   using pointer = T*;
+  /// The type `operator*` returns, as for an iterator.
   using reference = std::add_lvalue_reference_t<T>;
+  /// ptr is a random access iterator for code that reads
+  /// std::iterator_traits...
   using iterator_category = std::random_access_iterator_tag;
+  /// ...and a contiguous iterator for the C++20 iterator concepts, so that
+  /// algorithms such as std::copy over a range of ptr lower to memmove.
+  using iterator_concept = std::contiguous_iterator_tag;
 
+  /// Null.
   constexpr basic_ptr() noexcept = default;
-  constexpr basic_ptr(std::nullptr_t) noexcept {}
-  /// Accepts a literal 0 or NULL, which older code uses for null pointers.
-  template <class I>
-    requires std::is_integral_v<I>
-  constexpr basic_ptr([[maybe_unused]] I zero) noexcept {
-    CPTR_ASSERT(zero == 0, "only zero converts to a pointer");
-  }
-  explicit(Strict) basic_ptr(T* p) noexcept : bits_(Cage::compress(p)) {}
+  /// Null.
+  template <class N>
+    requires std::is_null_pointer_v<N>
+  constexpr basic_ptr(N) noexcept {}
+  /// Null, from a literal `0` or `NULL`, which older code and some fancy
+  /// pointer users (plf::list) write for null pointers. Like a raw pointer,
+  /// it accepts only a null pointer constant: an integer variable, a
+  /// non-zero literal or a `bool` does not convert.
+  constexpr basic_ptr(detail::null_literal) noexcept {}
+  /// Compresses `p`, which must be null or point into the cage. Implicit
+  /// for ptr, explicit for strict_ptr. A template on `U` only so that a
+  /// literal `0` picks the constructor above instead of being ambiguous; it
+  /// takes any `U*` that converts implicitly to `T*`.
+  template <class U>
+    requires std::is_convertible_v<U*, T*>
+  explicit(Strict) basic_ptr(U* p) noexcept
+      : bits_(Cage::compress(static_cast<T*>(p))) {}
+  /// Converts from a pointer to `U` where `U*` converts implicitly to `T*`:
+  /// adding cv-qualifiers, to `void`, or derived to base. Only the
+  /// derived-to-base case at a non-zero offset decompresses; the others copy
+  /// the offset.
   template <class U, bool S>
     requires std::is_convertible_v<U*, T*>
   constexpr basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
@@ -109,20 +139,21 @@ class basic_ptr {
   explicit basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
       : basic_ptr(static_cast<T*>(other.get())) {}
 
-  basic_ptr& operator=(T* p) noexcept
+  /// Compresses `p`, which must be null or point into the cage. Not for
+  /// strict_ptr, which needs an explicit `s = strict_ptr<T>(p)`. A literal
+  /// `0` or `NULL` lands here too, and stays constant-evaluable.
+  constexpr basic_ptr& operator=(T* p) noexcept
     requires(!Strict)
   {
-    bits_ = Cage::compress(p);
+    bits_ = p ? Cage::compress(p) : 0;
     return *this;
   }
-  constexpr basic_ptr& operator=(std::nullptr_t) noexcept {
-    bits_ = 0;
-    return *this;
-  }
-  template <class I>
-    requires std::is_integral_v<I>
-  constexpr basic_ptr& operator=([[maybe_unused]] I zero) noexcept {
-    CPTR_ASSERT(zero == 0, "only zero converts to a pointer");
+  /// Null. A template, so that a literal `0` picks the `T*` overload above
+  /// (or, for strict_ptr, the null-literal constructor) instead of being
+  /// ambiguous.
+  template <class N>
+    requires std::is_null_pointer_v<N>
+  constexpr basic_ptr& operator=(N) noexcept {
     bits_ = 0;
     return *this;
   }
@@ -237,19 +268,31 @@ class basic_ptr {
     return p;
   }
 
+  /// Same address. Compares the offsets, without touching the cage base.
   friend constexpr bool operator==(basic_ptr a, basic_ptr b) noexcept {
     return a.bits_ == b.bits_;
   }
-  friend constexpr bool operator==(basic_ptr a, std::nullptr_t) noexcept {
+  /// True if null. A template, as are the overloads below, so that only
+  /// one of them takes a literal `0`.
+  template <class N>
+    requires std::is_null_pointer_v<N>
+  friend constexpr bool operator==(basic_ptr a, N) noexcept {
     return !a.bits_;
   }
-  friend bool operator==(basic_ptr a, T* b) noexcept { return a.get() == b; }
-  template <class I>
-    requires std::is_integral_v<I>
-  friend constexpr bool operator==(basic_ptr a,
-                                   [[maybe_unused]] I zero) noexcept {
-    CPTR_ASSERT(zero == 0, "only zero compares as a pointer");
+  /// True if null, for a literal `0` or `NULL`. Any other integer does not
+  /// compile.
+  friend constexpr bool operator==(basic_ptr a, detail::null_literal) noexcept {
     return !a.bits_;
+  }
+  /// Same address as the raw pointer `b`, as `get() == b`. Takes any `U*`
+  /// that converts implicitly to `T*`.
+  template <class U>
+    requires std::is_convertible_v<U*, T*>
+  friend constexpr bool operator==(basic_ptr a, U* b) noexcept {
+    if (!b) {
+      return !a.bits_;
+    }
+    return a.get() == static_cast<T*>(b);
   }
   /// All pointers share the cage base, so offsets order like addresses.
   friend constexpr std::strong_ordering operator<=>(basic_ptr a,
@@ -355,6 +398,33 @@ void destroy(basic_ptr<T, Cage, Strict> p) noexcept {
 }
 
 }  // namespace cptr
+
+/// std::pointer_traits for basic_ptr. The primary template would work but
+/// has no to_address(), and std::to_address then falls back to `operator->`,
+/// which skips the null check: std::to_address of a null ptr would return the
+/// cage base instead of nullptr.
+template <class T, class Cage, bool Strict>
+struct std::pointer_traits<cptr::basic_ptr<T, Cage, Strict>> {
+  /// The compressed pointer type.
+  using pointer = cptr::basic_ptr<T, Cage, Strict>;
+  /// The type pointed to.
+  using element_type = T;
+  /// The signed distance between two pointers, in elements.
+  using difference_type = std::ptrdiff_t;
+  /// The same kind of pointer to a `U`.
+  template <class U>
+  using rebind = cptr::basic_ptr<U, Cage, Strict>;
+
+  /// A pointer to `r`, which must be in the cage.
+  template <class U = T>
+    requires(!std::is_void_v<U>)
+  static pointer pointer_to(U& r) noexcept {
+    return pointer::pointer_to(r);
+  }
+  /// The raw pointer, or `nullptr` for a null `p`; what std::to_address
+  /// returns.
+  static constexpr T* to_address(pointer p) noexcept { return p.get(); }
+};
 
 template <class T, class Cage, bool Strict>
 struct std::hash<cptr::basic_ptr<T, Cage, Strict>> {
