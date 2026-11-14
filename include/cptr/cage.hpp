@@ -57,9 +57,10 @@ class spin_lock {
   void unlock() noexcept { locked_.store(false, std::memory_order_release); }
 };
 
+template <class Lock>
 struct lock_guard {
-  spin_lock& lock;
-  explicit lock_guard(spin_lock& l) : lock(l) { lock.lock(); }
+  Lock& lock;
+  explicit lock_guard(Lock& l) : lock(l) { lock.lock(); }
   ~lock_guard() { lock.unlock(); }
   lock_guard(const lock_guard&) = delete;
   lock_guard& operator=(const lock_guard&) = delete;
@@ -151,17 +152,22 @@ class CPTR_VISIBLE cage {
       if (!p) {
         return false;
       }
+#if !defined(_WIN32)
+      // Hold the lock across fork(), so that the child never starts with it
+      // taken by a thread that does not exist there. Registered once, by the
+      // thread that reserves the cage, and before any other thread can see
+      // the cage ready and take the lock.
+      if (pthread_atfork(&lock_for_fork, &unlock_after_fork,
+                         &unlock_after_fork) != 0) {
+        detail::release(p, size);
+        return false;
+      }
+#endif
       st->bump = span_size;
       st->commit_end = span_size;
       base_ = reinterpret_cast<std::uintptr_t>(p);
       ready_.store(true, std::memory_order_release);
     }
-#if !defined(_WIN32)
-    // Hold the lock across fork(), so that the child never starts with it
-    // taken by a thread that does not exist there. Registered outside the
-    // lock, and only once, by the thread that reserved the cage.
-    pthread_atfork(&lock_for_fork, &unlock_after_fork, &unlock_after_fork);
-#endif
     return true;
   }
 
@@ -224,7 +230,11 @@ class CPTR_VISIBLE cage {
     if (cls >= 0) {
       // Small blocks come from this thread's cache, which is refilled from
       // the slabs a batch at a time.
-      thread_cache& tc = cache();
+      thread_cache* tcp = cache();
+      if (!tcp) [[unlikely]] {
+        return allocate_uncached(cls);
+      }
+      thread_cache& tc = *tcp;
       std::uint32_t& n = tc.count[cls];
       if (n == 0 && !refill(tc, cls)) {
         return nullptr;
@@ -254,7 +264,12 @@ class CPTR_VISIBLE cage {
     // the lock.
     std::uint8_t cls = st.span_class[span];
     if (cls < detail::kClassSizes.size()) {
-      thread_cache& tc = cache();
+      thread_cache* tcp = cache();
+      if (!tcp) [[unlikely]] {
+        free_uncached(p, cls);
+        return;
+      }
+      thread_cache& tc = *tcp;
       if (tc.count[cls] == cache_capacity(cls)) {
         flush(tc, cls, cache_capacity(cls) / 2);
       }
@@ -277,17 +292,21 @@ class CPTR_VISIBLE cage {
   }
 
   /// Bytes handed out and not yet freed, rounded up to the size class.
+  /// While other threads allocate and free, this is a snapshot that can be
+  /// off by the blocks they move meanwhile.
   static std::size_t allocated_bytes() noexcept {
     if (!ready_.load(std::memory_order_acquire)) {
       return 0;
     }
     state_type& st = state();
     detail::lock_guard g(st.lock);
-    std::size_t bytes = st.allocated;
+    // Each thread's cache count is read at a slightly different moment, so
+    // a block moving from one cache to another can be counted twice.
+    std::size_t cached = 0;
     for (thread_cache* c = st.caches; c; c = c->next) {
-      bytes -= c->cached.load(std::memory_order_relaxed);
+      cached += c->cached.load(std::memory_order_relaxed);
     }
-    return bytes;
+    return cached < st.allocated ? st.allocated - cached : 0;
   }
 
   /// Bytes of the cage backed by committed memory.
@@ -308,19 +327,21 @@ class CPTR_VISIBLE cage {
     if (!ready_.load(std::memory_order_acquire)) {
       return;
     }
-    thread_cache& tc = cache();
-    for (std::size_t cls = 0; cls < detail::kClassSizes.size(); cls++) {
-      flush(tc, int(cls), tc.count[cls]);
+    if (thread_cache* tc = cache()) {
+      for (std::size_t cls = 0; cls < detail::kClassSizes.size(); cls++) {
+        flush(*tc, int(cls), tc->count[cls]);
+      }
     }
     state_type& st = state();
     detail::lock_guard g(st.lock);
     purge_empty_slabs(INT64_MAX);
   }
 
-  /// A std::pmr::memory_resource that allocates from this cage.
+  /// A std::pmr::memory_resource that allocates from this cage. It is never
+  /// destroyed, so containers with static storage duration can still free
+  /// into it during program exit, after the thread caches are gone: such
+  /// frees go straight to the slabs.
   static std::pmr::memory_resource* resource() noexcept {
-    // Never destroyed, so containers with static storage duration can still
-    // free into it during program exit.
     // Out of memory this early is fatal anyway.
     // NOLINTNEXTLINE(bugprone-unhandled-exception-at-new)
     static resource_type* r = new resource_type;
@@ -426,6 +447,7 @@ class CPTR_VISIBLE cage {
     thread_cache* prev = nullptr;
 
     thread_cache() noexcept {
+      tls_.cache = this;
       state_type& st = state();
       detail::lock_guard g(st.lock);
       next = st.caches;
@@ -438,6 +460,9 @@ class CPTR_VISIBLE cage {
       for (std::size_t cls = 0; cls < count.size(); cls++) {
         flush(*this, int(cls), count[cls]);
       }
+      // From here on this thread allocates and frees without a cache.
+      tls_.cache = nullptr;
+      tls_.gone = true;
       state_type& st = state();
       detail::lock_guard g(st.lock);
       if (prev) {
@@ -453,12 +478,50 @@ class CPTR_VISIBLE cage {
     thread_cache& operator=(const thread_cache&) = delete;
   };
 
-  static thread_cache& cache() noexcept {
-    thread_local thread_cache c;
-    return c;
+  /// This thread's cache, or nullptr once it has been destroyed:
+  /// thread_local objects destroyed after it, and objects with static
+  /// storage duration in the main thread, still allocate and free, and do so
+  /// straight from the slabs. The slot is trivially destructible, so it
+  /// outlives every thread_local destructor, and reading it needs no guard.
+  struct tls_slot {
+    thread_cache* cache;
+    bool gone;
+  };
+  inline static thread_local constinit tls_slot tls_{nullptr, false};
+
+  static thread_cache* cache() noexcept {
+    if (thread_cache* c = tls_.cache) [[likely]] {
+      return c;
+    }
+    return first_cache();
   }
 
-  /// Blocks a thread keeps per class: up to kRecent, and up to 32 KiB.
+  CPTR_NOINLINE static thread_cache* first_cache() noexcept {
+    if (tls_.gone) {
+      return nullptr;
+    }
+    thread_local thread_cache c;
+    return &c;
+  }
+
+  static void* allocate_uncached(int cls) noexcept {
+    detail::lock_guard g(state().lock);
+    void* p = allocate_from_slab(cls);
+    if (p) {
+      state().allocated += detail::kClassSizes[cls];
+    }
+    return p;
+  }
+
+  static void free_uncached(void* p, int cls) noexcept {
+    detail::lock_guard g(state().lock);
+    CPTR_POISON(p, detail::kClassSizes[cls]);
+    return_to_slab(p, cls);
+    state().allocated -= detail::kClassSizes[cls];
+  }
+
+  /// Blocks a thread keeps per class: up to kRecent, and up to 32 KiB of
+  /// them, but at least 4 (so up to 128 KiB for the largest classes).
   static std::uint32_t cache_capacity(int cls) noexcept {
     std::uint32_t n = 32768 / detail::kClassSizes[cls];
     return n < 4 ? 4 : n > kRecent ? kRecent : n;
@@ -517,14 +580,16 @@ class CPTR_VISIBLE cage {
       for (std::uint32_t i = 0; i < k; i++) {
         return_to_slab(decompress_nonnull(blocks[i]), cls);
       }
+      // Both counts change under the lock, so allocated_bytes() never sees
+      // one without the other.
       st.allocated -= std::size_t(k) * block_size;
+      tc.cached.store(tc.cached.load(std::memory_order_relaxed) -
+                          std::size_t(k) * block_size,
+                      std::memory_order_relaxed);
     }
     std::uint32_t& n = tc.count[cls];
     std::memmove(blocks.data(), blocks.data() + k, sizeof(blocks[0]) * (n - k));
     n -= k;
-    tc.cached.store(
-        tc.cached.load(std::memory_order_relaxed) - std::size_t(k) * block_size,
-        std::memory_order_relaxed);
   }
 
 #if !defined(_WIN32)
@@ -590,8 +655,8 @@ class CPTR_VISIBLE cage {
   static std::uint32_t take_spans(std::uint32_t count) noexcept {
     std::uint32_t first = take_spans_once(count);
     if (!first && state().empty_bytes) {
-      // The cage may be full of parked empty slabs.
-      purge_empty_slabs(0);
+      // The cage may be full of parked empty slabs: purge all of them.
+      purge_empty_slabs(INT64_MAX);
       first = take_spans_once(count);
     }
     return first;

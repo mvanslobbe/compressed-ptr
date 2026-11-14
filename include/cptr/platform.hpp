@@ -9,7 +9,9 @@
 
 // Checks for misuse: active when NDEBUG is not defined. Define CPTR_ASSERT
 // before including any cage header to route failures elsewhere.
-#ifndef CPTR_ASSERT
+#ifdef CPTR_ASSERT
+#  define CPTR_DETAIL_USER_ASSERT 1
+#else
 #  define CPTR_ASSERT(cond, msg) assert((cond) && msg)
 #endif
 
@@ -17,10 +19,13 @@
 // one, or building a nonnull_ptr from null. They are assertions by default.
 // Define CPTR_CHECKED to keep them in release builds too, where a failure
 // prints the message and aborts. Each costs a compare and a branch that is
-// never taken. Define CPTR_CHECK yourself to handle failures differently;
-// it must not return.
+// never taken.
+//
+// A CPTR_ASSERT of your own takes these checks too, with or without
+// CPTR_CHECKED, so one handler sees every failure. Define CPTR_CHECK
+// yourself to handle only these differently; it must not return.
 #ifndef CPTR_CHECK
-#  if defined(CPTR_CHECKED)
+#  if defined(CPTR_CHECKED) && !defined(CPTR_DETAIL_USER_ASSERT)
 #    include <cstdio>
 #    include <cstdlib>
 #    define CPTR_CHECK(cond, msg) \
@@ -34,6 +39,12 @@ namespace cptr::detail {
 #  else
 #    define CPTR_CHECK(cond, msg) CPTR_ASSERT(cond, msg)
 #  endif
+#endif
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#  define CPTR_NOINLINE __declspec(noinline)
+#else
+#  define CPTR_NOINLINE __attribute__((noinline))
 #endif
 
 // Gives a cage and its tag default visibility, so that every shared library
@@ -108,6 +119,16 @@ inline void* reserve_aligned(std::size_t size, std::size_t align) noexcept {
     munmap(reinterpret_cast<void*>(aligned + size), end - (aligned + size));
   }
   return reinterpret_cast<void*>(aligned);
+#endif
+}
+
+/// Give back address space from reserve_aligned(), whole.
+inline void release(void* p, std::size_t size) noexcept {
+#if defined(_WIN32)
+  (void)size;
+  VirtualFree(p, 0, MEM_RELEASE);
+#else
+  munmap(p, size);
 #endif
 }
 

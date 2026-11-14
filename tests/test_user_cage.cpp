@@ -1,6 +1,8 @@
 // Cages whose memory is managed by an allocator the user supplies.
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <map>
 #include <new>
 #include <span>
@@ -8,6 +10,13 @@
 #include "check.hpp"
 #include "cptr/all.hpp"
 #include "cptr/user_cage.hpp"
+
+#if !defined(_WIN32)
+#  include <sys/wait.h>
+#  include <unistd.h>
+#  include <csignal>
+#endif
+#include <thread>
 
 namespace {
 
@@ -101,4 +110,112 @@ TEST(bump_allocator_aligns_and_commits) {
   big[0] = 1;
   big[(3 << 20) - 1] = 2;
   CHECK(big[0] + big[(3 << 20) - 1] == 3);
+}
+
+namespace {
+int flaky_constructions = 0;
+// An allocator whose constructor fails the first few times.
+struct flaky_allocator {
+  explicit flaky_allocator(std::span<std::byte>) {
+    if (++flaky_constructions < 9) {
+      throw std::bad_alloc();
+    }
+  }
+  void* allocate(std::size_t, std::size_t) noexcept { return nullptr; }
+  void deallocate(void*) noexcept {}
+};
+struct flaky_tag {};
+using flaky_cage = cptr::user_cage<flaky_tag, flaky_allocator>;
+
+#if defined(__linux__)
+std::size_t vm_size_kib() {
+  std::FILE* f = std::fopen("/proc/self/status", "r");
+  char line[256];
+  std::size_t kib = 0;
+  while (f && std::fgets(line, sizeof line, f)) {
+    if (std::sscanf(line, "VmSize: %zu", &kib) == 1) {
+      break;
+    }
+  }
+  if (f) {
+    std::fclose(f);
+  }
+  return kib;
+}
+#endif
+}  // namespace
+
+// A failed init() kept the 4 GiB reservation: eight failures and a success
+// left 36 GiB of address space reserved.
+TEST(user_cage_failed_init_releases_the_reservation) {
+#if defined(__linux__)
+  std::size_t before = vm_size_kib();
+#endif
+  for (int i = 0; i < 8; i++) {
+    CHECK(!flaky_cage::init());
+  }
+  CHECK(flaky_cage::base() == 0);
+  CHECK(flaky_cage::init());
+#if defined(__linux__)
+  std::size_t grown_gib = (vm_size_kib() - before) >> 20;
+  if (grown_gib > 5) {
+    std::printf("  address space grew by %zu GiB\n", grown_gib);
+  }
+  CHECK(grown_gib <= 5);  // one 4 GiB cage, plus slack
+#endif
+}
+
+TEST(user_cage_zero_byte_requests_are_distinct) {
+  struct tag {};
+  using cage = cptr::user_cage<tag, cptr::bump_allocator>;
+  void* a = cage::allocate(0, 8);
+  void* b = cage::allocate(0, 8);
+  void* c = cage::allocate(8, 8);
+  CHECK(a != b && b != c && a != c);
+}
+
+#if defined(__SANITIZE_ADDRESS__)
+#  define CPTR_TEST_NO_FORK 1
+#elif defined(__has_feature)
+#  if __has_feature(address_sanitizer)
+#    define CPTR_TEST_NO_FORK 1
+#  endif
+#endif
+
+// fork() while another thread holds bump_allocator's lock left the child
+// spinning for ever on its first allocation.
+TEST(bump_allocator_survives_fork) {
+#if defined(_WIN32) || defined(CPTR_TEST_NO_FORK)
+  std::printf("  (skipped: needs fork)\n");
+#else
+  struct tag {};
+  using cage = cptr::user_cage<tag, cptr::bump_allocator, 36, 4>;
+  CHECK(cage::init());
+  std::atomic<bool> stop{false};
+  std::thread churn([&] {
+    while (!stop.load(std::memory_order_relaxed) &&
+           cage::allocator().used() < (std::size_t(1) << 30)) {
+      (void)cage::allocate(16, 16);
+    }
+  });
+  int stuck = 0;
+  for (int i = 0; i < 200; i++) {
+    std::fflush(stdout);
+    pid_t pid = fork();
+    if (pid == 0) {
+      alarm(2);
+      (void)cage::allocate(16, 16);
+      _exit(0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    stuck += WIFSIGNALED(status) && WTERMSIG(status) == SIGALRM;
+  }
+  stop = true;
+  churn.join();
+  if (stuck) {
+    std::printf("  %d of 200 children hung\n", stuck);
+  }
+  CHECK(stuck == 0);
+#endif
 }

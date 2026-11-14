@@ -5,6 +5,12 @@
 
 inline std::atomic<int> g_assert_failures{0};
 #define CPTR_ASSERT(cond, msg) ((cond) ? (void)0 : (void)g_assert_failures++)
+// CPTR_CHECKED too: a CPTR_ASSERT of one's own still takes the checks for
+// foreign pointers, instead of the built-in check that aborts. Before, the
+// tests below aborted when the suite was built with -DCPTR_CHECKED.
+#ifndef CPTR_CHECKED
+#  define CPTR_CHECKED 1
+#endif
 #define CPTR_FAULT_INJECTION 1
 
 #include <thread>

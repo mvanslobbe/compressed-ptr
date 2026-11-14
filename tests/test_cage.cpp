@@ -1,3 +1,7 @@
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory_resource>
 #include <random>
@@ -7,6 +11,11 @@
 
 #include "check.hpp"
 #include "cptr/all.hpp"
+
+#if !defined(_WIN32)
+#  include <sys/wait.h>
+#  include <unistd.h>
+#endif
 
 namespace {
 struct small_cage : cptr::cage<small_cage, 24> {};
@@ -387,4 +396,120 @@ TEST(freed_small_blocks_are_decommitted) {
   std::printf("  after 300 ms: committed %zu KiB\n",
               C::committed_bytes() / 1024);
   CHECK(C::committed_bytes() <= kKept + 8 * C::span_size);
+}
+
+namespace {
+struct parked_cage : cptr::cage<parked_cage, 24> {};
+struct late_free_cage : cptr::cage<late_free_cage, 24> {};
+struct stats_cage : cptr::cage<stats_cage, 28> {};
+}  // namespace
+
+// A cage full of empty slabs, parked for reuse, must still serve a large
+// allocation at once: take_spans() purged only slabs parked before time 0,
+// that is none of them, so the 4 MiB request failed until trim().
+TEST(full_cage_of_parked_slabs_serves_large_blocks) {
+  using C = parked_cage;
+  std::thread t([] {
+    std::vector<void*> blocks;
+    while (void* p = C::try_allocate(1024)) {
+      blocks.push_back(p);
+    }
+    for (void* p : blocks) {
+      C::deallocate(p);
+    }
+  });  // the thread's exit empties its cache, so every slab is parked
+  t.join();
+  CHECK(C::allocated_bytes() == 0);
+  void* big = C::try_allocate(4 << 20);
+  CHECK(big != nullptr);
+  C::deallocate(big);
+}
+
+// A thread_local object constructed before the thread's cache is destroyed
+// after it. Its frees used to go into the destroyed cache and were lost:
+// allocated_bytes() grew by 384 bytes per thread.
+namespace {
+struct late_holder {
+  void* blocks[8] = {};
+  ~late_holder() {
+    for (void* p : blocks) {
+      late_free_cage::deallocate(p);
+    }
+    // And allocating after the cache is gone works too.
+    late_free_cage::deallocate(late_free_cage::allocate(48));
+  }
+};
+}  // namespace
+
+TEST(frees_after_the_thread_cache_is_gone) {
+  for (int round = 0; round < 3; round++) {
+    std::thread t([] {
+      thread_local late_holder h;  // constructed before the cache ...
+      for (void*& p : h.blocks) {
+        p = late_free_cage::allocate(48);  // ... which is destroyed first
+      }
+    });
+    t.join();
+    CHECK(late_free_cage::allocated_bytes() == 0);
+  }
+#if !defined(_WIN32)
+  // The same at program exit: a container with static storage duration in
+  // the main thread is destroyed after the main thread's cache.
+  std::fflush(stdout);
+  pid_t pid = fork();
+  if (pid == 0) {
+    static void (*check_at_exit)() = [] {
+      _exit(late_free_cage::allocated_bytes() == 0 ? 0 : 1);
+    };
+    std::atexit(check_at_exit);  // runs after the vector is destroyed
+    static std::pmr::vector<int> v(late_free_cage::resource());
+    v.assign(10, 1);
+    std::exit(0);
+  }
+  int status = 0;
+  waitpid(pid, &status, 0);
+  CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+#endif
+}
+
+// allocated_bytes() lowered the global count under the lock but a thread's
+// cached count only after releasing it, so a reading in between came out
+// near 2^64 (about 650 times a second with one thread allocating and
+// another freeing).
+TEST(allocated_bytes_never_wraps) {
+  using C = stats_cage;
+  std::atomic<bool> stop{false};
+  std::atomic<void*> slot{nullptr};
+  std::thread producer([&] {
+    while (!stop.load(std::memory_order_relaxed)) {
+      void* p = C::allocate(64);
+      void* expected = nullptr;
+      while (!slot.compare_exchange_weak(expected, p) && !stop.load()) {
+        expected = nullptr;
+      }
+      if (stop.load()) {
+        C::deallocate(p);
+      }
+    }
+  });
+  std::thread consumer([&] {
+    while (!stop.load(std::memory_order_relaxed)) {
+      if (void* p = slot.exchange(nullptr)) {
+        C::deallocate(p);
+      }
+    }
+  });
+  long wrapped = 0;
+  auto end = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+  while (std::chrono::steady_clock::now() < end) {
+    wrapped += C::allocated_bytes() > (std::size_t(1) << 40);
+  }
+  stop = true;
+  producer.join();
+  consumer.join();
+  C::deallocate(slot.exchange(nullptr));
+  if (wrapped) {
+    std::printf("  %ld readings wrapped\n", wrapped);
+  }
+  CHECK(wrapped == 0);
 }

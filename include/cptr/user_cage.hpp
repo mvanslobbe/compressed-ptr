@@ -87,7 +87,9 @@ class CPTR_VISIBLE user_cage {
   static constexpr std::size_t usable_end = size - span_size;
 
   /// Reserve the cage and construct the allocator. Called lazily by
-  /// allocate(); returns false if the address space could not be reserved.
+  /// allocate(); returns false if the address space could not be reserved
+  /// or the allocator's constructor threw. A failed call gives the address
+  /// space back, and a later call tries again.
   static bool init() noexcept {
     if (ready_.load(std::memory_order_acquire)) {
       return true;
@@ -105,6 +107,7 @@ class CPTR_VISIBLE user_cage {
       ::new (static_cast<void*>(storage_))
           Allocator(std::span<std::byte>(first, usable_end - span_size));
     } catch (...) {
+      detail::release(p, size);
       return false;
     }
     base_ = reinterpret_cast<std::uintptr_t>(p);
@@ -155,11 +158,16 @@ class CPTR_VISIBLE user_cage {
     throw std::bad_alloc();
   }
 
+  /// As allocate(), but returns nullptr on failure. A request for zero
+  /// bytes asks the allocator for one, so every allocation is distinct.
   static void* try_allocate(std::size_t bytes, std::size_t align = alignof(
                                                    std::max_align_t)) noexcept {
     CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
     if (!init()) {
       return nullptr;
+    }
+    if (bytes == 0) {
+      bytes = 1;
     }
     void* p =
         allocator().allocate(bytes, align < granularity ? granularity : align);
@@ -187,10 +195,82 @@ class CPTR_VISIBLE user_cage {
   alignas(Allocator) static inline std::byte storage_[sizeof(Allocator)];
 };
 
+namespace detail {
+
+/// A spin lock that is held across fork(), like cage's own lock, so that a
+/// child never starts with it taken by a thread that does not exist there.
+/// Every live fork_safe_lock is in one list, which a single pthread_atfork
+/// handler locks in order before fork() and unlocks after it.
+class fork_safe_lock {
+ public:
+  fork_safe_lock() noexcept {
+#if !defined(_WIN32)
+    lock_guard g(registry_lock());
+    static bool registered = false;
+    if (!registered) {
+      // If this fails the locks are no safer than before, but still work.
+      registered = pthread_atfork(&lock_all, &unlock_all, &unlock_all) == 0;
+    }
+    next_ = head();
+    if (next_) {
+      next_->prev_ = this;
+    }
+    head() = this;
+#endif
+  }
+  ~fork_safe_lock() {
+#if !defined(_WIN32)
+    lock_guard g(registry_lock());
+    (prev_ ? prev_->next_ : head()) = next_;
+    if (next_) {
+      next_->prev_ = prev_;
+    }
+#endif
+  }
+  fork_safe_lock(const fork_safe_lock&) = delete;
+  fork_safe_lock& operator=(const fork_safe_lock&) = delete;
+
+  void lock() noexcept { lock_.lock(); }
+  void unlock() noexcept { lock_.unlock(); }
+
+ private:
+  // Function-local statics, so that they are usable from any constructor
+  // that runs during static initialisation.
+  static spin_lock& registry_lock() noexcept {
+    static spin_lock l;
+    return l;
+  }
+  static fork_safe_lock*& head() noexcept {
+    static fork_safe_lock* h = nullptr;
+    return h;
+  }
+#if !defined(_WIN32)
+  static void lock_all() noexcept {
+    registry_lock().lock();
+    for (fork_safe_lock* l = head(); l; l = l->next_) {
+      l->lock();
+    }
+  }
+  static void unlock_all() noexcept {
+    for (fork_safe_lock* l = head(); l; l = l->next_) {
+      l->unlock();
+    }
+    registry_lock().unlock();
+  }
+#endif
+
+  spin_lock lock_;
+  fork_safe_lock* next_ = nullptr;
+  fork_safe_lock* prev_ = nullptr;
+};
+
+}  // namespace detail
+
 /// A thread-safe bump (monotonic) allocator for user_cage: allocation is a
 /// pointer increment, deallocate() does nothing, and memory is committed in
 /// 1 MiB steps as it is used. Suited to data that is built once and freed
-/// all at once, or never.
+/// all at once, or never. Its lock is held across fork(), so a child process
+/// can allocate even if another thread was allocating when it forked.
 class bump_allocator {
  public:
   explicit bump_allocator(std::span<std::byte> region) noexcept
@@ -233,7 +313,7 @@ class bump_allocator {
 
  private:
   static constexpr std::size_t kCommitStep = std::size_t(1) << 20;
-  mutable detail::spin_lock lock_;
+  mutable detail::fork_safe_lock lock_;
   std::byte* begin_;
   std::byte* next_;
   std::byte* committed_;
