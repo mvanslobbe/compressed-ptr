@@ -28,7 +28,7 @@ jobs:
           - { name: windows-x64-msvc, os: windows-2022, cxx: cl }
           - { name: windows-arm64-msvc, os: windows-11-arm, cxx: cl }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCOMPRESSED_PTR_WERROR=ON
       - name: Build
@@ -45,7 +45,7 @@ jobs:
   sanitizers:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure
         run: >
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++-18
@@ -63,7 +63,7 @@ jobs:
   benchmark:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCOMPRESSED_PTR_BUILD_TESTS=OFF
@@ -85,7 +85,7 @@ jobs:
   fuzz:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build
         run: |
           cmake -S . -B build-fuzz -DCMAKE_CXX_COMPILER=clang++-18 \
@@ -101,7 +101,7 @@ jobs:
   clang-tidy:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure
         run: >
           cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++-18
@@ -112,7 +112,7 @@ jobs:
   format:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Single header is up to date
         run: python3 scripts/amalgamate.py --check
       - name: Install clang-format
@@ -133,7 +133,7 @@ jobs:
         os: [ubuntu-24.04, macos-15, windows-2022]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install and use with find_package
         shell: bash
         run: scripts/test_install.sh
@@ -141,7 +141,7 @@ jobs:
   thread-sanitizer:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # TSan in clang 18 cannot handle the runner's default ASLR entropy.
       - name: Reduce ASLR entropy
         run: sudo sysctl vm.mmap_rnd_bits=28
@@ -163,7 +163,7 @@ jobs:
   coverage:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Coverage
         run: LLVM_SUFFIX=-18 CXX=clang++-18 scripts/coverage.sh
       - uses: actions/upload-artifact@v7
