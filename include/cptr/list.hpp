@@ -200,8 +200,9 @@ class basic_list {
   friend void swap(basic_list& a, basic_list& b) noexcept { a.swap(b); }
 
   iterator begin() noexcept {
-    return iterator(sentinel() ? static_cast<node_base*>(sentinel()->next)
-                               : nullptr);
+    // The sentinel's next link is never null, so it can skip the null check
+    // of decompression.
+    return iterator(sentinel() ? follow(sentinel()->next) : nullptr);
   }
   iterator end() noexcept { return iterator(sentinel()); }
   const_iterator begin() const noexcept {

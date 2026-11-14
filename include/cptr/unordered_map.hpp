@@ -143,14 +143,30 @@ class basic_unordered_map {
                       size_type buckets = 0, const Hash& hash = Hash(),
                       const KeyEqual& eq = KeyEqual())
       : basic_unordered_map(values.begin(), values.end(), buckets, hash, eq) {}
-  /// Copies the elements, the hash function, the key comparison and the
-  /// maximum load factor.
+  /// Copies the elements, the hash function, the key comparison, the
+  /// maximum load factor and the bucket count, so the copy iterates in the
+  /// same order. The keys are not hashed again: each node keeps its hash,
+  /// and the copy goes bucket by bucket.
   basic_unordered_map(const basic_unordered_map& other)
       : basic_unordered_map(0, other.hash_, other.eq_) {
     max_load_ = other.max_load_;
-    reserve(other.size_);
-    for (const auto& kv : other) {
-      emplace(kv.first, kv.second);
+    if (other.size_ == 0) {
+      return;
+    }
+    rehash(other.bucket_count());
+    // Each node is linked as soon as it is made, so if one throws the
+    // destructor frees the rest; first_ must already be a lower bound then.
+    first_ = other.first_;
+    size_type count = bucket_count();
+    for (size_type i = other.first_; i < count; i++) {
+      link_type* tail = &buckets_[i];
+      for (node* n = other.buckets_[i]; n; n = n->next) {
+        node* copy = new_node(n->kv);
+        copy->hash = n->hash;
+        *tail = copy;
+        tail = &copy->next;
+        size_++;
+      }
     }
   }
   basic_unordered_map(basic_unordered_map&& other) noexcept
@@ -495,14 +511,25 @@ class basic_unordered_map {
     }
     return make_iterator(last.node_);
   }
+  /// Erase the element with `key`, if any; returns how many were erased.
+  /// One walk of the bucket finds the element and the link to it, and
+  /// nothing looks for the next element.
   size_type erase(const K& key) {
-    node* n = find_node(key);
-    if (!n) {
+    if (!buckets_) {
       return 0;
     }
-    unlink_node(n);
-    delete_node(n);
-    return 1;
+    std::uint32_t h = hash_of(key);
+    link_type* at = &buckets_[index(h, log2_buckets_)];
+    while (node* n = *at) {
+      if (n->hash == h && eq_(n->kv.first, key)) {
+        *at = n->next;
+        delete_node(n);
+        size_--;
+        return 1;
+      }
+      at = &n->next;
+    }
+    return 0;
   }
 
   void clear() noexcept {

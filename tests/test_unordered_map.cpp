@@ -430,3 +430,23 @@ TEST(unordered_map_erase_begin_until_empty_matches_std) {
   int_map moved = std::move(m);
   CHECK(moved.begin()->first == 2 && m.begin() == m.end());
 }
+
+TEST(unordered_map_copy_keeps_buckets_and_order) {
+  // The copy reuses the stored hashes bucket by bucket instead of
+  // inserting every element again.
+  int_map m;
+  m.reserve(5000);
+  for (int i = 0; i < 1000; i++) {
+    m[i * 31] = i;
+  }
+  for (int i = 0; i < 500; i++) {
+    m.erase(m.begin());
+  }
+  int_map copy = m;
+  CHECK(copy == m && copy.bucket_count() == m.bucket_count());
+  CHECK(std::equal(copy.begin(), copy.end(), m.begin(), m.end()));
+  copy[-1] = -1;
+  CHECK(copy.size() == 501 && copy.at(-1) == -1);
+  int_map empty_copy = int_map();
+  CHECK(empty_copy.empty() && empty_copy.begin() == empty_copy.end());
+}
