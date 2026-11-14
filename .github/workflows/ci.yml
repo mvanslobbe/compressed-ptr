@@ -60,6 +60,20 @@ jobs:
           ! ./uaf 2> uaf.log
           grep -q "use-after-poison" uaf.log
 
+  checked:
+    name: release with CPTR_CHECKED
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-14
+          -DCMAKE_CXX_FLAGS="-O3 -DCPTR_CHECKED" -DCOMPRESSED_PTR_WERROR=ON
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
   benchmark:
     runs-on: ubuntu-24.04
     steps:
