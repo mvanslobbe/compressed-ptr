@@ -3,7 +3,7 @@
 Everything about using compressed-ptr: how it works, every header, the
 allocators, persistence, the rules, and building and testing. For the
 numbers, see [Benchmarks](benchmarks.md); for every type and function, the
-[API reference](https://mvanslobbe.github.io/compressed-ptr/reference/).
+[API reference](https://mvanslobbe.github.io/compressed-ptr/reference/cptr.html).
 
 ## Contents
 

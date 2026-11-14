@@ -339,7 +339,7 @@ class CPTR_VISIBLE cage {
   static constexpr std::size_t kRetainMax = 64 * 1024 * 1024;
   static constexpr std::uint8_t kEmptySlab = 0xFC;
 
-  /// Bookkeeping for small-block slabs, one entry per span. |start| is set
+  /// Bookkeeping for small-block slabs, one entry per span. `start` is set
   /// for every span of a slab; the other fields only at its first span.
   struct slab_meta {
     std::uint32_t start;
@@ -420,7 +420,7 @@ class CPTR_VISIBLE cage {
     std::array<std::uint32_t, detail::kClassSizes.size()> count{};
     std::array<std::array<std::uint32_t, kRecent>, detail::kClassSizes.size()>
         blocks;
-    /// Bytes in |blocks|. Only the owning thread writes it.
+    /// Bytes in `blocks`. Only the owning thread writes it.
     std::atomic<std::size_t> cached{0};
     thread_cache* next = nullptr;
     thread_cache* prev = nullptr;
@@ -464,7 +464,7 @@ class CPTR_VISIBLE cage {
     return n < 4 ? 4 : n > kRecent ? kRecent : n;
   }
 
-  /// Fill half of this thread's cache for |cls| from the slabs.
+  /// Fill half of this thread's cache for `cls` from the slabs.
   static bool refill(thread_cache& tc, int cls) noexcept {
     state_type& st = state();
     std::uint32_t block_size = detail::kClassSizes[cls];
@@ -503,7 +503,7 @@ class CPTR_VISIBLE cage {
     return n > 0;
   }
 
-  /// Return the oldest |k| blocks of this thread's cache for |cls| to their
+  /// Return the oldest `k` blocks of this thread's cache for `cls` to their
   /// slabs.
   static void flush(thread_cache& tc, int cls, std::uint32_t k) noexcept {
     if (k == 0) {
@@ -585,7 +585,7 @@ class CPTR_VISIBLE cage {
     }
   }
 
-  /// Take |count| spans, reusing a free run if one is big enough, and commit
+  /// Take `count` spans, reusing a free run if one is big enough, and commit
   /// them. Returns 0 on failure.
   static std::uint32_t take_spans(std::uint32_t count) noexcept {
     std::uint32_t first = take_spans_once(count);
@@ -597,7 +597,7 @@ class CPTR_VISIBLE cage {
     return first;
   }
 
-  /// A parked empty slab of |count| spans, most recently emptied first, as
+  /// A parked empty slab of `count` spans, most recently emptied first, as
   /// its memory is still resident. Returns 0 if there is none.
   static std::uint32_t reuse_empty_slab(std::uint32_t count) noexcept {
     auto& empty = state().empty;
@@ -629,7 +629,7 @@ class CPTR_VISIBLE cage {
     purge_empty_slabs(now - kRetainMs);
   }
 
-  /// Purge parked slabs emptied before |before_ms|, and the oldest beyond
+  /// Purge parked slabs emptied before `before_ms`, and the oldest beyond
   /// kRetainMax. purge_empty_slabs(INT64_MAX) purges all of them.
   static void purge_empty_slabs(std::int64_t before_ms) noexcept {
     state_type& st = state();
@@ -827,9 +827,9 @@ class CPTR_VISIBLE cage {
     release_run(first, count);
   }
 
-  /// Decommit |count| spans from |first| and record them as a free run,
+  /// Decommit `count` spans from `first` and record them as a free run,
   /// merged with free neighbours.
-  /// |purge| releases the pages but keeps the mapping, which is cheaper for
+  /// `purge` releases the pages but keeps the mapping, which is cheaper for
   /// slabs; large runs are decommitted, so stray accesses fault.
   static void release_run(std::uint32_t first, std::uint32_t count,
                           bool purge = false) noexcept {

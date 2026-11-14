@@ -65,7 +65,7 @@ namespace cptr::detail {
 
 namespace cptr::detail {
 
-/// Reserve |size| bytes of inaccessible address space aligned to |align|.
+/// Reserve `size` bytes of inaccessible address space aligned to `align`.
 /// Returns nullptr on failure.
 inline void* reserve_aligned(std::size_t size, std::size_t align) noexcept {
 #if defined(_WIN32)

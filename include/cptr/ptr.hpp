@@ -13,9 +13,46 @@
 
 #include "cptr/cage.hpp"
 
+/// compressed-ptr: 4-byte pointers and containers for 64-bit C++20.
+///
+/// Objects live in a *cage*, a reserved region of up to 4 GiB (or 64 GiB
+/// with a shift). A pointer into the cage is stored as a 32-bit offset, which
+/// halves the size of every link. Start here:
+///
+/// @li Containers: @ref list, @ref forward_list, @ref ordered_map and
+///     @ref unordered_map, the std interfaces with 4-byte links.
+/// @li Your own nodes: allocate with @ref make, point with @ref ptr (or
+///     @ref nonnull_ptr), pack two pointers with @ref ptr_pair, free with
+///     @ref destroy.
+/// @li Other containers: @ref allocator puts their elements in the cage;
+///     @ref fancy_allocator gives containers that support fancy pointers
+///     4-byte links.
+/// @li Cages: @ref default_cage, your own @ref cage, @ref user_cage with your
+///     own allocator, or @ref mapped_cage to keep data in a file.
+///
+/// The one rule: only compress pointers to objects allocated in the cage.
+/// Debug builds assert it.
+///
+/// @code
+/// #include "cptr/all.hpp"
+///
+/// struct node {
+///   cptr::ptr_pair<node> children;  // two 4-byte pointers
+///   int key;
+/// };
+///
+/// int main() {
+///   cptr::list<int> l{1, 2, 3};             // like std::list, half the memory
+///   cptr::ptr<node> n = cptr::make<node>();  // a node in the cage
+///   n->key = l.back();
+///   cptr::destroy(n);
+/// }
+/// @endcode
+///
+/// Guide, benchmarks and examples: https://mvanslobbe.github.io/compressed-ptr/
 namespace cptr {
 
-/// A nullable pointer to a T inside |Cage|, stored in 4 bytes. Use it as
+/// A nullable pointer to a T inside `Cage`, stored in 4 bytes. Use it as
 /// ptr<T> or strict_ptr<T>, declared below.
 ///
 /// ptr converts implicitly from and to T*, so it can replace a raw pointer
@@ -28,12 +65,17 @@ namespace cptr {
 template <class T, class Cage, bool Strict>
 class basic_ptr {
  public:
+  /// The type pointed to.
   using element_type = T;
+  /// The cage the pointer is compressed against.
   using cage_type = Cage;
+  /// The iterator and std::pointer_traits types below let ptr serve as an
+  /// allocator's pointer type, which must be a random access iterator.
   using difference_type = std::ptrdiff_t;
+  /// The same kind of pointer to a `U`, for std::pointer_traits.
   template <class U>
   using rebind = basic_ptr<U, Cage, Strict>;
-  /// An allocator's pointer type must be a random access iterator.
+  /// The pointee type without cv-qualifiers, as for an iterator.
   using value_type = std::remove_cv_t<T>;
   using pointer = T*;
   using reference = std::add_lvalue_reference_t<T>;
@@ -85,45 +127,59 @@ class basic_ptr {
     return *this;
   }
 
+  /// The raw pointer, or `nullptr`: one add and a conditional move.
   T* get() const noexcept { return static_cast<T*>(Cage::decompress(bits_)); }
+  /// Converts implicitly to the raw pointer, so a `ptr` can be passed
+  /// wherever a `T*` is expected.
   operator T*() const noexcept { return get(); }
-  /// Dereferencing null is undefined, so these skip the null check.
+  /// Member access. Dereferencing null is undefined, so this skips the null
+  /// check and costs a single add.
   T* operator->() const noexcept {
     return static_cast<T*>(Cage::decompress_nonnull(bits_));
   }
+  /// The object pointed to. Like `operator->`, it skips the null check.
   template <class U = T>
     requires(!std::is_void_v<U>)
   U& operator*() const noexcept {
     return *static_cast<U*>(Cage::decompress_nonnull(bits_));
   }
+  /// True unless null.
   constexpr explicit operator bool() const noexcept { return bits_ != 0; }
 
-  /// Pointer arithmetic, so ptr can serve as an allocator's pointer type for
-  /// containers that index into blocks of elements. It works on the
-  /// compressed offset directly, so it is as cheap as raw pointer arithmetic.
-  /// In a shifted cage, sizeof(T) must be a multiple of the granularity.
+  /// Element `i` counting from this one, as for a raw pointer.
+  ///
+  /// Pointer arithmetic (`[]`, `+`, `-`, `+=`, `-=`, `++`, `--`) lets ptr
+  /// serve as an allocator's pointer type for containers that index into
+  /// blocks of elements. It works on the compressed offset directly, so it
+  /// costs the same as raw pointer arithmetic, but a loop over an array does
+  /// not vectorise: convert to `T*` with get() for hot loops. In a shifted
+  /// cage, `sizeof(T)` must be a multiple of the granularity.
   template <class U = T>
     requires(!std::is_void_v<U>)
   U& operator[](std::ptrdiff_t i) const noexcept {
     return *(*this + i);
   }
+  /// Advance by `n` elements.
   constexpr basic_ptr& operator+=(std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
     bits_ += static_cast<std::uint32_t>(n * step());
     return *this;
   }
+  /// Go back by `n` elements.
   constexpr basic_ptr& operator-=(std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
     bits_ -= static_cast<std::uint32_t>(n * step());
     return *this;
   }
+  /// Advance by one element.
   constexpr basic_ptr& operator++() noexcept
     requires(!std::is_void_v<T>)
   {
     return *this += 1;
   }
+  /// Go back by one element.
   constexpr basic_ptr& operator--() noexcept
     requires(!std::is_void_v<T>)
   {
@@ -143,6 +199,7 @@ class basic_ptr {
     --*this;
     return old;
   }
+  /// The pointer `n` elements further on.
   friend constexpr basic_ptr operator+(basic_ptr p, std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
@@ -158,6 +215,7 @@ class basic_ptr {
   {
     return p -= n;
   }
+  /// The number of elements between two pointers into the same array.
   friend constexpr std::ptrdiff_t operator-(basic_ptr a, basic_ptr b) noexcept
     requires(!std::is_void_v<T>)
   {
@@ -234,16 +292,21 @@ class nonnull_ptr {
   using element_type = T;
   using cage_type = Cage;
 
+  /// Compress `p`, which must be in the cage and must not be null.
   nonnull_ptr(T* p) noexcept : bits_(Cage::compress(p)) {
     CPTR_CHECK(p, "nonnull_ptr must not be null");
   }
   nonnull_ptr(std::nullptr_t) = delete;
 
+  /// The raw pointer: a single add, with no null check.
   T* get() const noexcept {
     return static_cast<T*>(Cage::decompress_nonnull(bits_));
   }
+  /// Converts implicitly to the raw pointer.
   operator T*() const noexcept { return get(); }
+  /// Member access.
   T* operator->() const noexcept { return get(); }
+  /// The object pointed to.
   T& operator*() const noexcept { return *get(); }
 
   std::uint32_t bits() const noexcept { return bits_; }

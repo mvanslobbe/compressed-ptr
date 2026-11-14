@@ -22,6 +22,9 @@
 namespace cptr {
 namespace detail {
 
+/// The class behind cptr::ordered_map; use that alias. Its members behave like
+/// those of `std::map`.
+///
 /// The map behind cptr::ordered_map. Compressed = false gives the same tree
 /// with raw 8-byte links, which the benchmarks compare against.
 ///
@@ -533,7 +536,7 @@ class basic_ordered_map {
     node_base* existing;
   };
 
-  /// Where |key| belongs, or the node that already has it.
+  /// Where `key` belongs, or the node that already has it.
   slot find_slot(const K& key) {
     if (!header()) {
       header_ = new_header();
@@ -673,7 +676,7 @@ class basic_ordered_map {
     root()->color = kBlack;
   }
 
-  /// Put |v| (possibly null) where |u| was.
+  /// Put `v` (possibly null) where `u` was.
   void transplant(node_base* u, node_base* v) noexcept {
     replace_child(u, v);
     if (v) {
@@ -785,7 +788,7 @@ class basic_ordered_map {
     }
   }
 
-  /// Copy the subtree at |n|, colours included.
+  /// Copy the subtree at `n`, colours included.
   node_base* clone(node_base* n, node_base* parent) {
     node* copy = new_node(static_cast<node*>(n)->kv);
     copy->color = n->color;
@@ -850,9 +853,9 @@ class basic_ordered_map {
     return p;
   }
 
-  /// The number of black nodes on every path down from |n|, or 0 if the
+  /// The number of black nodes on every path down from `n`, or 0 if the
   /// paths differ or a red node has a red child. Counts the nodes into
-  /// |count| and checks the parent links and the key order.
+  /// `count` and checks the parent links and the key order.
   std::size_t black_height(node_base* n, std::size_t& count) const {
     if (!n) {
       return 1;
@@ -892,8 +895,23 @@ class basic_ordered_map {
 
 }  // namespace detail
 
-/// An ordered map with 4-byte links, like std::map without the allocator
-/// parameter and node handles. Nodes are allocated in |Cage|.
+/// An ordered map with 4-byte links, like `std::map` without the allocator
+/// parameter and node handles.
+///
+/// A red-black tree whose nodes are allocated in `Cage`: 24 bytes per
+/// element for 4-byte keys and values, against 48 for `std::map`. Every
+/// member behaves like its `std::map` counterpart; see
+/// @ref detail::basic_ordered_map for the full member list. Lookup is
+/// heterogeneous when `Compare::is_transparent` exists.
+///
+/// @code
+/// #include "cptr/ordered_map.hpp"
+///
+/// cptr::ordered_map<int, std::string> m;
+/// m[2] = "two";
+/// m.emplace(1, "one");
+/// for (auto& [key, value] : m) { /* in key order */ }
+/// @endcode
 template <class K, class V, class Compare = std::less<K>,
           class Cage = default_cage>
 using ordered_map = detail::basic_ordered_map<K, V, Compare, Cage, true>;

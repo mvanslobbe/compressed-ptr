@@ -16,8 +16,12 @@
 #include "cptr/link.hpp"
 
 namespace cptr {
+/// Implementation classes. Use the aliases in cptr, such as cptr::list.
 namespace detail {
 
+/// The class behind cptr::list; use that alias. Its members behave like
+/// those of `std::list`.
+///
 /// The list behind cptr::list. Compressed = false gives the same list with
 /// raw 8-byte links, which the benchmarks compare against.
 ///
@@ -282,12 +286,12 @@ class basic_list {
     resize_with(n, [&]() -> const T& { return v; });
   }
 
-  /// Move all of |other| before |pos|.
+  /// Move all of `other` before `pos`.
   void splice(const_iterator pos, basic_list& other) {
     splice(pos, other, other.begin(), other.end());
   }
   void splice(const_iterator pos, basic_list&& other) { splice(pos, other); }
-  /// Move the element at |it| in |other| before |pos|.
+  /// Move the element at `it` in `other` before `pos`.
   void splice(const_iterator pos, basic_list& other, const_iterator it) {
     node_base* n = it.node_;
     node_base* at = position(pos);
@@ -302,8 +306,8 @@ class basic_list {
   void splice(const_iterator pos, basic_list&& other, const_iterator it) {
     splice(pos, other, it);
   }
-  /// Move [first, last) of |other| before |pos|. Linear in the length of the
-  /// range when |other| is another list, to keep size() constant time.
+  /// Move [first, last) of `other` before `pos`. Linear in the length of the
+  /// range when `other` is another list, to keep size() constant time.
   void splice(const_iterator pos, basic_list& other, const_iterator first,
               const_iterator last) {
     if (first == last) {
@@ -322,7 +326,7 @@ class basic_list {
     splice(pos, other, first, last);
   }
 
-  /// Merge sorted |other| into this sorted list. Stable: of equal elements,
+  /// Merge sorted `other` into this sorted list. Stable: of equal elements,
   /// this list's come first.
   template <class Compare = std::less<>>
   void merge(basic_list& other, Compare comp = Compare()) {
@@ -506,7 +510,7 @@ class basic_list {
     at->prev = to_n;
   }
 
-  /// Returns the node after |n|.
+  /// Returns the node after `n`.
   static node_base* unlink(node_base* n) noexcept {
     node_base* prev = n->prev;
     node_base* next = n->next;
@@ -515,7 +519,7 @@ class basic_list {
     return next;
   }
 
-  /// Move the nodes [first, last) before |at|.
+  /// Move the nodes [first, last) before `at`.
   static void transfer(node_base* at, node_base* first,
                        node_base* last) noexcept {
     if (at == last) {
@@ -532,7 +536,7 @@ class basic_list {
     at->prev = tail;
   }
 
-  /// Merge two null-terminated sorted chains linked through |next|; |a|'s
+  /// Merge two null-terminated sorted chains linked through `next`; `a`'s
   /// elements come first among equals.
   template <class Compare>
   static node_base* merge_runs(node_base* a, node_base* b, Compare& comp) {
@@ -553,7 +557,7 @@ class basic_list {
     return head.next;
   }
 
-  /// Insert the values that |produce| passes to its callback before |pos|.
+  /// Insert the values that `produce` passes to its callback before `pos`.
   /// If one throws, the values inserted so far are removed again.
   template <class Produce>
   iterator insert_each(const_iterator pos, Produce produce) {
@@ -632,8 +636,19 @@ class basic_list {
 
 }  // namespace detail
 
-/// A doubly linked list with 4-byte links, like std::list without the
-/// allocator parameter. Nodes are allocated in |Cage|.
+/// A doubly linked list with 4-byte links, like `std::list` without the
+/// allocator parameter.
+///
+/// Nodes are allocated in `Cage`. Every member behaves like its `std::list`
+/// counterpart; see @ref detail::basic_list for the full member list.
+///
+/// @code
+/// #include "cptr/list.hpp"
+///
+/// cptr::list<int> l{1, 2, 3};
+/// l.push_front(0);
+/// l.sort();
+/// @endcode
 template <class T, class Cage = default_cage>
 using list = detail::basic_list<T, Cage, true>;
 

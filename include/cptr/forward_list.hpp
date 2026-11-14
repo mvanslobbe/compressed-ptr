@@ -18,6 +18,9 @@
 namespace cptr {
 namespace detail {
 
+/// The class behind cptr::forward_list; use that alias. Its members behave like
+/// those of `std::forward_list`.
+///
 /// The list behind cptr::forward_list. Compressed = false gives the same
 /// list with raw 8-byte links, for the benchmarks.
 ///
@@ -179,7 +182,7 @@ class basic_forward_list {
   iterator insert_after(const_iterator pos, T&& v) {
     return emplace_after(pos, std::move(v));
   }
-  /// Returns the last element inserted, or |pos| if none.
+  /// Returns the last element inserted, or `pos` if none.
   iterator insert_after(const_iterator pos, size_type n, const T& v) {
     return insert_each(pos, [&](auto&& add) {
       for (; n; n--) {
@@ -199,14 +202,14 @@ class basic_forward_list {
     return insert_after(pos, values.begin(), values.end());
   }
 
-  /// Erases the element after |pos| and returns the one after that.
+  /// Erases the element after `pos` and returns the one after that.
   iterator erase_after(const_iterator pos) noexcept {
     node_base* n = pos.node_->next;
     pos.node_->next = n->next;
     delete_node(n);
     return iterator(pos.node_->next);
   }
-  /// Erases the elements strictly between |first| and |last|.
+  /// Erases the elements strictly between `first` and `last`.
   iterator erase_after(const_iterator first, const_iterator last) noexcept {
     node_base* n = first.node_->next;
     first.node_->next = last.node_;
@@ -227,14 +230,14 @@ class basic_forward_list {
     resize_with(n, [&]() -> const T& { return v; });
   }
 
-  /// Move all of |other| after |pos|.
+  /// Move all of `other` after `pos`.
   void splice_after(const_iterator pos, basic_forward_list& other) noexcept {
     splice_after(pos, other, other.before_begin(), other.end());
   }
   void splice_after(const_iterator pos, basic_forward_list&& other) noexcept {
     splice_after(pos, other);
   }
-  /// Move the element after |it| in |other| to after |pos|.
+  /// Move the element after `it` in `other` to after `pos`.
   void splice_after(const_iterator pos, basic_forward_list&,
                     const_iterator it) noexcept {
     node_base* n = it.node_->next;
@@ -249,7 +252,7 @@ class basic_forward_list {
                     const_iterator it) noexcept {
     splice_after(pos, other, it);
   }
-  /// Move the elements strictly between |first| and |last| to after |pos|.
+  /// Move the elements strictly between `first` and `last` to after `pos`.
   void splice_after(const_iterator pos, basic_forward_list&,
                     const_iterator first, const_iterator last) noexcept {
     node_base* begin = first.node_->next;
@@ -269,7 +272,7 @@ class basic_forward_list {
     splice_after(pos, other, first, last);
   }
 
-  /// Merge sorted |other| into this sorted list; stable, this list's
+  /// Merge sorted `other` into this sorted list; stable, this list's
   /// elements come first among equals.
   template <class Compare = std::less<>>
   void merge(basic_forward_list& other, Compare comp = Compare()) {
@@ -321,7 +324,7 @@ class basic_forward_list {
     head_.next = prev;
   }
 
-  /// Unlinked nodes are destroyed only at the end, so |value| may refer to
+  /// Unlinked nodes are destroyed only at the end, so `value` may refer to
   /// an element of this list.
   size_type remove(const T& value) {
     return remove_if([&](const T& v) { return v == value; });
@@ -469,8 +472,20 @@ class basic_forward_list {
 
 }  // namespace detail
 
-/// A singly linked list with 4-byte links, like std::forward_list without
-/// the allocator parameter. Nodes are allocated in |Cage|.
+/// A singly linked list with 4-byte links, like `std::forward_list` without
+/// the allocator parameter.
+///
+/// Nodes are allocated in `Cage`; an empty list allocates nothing. Every
+/// member behaves like its `std::forward_list` counterpart; see
+/// @ref detail::basic_forward_list for the full member list.
+///
+/// @code
+/// #include "cptr/forward_list.hpp"
+///
+/// cptr::forward_list<int> f{3, 1, 2};
+/// f.push_front(0);
+/// f.sort();
+/// @endcode
 template <class T, class Cage = default_cage>
 using forward_list = detail::basic_forward_list<T, Cage, true>;
 

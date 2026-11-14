@@ -11,6 +11,18 @@
 
 namespace cptr {
 
+/// An allocator whose `pointer` type is cptr::ptr, so that containers that
+/// take their link type from the allocator get 4-byte links.
+///
+/// plf::list is one such container. Its nodes link to a sentinel inside the
+/// list object, so the list object must be in the cage as well.
+///
+/// @code
+/// using list = plf::list<int, cptr::fancy_allocator<int>>;
+/// cptr::ptr<list> l = cptr::make<list>();  // the list object in the cage
+/// l->push_back(1);
+/// cptr::destroy(l);
+/// @endcode
 template <class T, class Cage = default_cage>
 class fancy_allocator {
  public:

@@ -23,6 +23,9 @@
 namespace cptr {
 namespace detail {
 
+/// The class behind cptr::unordered_map; use that alias. Its members behave
+/// like those of `std::unordered_map`.
+///
 /// The map behind cptr::unordered_map. Compressed = false gives the same
 /// table with raw 8-byte links, which the benchmarks compare against.
 ///
@@ -186,12 +189,12 @@ class basic_unordered_map {
   hasher hash_function() const { return hash_; }
   key_equal key_eq() const { return eq_; }
 
-  /// Make room for |n| elements without exceeding max_load_factor().
+  /// Make room for `n` elements without exceeding max_load_factor().
   void reserve(size_type n) {
     rehash(size_type(std::ceil(float(n) / max_load_)));
   }
 
-  /// Use at least |n| buckets, and enough for max_load_factor(). The count
+  /// Use at least `n` buckets, and enough for max_load_factor(). The count
   /// is rounded up to a power of two.
   void rehash(size_type n) {
     size_type need =
@@ -498,9 +501,24 @@ class basic_unordered_map {
 
 }  // namespace detail
 
-/// A hash map with 4-byte links, like std::unordered_map without the
-/// allocator parameter, node handles, and the bucket interface. Nodes and
-/// buckets are allocated in |Cage|.
+/// A hash map with 4-byte links, like `std::unordered_map` without the
+/// allocator parameter, node handles and the bucket interface.
+///
+/// Separate chaining; nodes and buckets are allocated in `Cage`: about 20
+/// bytes per element for 4-byte keys and values, against 44 for
+/// `std::unordered_map`. Every member behaves like its
+/// `std::unordered_map` counterpart; see @ref detail::basic_unordered_map
+/// for the full member list. Lookup is heterogeneous when both `Hash` and
+/// `KeyEqual` are transparent.
+///
+/// @code
+/// #include "cptr/unordered_map.hpp"
+///
+/// cptr::unordered_map<std::uint32_t, float> prices;
+/// prices.reserve(1000);
+/// prices[42] = 9.5f;
+/// if (auto it = prices.find(42); it != prices.end()) { /* ... */ }
+/// @endcode
 template <class K, class V, class Hash = std::hash<K>,
           class KeyEqual = std::equal_to<K>, class Cage = default_cage>
 using unordered_map =

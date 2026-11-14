@@ -72,7 +72,7 @@ namespace cptr::detail {
 
 namespace cptr::detail {
 
-/// Reserve |size| bytes of inaccessible address space aligned to |align|.
+/// Reserve `size` bytes of inaccessible address space aligned to `align`.
 /// Returns nullptr on failure.
 inline void* reserve_aligned(std::size_t size, std::size_t align) noexcept {
 #if defined(_WIN32)
@@ -508,7 +508,7 @@ class CPTR_VISIBLE cage {
   static constexpr std::size_t kRetainMax = 64 * 1024 * 1024;
   static constexpr std::uint8_t kEmptySlab = 0xFC;
 
-  /// Bookkeeping for small-block slabs, one entry per span. |start| is set
+  /// Bookkeeping for small-block slabs, one entry per span. `start` is set
   /// for every span of a slab; the other fields only at its first span.
   struct slab_meta {
     std::uint32_t start;
@@ -589,7 +589,7 @@ class CPTR_VISIBLE cage {
     std::array<std::uint32_t, detail::kClassSizes.size()> count{};
     std::array<std::array<std::uint32_t, kRecent>, detail::kClassSizes.size()>
         blocks;
-    /// Bytes in |blocks|. Only the owning thread writes it.
+    /// Bytes in `blocks`. Only the owning thread writes it.
     std::atomic<std::size_t> cached{0};
     thread_cache* next = nullptr;
     thread_cache* prev = nullptr;
@@ -633,7 +633,7 @@ class CPTR_VISIBLE cage {
     return n < 4 ? 4 : n > kRecent ? kRecent : n;
   }
 
-  /// Fill half of this thread's cache for |cls| from the slabs.
+  /// Fill half of this thread's cache for `cls` from the slabs.
   static bool refill(thread_cache& tc, int cls) noexcept {
     state_type& st = state();
     std::uint32_t block_size = detail::kClassSizes[cls];
@@ -672,7 +672,7 @@ class CPTR_VISIBLE cage {
     return n > 0;
   }
 
-  /// Return the oldest |k| blocks of this thread's cache for |cls| to their
+  /// Return the oldest `k` blocks of this thread's cache for `cls` to their
   /// slabs.
   static void flush(thread_cache& tc, int cls, std::uint32_t k) noexcept {
     if (k == 0) {
@@ -754,7 +754,7 @@ class CPTR_VISIBLE cage {
     }
   }
 
-  /// Take |count| spans, reusing a free run if one is big enough, and commit
+  /// Take `count` spans, reusing a free run if one is big enough, and commit
   /// them. Returns 0 on failure.
   static std::uint32_t take_spans(std::uint32_t count) noexcept {
     std::uint32_t first = take_spans_once(count);
@@ -766,7 +766,7 @@ class CPTR_VISIBLE cage {
     return first;
   }
 
-  /// A parked empty slab of |count| spans, most recently emptied first, as
+  /// A parked empty slab of `count` spans, most recently emptied first, as
   /// its memory is still resident. Returns 0 if there is none.
   static std::uint32_t reuse_empty_slab(std::uint32_t count) noexcept {
     auto& empty = state().empty;
@@ -798,7 +798,7 @@ class CPTR_VISIBLE cage {
     purge_empty_slabs(now - kRetainMs);
   }
 
-  /// Purge parked slabs emptied before |before_ms|, and the oldest beyond
+  /// Purge parked slabs emptied before `before_ms`, and the oldest beyond
   /// kRetainMax. purge_empty_slabs(INT64_MAX) purges all of them.
   static void purge_empty_slabs(std::int64_t before_ms) noexcept {
     state_type& st = state();
@@ -996,9 +996,9 @@ class CPTR_VISIBLE cage {
     release_run(first, count);
   }
 
-  /// Decommit |count| spans from |first| and record them as a free run,
+  /// Decommit `count` spans from `first` and record them as a free run,
   /// merged with free neighbours.
-  /// |purge| releases the pages but keeps the mapping, which is cheaper for
+  /// `purge` releases the pages but keeps the mapping, which is cheaper for
   /// slabs; large runs are decommitted, so stray accesses fault.
   static void release_run(std::uint32_t first, std::uint32_t count,
                           bool purge = false) noexcept {
@@ -1050,6 +1050,18 @@ struct CPTR_VISIBLE default_cage : cage<default_cage> {};
 
 namespace cptr {
 
+/// A standard allocator that places objects in the cage, so that any std
+/// container's elements can be pointed to with a 4-byte cptr::ptr.
+///
+/// The container's own links stay 8 bytes; for 4-byte links use the
+/// cptr containers, or @ref fancy_allocator with a container that supports
+/// fancy pointers.
+///
+/// @code
+/// std::vector<node, cptr::allocator<node>> nodes;
+/// nodes.reserve(1000);
+/// cptr::ptr<node> first = &nodes[0];  // the elements are in the cage
+/// @endcode
 template <class T, class Cage = default_cage>
 class allocator {
  public:
@@ -1095,9 +1107,46 @@ class allocator {
 #include <utility>
 
 
+/// compressed-ptr: 4-byte pointers and containers for 64-bit C++20.
+///
+/// Objects live in a *cage*, a reserved region of up to 4 GiB (or 64 GiB
+/// with a shift). A pointer into the cage is stored as a 32-bit offset, which
+/// halves the size of every link. Start here:
+///
+/// @li Containers: @ref list, @ref forward_list, @ref ordered_map and
+///     @ref unordered_map, the std interfaces with 4-byte links.
+/// @li Your own nodes: allocate with @ref make, point with @ref ptr (or
+///     @ref nonnull_ptr), pack two pointers with @ref ptr_pair, free with
+///     @ref destroy.
+/// @li Other containers: @ref allocator puts their elements in the cage;
+///     @ref fancy_allocator gives containers that support fancy pointers
+///     4-byte links.
+/// @li Cages: @ref default_cage, your own @ref cage, @ref user_cage with your
+///     own allocator, or @ref mapped_cage to keep data in a file.
+///
+/// The one rule: only compress pointers to objects allocated in the cage.
+/// Debug builds assert it.
+///
+/// @code
+/// #include "cptr/all.hpp"
+///
+/// struct node {
+///   cptr::ptr_pair<node> children;  // two 4-byte pointers
+///   int key;
+/// };
+///
+/// int main() {
+///   cptr::list<int> l{1, 2, 3};             // like std::list, half the memory
+///   cptr::ptr<node> n = cptr::make<node>();  // a node in the cage
+///   n->key = l.back();
+///   cptr::destroy(n);
+/// }
+/// @endcode
+///
+/// Guide, benchmarks and examples: https://mvanslobbe.github.io/compressed-ptr/
 namespace cptr {
 
-/// A nullable pointer to a T inside |Cage|, stored in 4 bytes. Use it as
+/// A nullable pointer to a T inside `Cage`, stored in 4 bytes. Use it as
 /// ptr<T> or strict_ptr<T>, declared below.
 ///
 /// ptr converts implicitly from and to T*, so it can replace a raw pointer
@@ -1110,12 +1159,17 @@ namespace cptr {
 template <class T, class Cage, bool Strict>
 class basic_ptr {
  public:
+  /// The type pointed to.
   using element_type = T;
+  /// The cage the pointer is compressed against.
   using cage_type = Cage;
+  /// The iterator and std::pointer_traits types below let ptr serve as an
+  /// allocator's pointer type, which must be a random access iterator.
   using difference_type = std::ptrdiff_t;
+  /// The same kind of pointer to a `U`, for std::pointer_traits.
   template <class U>
   using rebind = basic_ptr<U, Cage, Strict>;
-  /// An allocator's pointer type must be a random access iterator.
+  /// The pointee type without cv-qualifiers, as for an iterator.
   using value_type = std::remove_cv_t<T>;
   using pointer = T*;
   using reference = std::add_lvalue_reference_t<T>;
@@ -1167,45 +1221,59 @@ class basic_ptr {
     return *this;
   }
 
+  /// The raw pointer, or `nullptr`: one add and a conditional move.
   T* get() const noexcept { return static_cast<T*>(Cage::decompress(bits_)); }
+  /// Converts implicitly to the raw pointer, so a `ptr` can be passed
+  /// wherever a `T*` is expected.
   operator T*() const noexcept { return get(); }
-  /// Dereferencing null is undefined, so these skip the null check.
+  /// Member access. Dereferencing null is undefined, so this skips the null
+  /// check and costs a single add.
   T* operator->() const noexcept {
     return static_cast<T*>(Cage::decompress_nonnull(bits_));
   }
+  /// The object pointed to. Like `operator->`, it skips the null check.
   template <class U = T>
     requires(!std::is_void_v<U>)
   U& operator*() const noexcept {
     return *static_cast<U*>(Cage::decompress_nonnull(bits_));
   }
+  /// True unless null.
   constexpr explicit operator bool() const noexcept { return bits_ != 0; }
 
-  /// Pointer arithmetic, so ptr can serve as an allocator's pointer type for
-  /// containers that index into blocks of elements. It works on the
-  /// compressed offset directly, so it is as cheap as raw pointer arithmetic.
-  /// In a shifted cage, sizeof(T) must be a multiple of the granularity.
+  /// Element `i` counting from this one, as for a raw pointer.
+  ///
+  /// Pointer arithmetic (`[]`, `+`, `-`, `+=`, `-=`, `++`, `--`) lets ptr
+  /// serve as an allocator's pointer type for containers that index into
+  /// blocks of elements. It works on the compressed offset directly, so it
+  /// costs the same as raw pointer arithmetic, but a loop over an array does
+  /// not vectorise: convert to `T*` with get() for hot loops. In a shifted
+  /// cage, `sizeof(T)` must be a multiple of the granularity.
   template <class U = T>
     requires(!std::is_void_v<U>)
   U& operator[](std::ptrdiff_t i) const noexcept {
     return *(*this + i);
   }
+  /// Advance by `n` elements.
   constexpr basic_ptr& operator+=(std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
     bits_ += static_cast<std::uint32_t>(n * step());
     return *this;
   }
+  /// Go back by `n` elements.
   constexpr basic_ptr& operator-=(std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
     bits_ -= static_cast<std::uint32_t>(n * step());
     return *this;
   }
+  /// Advance by one element.
   constexpr basic_ptr& operator++() noexcept
     requires(!std::is_void_v<T>)
   {
     return *this += 1;
   }
+  /// Go back by one element.
   constexpr basic_ptr& operator--() noexcept
     requires(!std::is_void_v<T>)
   {
@@ -1225,6 +1293,7 @@ class basic_ptr {
     --*this;
     return old;
   }
+  /// The pointer `n` elements further on.
   friend constexpr basic_ptr operator+(basic_ptr p, std::ptrdiff_t n) noexcept
     requires(!std::is_void_v<T>)
   {
@@ -1240,6 +1309,7 @@ class basic_ptr {
   {
     return p -= n;
   }
+  /// The number of elements between two pointers into the same array.
   friend constexpr std::ptrdiff_t operator-(basic_ptr a, basic_ptr b) noexcept
     requires(!std::is_void_v<T>)
   {
@@ -1316,16 +1386,21 @@ class nonnull_ptr {
   using element_type = T;
   using cage_type = Cage;
 
+  /// Compress `p`, which must be in the cage and must not be null.
   nonnull_ptr(T* p) noexcept : bits_(Cage::compress(p)) {
     CPTR_CHECK(p, "nonnull_ptr must not be null");
   }
   nonnull_ptr(std::nullptr_t) = delete;
 
+  /// The raw pointer: a single add, with no null check.
   T* get() const noexcept {
     return static_cast<T*>(Cage::decompress_nonnull(bits_));
   }
+  /// Converts implicitly to the raw pointer.
   operator T*() const noexcept { return get(); }
+  /// Member access.
   T* operator->() const noexcept { return get(); }
+  /// The object pointed to.
   T& operator*() const noexcept { return *get(); }
 
   std::uint32_t bits() const noexcept { return bits_; }
@@ -1400,6 +1475,18 @@ struct std::hash<cptr::nonnull_ptr<T, Cage>> {
 
 namespace cptr {
 
+/// An allocator whose `pointer` type is cptr::ptr, so that containers that
+/// take their link type from the allocator get 4-byte links.
+///
+/// plf::list is one such container. Its nodes link to a sentinel inside the
+/// list object, so the list object must be in the cage as well.
+///
+/// @code
+/// using list = plf::list<int, cptr::fancy_allocator<int>>;
+/// cptr::ptr<list> l = cptr::make<list>();  // the list object in the cage
+/// l->push_back(1);
+/// cptr::destroy(l);
+/// @endcode
 template <class T, class Cage = default_cage>
 class fancy_allocator {
  public:
@@ -1489,6 +1576,9 @@ using link = std::conditional_t<Compressed, ptr<T, Cage>, T*>;
 namespace cptr {
 namespace detail {
 
+/// The class behind cptr::forward_list; use that alias. Its members behave like
+/// those of `std::forward_list`.
+///
 /// The list behind cptr::forward_list. Compressed = false gives the same
 /// list with raw 8-byte links, for the benchmarks.
 ///
@@ -1650,7 +1740,7 @@ class basic_forward_list {
   iterator insert_after(const_iterator pos, T&& v) {
     return emplace_after(pos, std::move(v));
   }
-  /// Returns the last element inserted, or |pos| if none.
+  /// Returns the last element inserted, or `pos` if none.
   iterator insert_after(const_iterator pos, size_type n, const T& v) {
     return insert_each(pos, [&](auto&& add) {
       for (; n; n--) {
@@ -1670,14 +1760,14 @@ class basic_forward_list {
     return insert_after(pos, values.begin(), values.end());
   }
 
-  /// Erases the element after |pos| and returns the one after that.
+  /// Erases the element after `pos` and returns the one after that.
   iterator erase_after(const_iterator pos) noexcept {
     node_base* n = pos.node_->next;
     pos.node_->next = n->next;
     delete_node(n);
     return iterator(pos.node_->next);
   }
-  /// Erases the elements strictly between |first| and |last|.
+  /// Erases the elements strictly between `first` and `last`.
   iterator erase_after(const_iterator first, const_iterator last) noexcept {
     node_base* n = first.node_->next;
     first.node_->next = last.node_;
@@ -1698,14 +1788,14 @@ class basic_forward_list {
     resize_with(n, [&]() -> const T& { return v; });
   }
 
-  /// Move all of |other| after |pos|.
+  /// Move all of `other` after `pos`.
   void splice_after(const_iterator pos, basic_forward_list& other) noexcept {
     splice_after(pos, other, other.before_begin(), other.end());
   }
   void splice_after(const_iterator pos, basic_forward_list&& other) noexcept {
     splice_after(pos, other);
   }
-  /// Move the element after |it| in |other| to after |pos|.
+  /// Move the element after `it` in `other` to after `pos`.
   void splice_after(const_iterator pos, basic_forward_list&,
                     const_iterator it) noexcept {
     node_base* n = it.node_->next;
@@ -1720,7 +1810,7 @@ class basic_forward_list {
                     const_iterator it) noexcept {
     splice_after(pos, other, it);
   }
-  /// Move the elements strictly between |first| and |last| to after |pos|.
+  /// Move the elements strictly between `first` and `last` to after `pos`.
   void splice_after(const_iterator pos, basic_forward_list&,
                     const_iterator first, const_iterator last) noexcept {
     node_base* begin = first.node_->next;
@@ -1740,7 +1830,7 @@ class basic_forward_list {
     splice_after(pos, other, first, last);
   }
 
-  /// Merge sorted |other| into this sorted list; stable, this list's
+  /// Merge sorted `other` into this sorted list; stable, this list's
   /// elements come first among equals.
   template <class Compare = std::less<>>
   void merge(basic_forward_list& other, Compare comp = Compare()) {
@@ -1792,7 +1882,7 @@ class basic_forward_list {
     head_.next = prev;
   }
 
-  /// Unlinked nodes are destroyed only at the end, so |value| may refer to
+  /// Unlinked nodes are destroyed only at the end, so `value` may refer to
   /// an element of this list.
   size_type remove(const T& value) {
     return remove_if([&](const T& v) { return v == value; });
@@ -1940,8 +2030,20 @@ class basic_forward_list {
 
 }  // namespace detail
 
-/// A singly linked list with 4-byte links, like std::forward_list without
-/// the allocator parameter. Nodes are allocated in |Cage|.
+/// A singly linked list with 4-byte links, like `std::forward_list` without
+/// the allocator parameter.
+///
+/// Nodes are allocated in `Cage`; an empty list allocates nothing. Every
+/// member behaves like its `std::forward_list` counterpart; see
+/// @ref detail::basic_forward_list for the full member list.
+///
+/// @code
+/// #include "cptr/forward_list.hpp"
+///
+/// cptr::forward_list<int> f{3, 1, 2};
+/// f.push_front(0);
+/// f.sort();
+/// @endcode
 template <class T, class Cage = default_cage>
 using forward_list = detail::basic_forward_list<T, Cage, true>;
 
@@ -1963,8 +2065,12 @@ using forward_list = detail::basic_forward_list<T, Cage, true>;
 
 
 namespace cptr {
+/// Implementation classes. Use the aliases in cptr, such as cptr::list.
 namespace detail {
 
+/// The class behind cptr::list; use that alias. Its members behave like
+/// those of `std::list`.
+///
 /// The list behind cptr::list. Compressed = false gives the same list with
 /// raw 8-byte links, which the benchmarks compare against.
 ///
@@ -2229,12 +2335,12 @@ class basic_list {
     resize_with(n, [&]() -> const T& { return v; });
   }
 
-  /// Move all of |other| before |pos|.
+  /// Move all of `other` before `pos`.
   void splice(const_iterator pos, basic_list& other) {
     splice(pos, other, other.begin(), other.end());
   }
   void splice(const_iterator pos, basic_list&& other) { splice(pos, other); }
-  /// Move the element at |it| in |other| before |pos|.
+  /// Move the element at `it` in `other` before `pos`.
   void splice(const_iterator pos, basic_list& other, const_iterator it) {
     node_base* n = it.node_;
     node_base* at = position(pos);
@@ -2249,8 +2355,8 @@ class basic_list {
   void splice(const_iterator pos, basic_list&& other, const_iterator it) {
     splice(pos, other, it);
   }
-  /// Move [first, last) of |other| before |pos|. Linear in the length of the
-  /// range when |other| is another list, to keep size() constant time.
+  /// Move [first, last) of `other` before `pos`. Linear in the length of the
+  /// range when `other` is another list, to keep size() constant time.
   void splice(const_iterator pos, basic_list& other, const_iterator first,
               const_iterator last) {
     if (first == last) {
@@ -2269,7 +2375,7 @@ class basic_list {
     splice(pos, other, first, last);
   }
 
-  /// Merge sorted |other| into this sorted list. Stable: of equal elements,
+  /// Merge sorted `other` into this sorted list. Stable: of equal elements,
   /// this list's come first.
   template <class Compare = std::less<>>
   void merge(basic_list& other, Compare comp = Compare()) {
@@ -2453,7 +2559,7 @@ class basic_list {
     at->prev = to_n;
   }
 
-  /// Returns the node after |n|.
+  /// Returns the node after `n`.
   static node_base* unlink(node_base* n) noexcept {
     node_base* prev = n->prev;
     node_base* next = n->next;
@@ -2462,7 +2568,7 @@ class basic_list {
     return next;
   }
 
-  /// Move the nodes [first, last) before |at|.
+  /// Move the nodes [first, last) before `at`.
   static void transfer(node_base* at, node_base* first,
                        node_base* last) noexcept {
     if (at == last) {
@@ -2479,7 +2585,7 @@ class basic_list {
     at->prev = tail;
   }
 
-  /// Merge two null-terminated sorted chains linked through |next|; |a|'s
+  /// Merge two null-terminated sorted chains linked through `next`; `a`'s
   /// elements come first among equals.
   template <class Compare>
   static node_base* merge_runs(node_base* a, node_base* b, Compare& comp) {
@@ -2500,7 +2606,7 @@ class basic_list {
     return head.next;
   }
 
-  /// Insert the values that |produce| passes to its callback before |pos|.
+  /// Insert the values that `produce` passes to its callback before `pos`.
   /// If one throws, the values inserted so far are removed again.
   template <class Produce>
   iterator insert_each(const_iterator pos, Produce produce) {
@@ -2579,8 +2685,19 @@ class basic_list {
 
 }  // namespace detail
 
-/// A doubly linked list with 4-byte links, like std::list without the
-/// allocator parameter. Nodes are allocated in |Cage|.
+/// A doubly linked list with 4-byte links, like `std::list` without the
+/// allocator parameter.
+///
+/// Nodes are allocated in `Cage`. Every member behaves like its `std::list`
+/// counterpart; see @ref detail::basic_list for the full member list.
+///
+/// @code
+/// #include "cptr/list.hpp"
+///
+/// cptr::list<int> l{1, 2, 3};
+/// l.push_front(0);
+/// l.sort();
+/// @endcode
 template <class T, class Cage = default_cage>
 using list = detail::basic_list<T, Cage, true>;
 
@@ -2608,6 +2725,9 @@ using list = detail::basic_list<T, Cage, true>;
 namespace cptr {
 namespace detail {
 
+/// The class behind cptr::ordered_map; use that alias. Its members behave like
+/// those of `std::map`.
+///
 /// The map behind cptr::ordered_map. Compressed = false gives the same tree
 /// with raw 8-byte links, which the benchmarks compare against.
 ///
@@ -3119,7 +3239,7 @@ class basic_ordered_map {
     node_base* existing;
   };
 
-  /// Where |key| belongs, or the node that already has it.
+  /// Where `key` belongs, or the node that already has it.
   slot find_slot(const K& key) {
     if (!header()) {
       header_ = new_header();
@@ -3259,7 +3379,7 @@ class basic_ordered_map {
     root()->color = kBlack;
   }
 
-  /// Put |v| (possibly null) where |u| was.
+  /// Put `v` (possibly null) where `u` was.
   void transplant(node_base* u, node_base* v) noexcept {
     replace_child(u, v);
     if (v) {
@@ -3371,7 +3491,7 @@ class basic_ordered_map {
     }
   }
 
-  /// Copy the subtree at |n|, colours included.
+  /// Copy the subtree at `n`, colours included.
   node_base* clone(node_base* n, node_base* parent) {
     node* copy = new_node(static_cast<node*>(n)->kv);
     copy->color = n->color;
@@ -3436,9 +3556,9 @@ class basic_ordered_map {
     return p;
   }
 
-  /// The number of black nodes on every path down from |n|, or 0 if the
+  /// The number of black nodes on every path down from `n`, or 0 if the
   /// paths differ or a red node has a red child. Counts the nodes into
-  /// |count| and checks the parent links and the key order.
+  /// `count` and checks the parent links and the key order.
   std::size_t black_height(node_base* n, std::size_t& count) const {
     if (!n) {
       return 1;
@@ -3478,8 +3598,23 @@ class basic_ordered_map {
 
 }  // namespace detail
 
-/// An ordered map with 4-byte links, like std::map without the allocator
-/// parameter and node handles. Nodes are allocated in |Cage|.
+/// An ordered map with 4-byte links, like `std::map` without the allocator
+/// parameter and node handles.
+///
+/// A red-black tree whose nodes are allocated in `Cage`: 24 bytes per
+/// element for 4-byte keys and values, against 48 for `std::map`. Every
+/// member behaves like its `std::map` counterpart; see
+/// @ref detail::basic_ordered_map for the full member list. Lookup is
+/// heterogeneous when `Compare::is_transparent` exists.
+///
+/// @code
+/// #include "cptr/ordered_map.hpp"
+///
+/// cptr::ordered_map<int, std::string> m;
+/// m[2] = "two";
+/// m.emplace(1, "one");
+/// for (auto& [key, value] : m) { /* in key order */ }
+/// @endcode
 template <class K, class V, class Compare = std::less<K>,
           class Cage = default_cage>
 using ordered_map = detail::basic_ordered_map<K, V, Compare, Cage, true>;
@@ -3647,7 +3782,7 @@ class atomic_ptr {
                                    failure_order(order));
   }
 
-  /// Blocks until the value is no longer |old| (and a notify call wakes it).
+  /// Blocks until the value is no longer `old` (and a notify call wakes it).
   void wait(T* old, std::memory_order order =
                         std::memory_order_seq_cst) const noexcept {
     bits_.wait(Cage::compress(old), order);
@@ -3704,6 +3839,9 @@ static_assert(sizeof(atomic_ptr<int>) == 4);
 namespace cptr {
 namespace detail {
 
+/// The class behind cptr::unordered_map; use that alias. Its members behave
+/// like those of `std::unordered_map`.
+///
 /// The map behind cptr::unordered_map. Compressed = false gives the same
 /// table with raw 8-byte links, which the benchmarks compare against.
 ///
@@ -3867,12 +4005,12 @@ class basic_unordered_map {
   hasher hash_function() const { return hash_; }
   key_equal key_eq() const { return eq_; }
 
-  /// Make room for |n| elements without exceeding max_load_factor().
+  /// Make room for `n` elements without exceeding max_load_factor().
   void reserve(size_type n) {
     rehash(size_type(std::ceil(float(n) / max_load_)));
   }
 
-  /// Use at least |n| buckets, and enough for max_load_factor(). The count
+  /// Use at least `n` buckets, and enough for max_load_factor(). The count
   /// is rounded up to a power of two.
   void rehash(size_type n) {
     size_type need =
@@ -4179,9 +4317,24 @@ class basic_unordered_map {
 
 }  // namespace detail
 
-/// A hash map with 4-byte links, like std::unordered_map without the
-/// allocator parameter, node handles, and the bucket interface. Nodes and
-/// buckets are allocated in |Cage|.
+/// A hash map with 4-byte links, like `std::unordered_map` without the
+/// allocator parameter, node handles and the bucket interface.
+///
+/// Separate chaining; nodes and buckets are allocated in `Cage`: about 20
+/// bytes per element for 4-byte keys and values, against 44 for
+/// `std::unordered_map`. Every member behaves like its
+/// `std::unordered_map` counterpart; see @ref detail::basic_unordered_map
+/// for the full member list. Lookup is heterogeneous when both `Hash` and
+/// `KeyEqual` are transparent.
+///
+/// @code
+/// #include "cptr/unordered_map.hpp"
+///
+/// cptr::unordered_map<std::uint32_t, float> prices;
+/// prices.reserve(1000);
+/// prices[42] = 9.5f;
+/// if (auto it = prices.find(42); it != prices.end()) { /* ... */ }
+/// @endcode
 template <class K, class V, class Hash = std::hash<K>,
           class KeyEqual = std::equal_to<K>, class Cage = default_cage>
 using unordered_map =
@@ -4242,7 +4395,7 @@ inline void purge(void* p, std::size_t size) noexcept {
 /// thread that uses the cage.
 ///
 /// - allocate(bytes, align) returns a block inside the region aligned to
-///   |align| (a power of two), or nullptr when it cannot.
+///   `align` (a power of two), or nullptr when it cannot.
 /// - deallocate(p) frees a block from allocate(). It gets no size, because
 ///   the bundled containers do not pass one.
 template <class A>
@@ -4253,7 +4406,7 @@ concept region_allocator = std::constructible_from<A, std::span<std::byte>> &&
                            };
 
 /// A cage of 2^SizeLog2 bytes, compressed like cage<Tag, SizeLog2, Shift>,
-/// whose allocations go to |Allocator|.
+/// whose allocations go to `Allocator`.
 ///
 ///   struct my_tag {};
 ///   using my_cage = cptr::user_cage<my_tag, my_allocator>;
@@ -4500,7 +4653,7 @@ class CPTR_VISIBLE mapped_cage {
   /// compresses; see cage::usable_end.
   static constexpr std::size_t usable_end = size - span_size;
 
-  /// Map the file at |path| as the cage, creating it if it does not exist.
+  /// Map the file at `path` as the cage, creating it if it does not exist.
   /// Fails if a file is already open, if the file is not a cage of this
   /// size, or if address space or the file cannot be had.
   static bool open(const char* path) noexcept {
@@ -4741,7 +4894,7 @@ class CPTR_VISIBLE mapped_cage {
     return reinterpret_cast<void*>(base_ + off);
   }
 
-  /// The smallest class that fits |bytes| and is a multiple of |align|, or
+  /// The smallest class that fits `bytes` and is a multiple of `align`, or
   /// -1 for a large allocation.
   static int size_class(std::size_t bytes, std::size_t align) noexcept {
     for (std::size_t i = 0; i < kClasses; i++) {
@@ -4758,7 +4911,7 @@ class CPTR_VISIBLE mapped_cage {
     return std::uint32_t((std::size_t(block) * 8 + span_size - 1) / span_size);
   }
 
-  /// Returns the first of |count| fresh spans, or 0 if the cage is full.
+  /// Returns the first of `count` fresh spans, or 0 if the cage is full.
   static std::uint32_t take_spans(header* h, std::uint32_t count) noexcept {
     // First fit from the freed large runs.
     std::uint32_t* link = &h->free_runs;

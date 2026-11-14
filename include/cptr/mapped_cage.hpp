@@ -64,7 +64,7 @@ class CPTR_VISIBLE mapped_cage {
   /// compresses; see cage::usable_end.
   static constexpr std::size_t usable_end = size - span_size;
 
-  /// Map the file at |path| as the cage, creating it if it does not exist.
+  /// Map the file at `path` as the cage, creating it if it does not exist.
   /// Fails if a file is already open, if the file is not a cage of this
   /// size, or if address space or the file cannot be had.
   static bool open(const char* path) noexcept {
@@ -305,7 +305,7 @@ class CPTR_VISIBLE mapped_cage {
     return reinterpret_cast<void*>(base_ + off);
   }
 
-  /// The smallest class that fits |bytes| and is a multiple of |align|, or
+  /// The smallest class that fits `bytes` and is a multiple of `align`, or
   /// -1 for a large allocation.
   static int size_class(std::size_t bytes, std::size_t align) noexcept {
     for (std::size_t i = 0; i < kClasses; i++) {
@@ -322,7 +322,7 @@ class CPTR_VISIBLE mapped_cage {
     return std::uint32_t((std::size_t(block) * 8 + span_size - 1) / span_size);
   }
 
-  /// Returns the first of |count| fresh spans, or 0 if the cage is full.
+  /// Returns the first of `count` fresh spans, or 0 if the cage is full.
   static std::uint32_t take_spans(header* h, std::uint32_t count) noexcept {
     // First fit from the freed large runs.
     std::uint32_t* link = &h->free_runs;

@@ -23,6 +23,53 @@ GCC 15, `-O2`. **Get your own numbers in one command:**
 [benchmark pages](https://mvanslobbe.github.io/compressed-ptr/benchmarks.html),
 including [compressed against raw pointers at p50 to p99.5](https://mvanslobbe.github.io/compressed-ptr/benchmarks.html#compressed-against-raw-pointers).**
 
+## Start in two minutes
+
+Header-only; C++20 and a 64-bit target (Linux, macOS, Windows; GCC, Clang,
+MSVC). A complete project, `CMakeLists.txt`:
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(hello CXX)
+set(CMAKE_CXX_STANDARD 20)
+
+include(FetchContent)
+FetchContent_Declare(compressed_ptr
+  GIT_REPOSITORY https://github.com/mvanslobbe/compressed-ptr.git
+  GIT_TAG main)
+FetchContent_MakeAvailable(compressed_ptr)
+
+add_executable(hello main.cpp)
+target_link_libraries(hello PRIVATE compressed_ptr::compressed_ptr)
+```
+
+`main.cpp`:
+
+```cpp
+#include <cstdio>
+
+#include "cptr/all.hpp"
+
+int main() {
+  cptr::list<int> l{3, 1, 2};  // was std::list<int>
+  l.sort();
+  for (int v : l) std::printf("%d ", v);
+  std::printf("\n%zu bytes per element (std::list: 24 plus malloc's)\n",
+              cptr::list<int>::node_size);
+}
+```
+
+```sh
+cmake -B build && cmake --build build && ./build/hello
+# 1 2 3
+# 12 bytes per element (std::list: 24 plus malloc's)
+```
+
+No CMake? Copy [`single_include/cptr.hpp`](single_include/cptr.hpp), write
+`#include "cptr.hpp"`, and build with `g++ -std=c++20 main.cpp`. Installed
+copies work with `find_package(compressed_ptr)` and
+`pkg-config compressed_ptr`.
+
 ## Do this, expect this
 
 **1. Swap the container.** Same interface as `std::list`, `std::map`,
@@ -31,9 +78,9 @@ including [compressed against raw pointers at p50 to p99.5](https://mvanslobbe.g
 ```cpp
 #include "cptr/all.hpp"
 
-cptr::list<int> l;                       // was std::list<int>
-cptr::ordered_map<int, Order> orders;    // was std::map<int, Order>
-cptr::unordered_map<Id, Item> items;     // was std::unordered_map<Id, Item>
+cptr::list<int> l;                              // was std::list<int>
+cptr::ordered_map<int, std::string> names;      // was std::map
+cptr::unordered_map<std::uint32_t, float> hits;  // was std::unordered_map
 ```
 
 Expect: about half the memory per element, and equal or faster operations
@@ -60,9 +107,22 @@ Expect: 4 bytes saved per pointer, more when it removes padding.
 being mapped at another address, by another process.
 
 ```cpp
+#include "cptr/list.hpp"
+#include "cptr/mapped_cage.hpp"  // POSIX only; not part of cptr/all.hpp
+
 using store = cptr::mapped_cage<struct store_tag>;
+struct history {
+  cptr::list<int, store> events;  // the list's nodes live in the file too
+};
+
 store::open("data.cage");
 auto* h = store::root<history>();  // nullptr in a new file
+if (!h) {
+  h = cptr::make<history, store>().get();
+  store::set_root(h);
+}
+h->events.push_back(42);  // still there the next time the file is opened
+store::close();
 ```
 
 Expect: no serialisation code; reopening costs one `mmap`.
@@ -89,25 +149,6 @@ int main() {
 Expect: plf::list at 12.1 instead of 24.1 bytes per element, walks 15%
 faster, sorts as fast
 ([`examples/plf_list_minimal.cpp`](examples/plf_list_minimal.cpp)).
-
-## Install
-
-Header-only; C++20 and a 64-bit target (Linux, macOS, Windows; GCC, Clang,
-MSVC).
-
-```cmake
-include(FetchContent)
-FetchContent_Declare(compressed_ptr
-  GIT_REPOSITORY https://github.com/mvanslobbe/compressed-ptr.git
-  GIT_TAG main)
-FetchContent_MakeAvailable(compressed_ptr)
-target_link_libraries(your_target PRIVATE compressed_ptr::compressed_ptr)
-```
-
-Or drop the single header
-[`single_include/cptr.hpp`](single_include/cptr.hpp) into your tree, or
-`cmake --install` and use `find_package(compressed_ptr)` or
-`pkg-config compressed_ptr`.
 
 ## Is it for you?
 
@@ -147,7 +188,7 @@ needs more than 32 GiB.
   persistence, rules and limitations, building and testing.
 - **[Benchmarks](https://mvanslobbe.github.io/compressed-ptr/benchmarks.html):** compressed against raw pointers at p50/p90/p95/p99/p99.5, memory, and
   latency tables for every container and the allocator.
-- **[API reference](https://mvanslobbe.github.io/compressed-ptr/reference/)**,
+- **[API reference](https://mvanslobbe.github.io/compressed-ptr/reference/cptr.html)**,
   [coverage report](https://mvanslobbe.github.io/compressed-ptr/coverage/),
   [benchmark history](https://mvanslobbe.github.io/compressed-ptr/history.html).
 - **[Examples](examples):** minimal programs, from two objects pointing at

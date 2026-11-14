@@ -45,7 +45,7 @@ inline void purge(void* p, std::size_t size) noexcept {
 /// thread that uses the cage.
 ///
 /// - allocate(bytes, align) returns a block inside the region aligned to
-///   |align| (a power of two), or nullptr when it cannot.
+///   `align` (a power of two), or nullptr when it cannot.
 /// - deallocate(p) frees a block from allocate(). It gets no size, because
 ///   the bundled containers do not pass one.
 template <class A>
@@ -56,7 +56,7 @@ concept region_allocator = std::constructible_from<A, std::span<std::byte>> &&
                            };
 
 /// A cage of 2^SizeLog2 bytes, compressed like cage<Tag, SizeLog2, Shift>,
-/// whose allocations go to |Allocator|.
+/// whose allocations go to `Allocator`.
 ///
 ///   struct my_tag {};
 ///   using my_cage = cptr::user_cage<my_tag, my_allocator>;

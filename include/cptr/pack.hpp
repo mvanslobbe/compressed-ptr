@@ -161,7 +161,7 @@ class atomic_ptr {
                                    failure_order(order));
   }
 
-  /// Blocks until the value is no longer |old| (and a notify call wakes it).
+  /// Blocks until the value is no longer `old` (and a notify call wakes it).
   void wait(T* old, std::memory_order order =
                         std::memory_order_seq_cst) const noexcept {
     bits_.wait(Cage::compress(old), order);

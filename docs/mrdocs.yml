@@ -13,12 +13,22 @@ file-patterns:
 include-symbols:
   - 'cptr::**'
   - 'std::hash'
+# The containers are cptr::detail::basic_* class templates behind the
+# public aliases (cptr::list = basic_list<T, Cage, true>); they are
+# documented so that the aliases lead to a member list. The rest of
+# detail is internal.
 exclude-symbols:
-  - 'cptr::detail::**'
+  - 'cptr::detail::spin_lock'
+  - 'cptr::detail::lock_guard'
+  - 'cptr::detail::kMaxSmall'
+  - 'cptr::detail::class_count'
+  - 'cptr::detail::make_class_sizes'
+  - 'cptr::detail::kClassSizes'
+  - 'cptr::detail::reserve_aligned'
+  - 'cptr::detail::commit'
+  - 'cptr::detail::decommit'
+  - 'cptr::detail::purge'
   - 'cptr::link'
-see-below:
-  - 'cptr::detail::basic_list'
-  - 'cptr::detail::basic_ordered_map'
 implementation-defined: []
 generator: html
 multipage: true

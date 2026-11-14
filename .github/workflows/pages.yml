@@ -38,7 +38,9 @@ jobs:
             -C "$RUNNER_TEMP/mrdocs" --strip-components=1
           "$RUNNER_TEMP/mrdocs/bin/mrdocs" --version
       - name: Generate
-        run: '"$RUNNER_TEMP/mrdocs/bin/mrdocs" docs/mrdocs.yml'
+        run: |
+          "$RUNNER_TEMP/mrdocs/bin/mrdocs" docs/mrdocs.yml
+          python3 scripts/decorate_reference.py build-docs/site
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

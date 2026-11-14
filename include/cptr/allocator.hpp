@@ -10,6 +10,18 @@
 
 namespace cptr {
 
+/// A standard allocator that places objects in the cage, so that any std
+/// container's elements can be pointed to with a 4-byte cptr::ptr.
+///
+/// The container's own links stay 8 bytes; for 4-byte links use the
+/// cptr containers, or @ref fancy_allocator with a container that supports
+/// fancy pointers.
+///
+/// @code
+/// std::vector<node, cptr::allocator<node>> nodes;
+/// nodes.reserve(1000);
+/// cptr::ptr<node> first = &nodes[0];  // the elements are in the cage
+/// @endcode
 template <class T, class Cage = default_cage>
 class allocator {
  public:
