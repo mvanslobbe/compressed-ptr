@@ -372,9 +372,17 @@ target_link_libraries(app PRIVATE compressed_ptr::compressed_ptr)
 ```
 
 Supported platforms: Linux, macOS and Windows on x86-64 and arm64. CI
-tests GCC 14, Clang 18, Apple Clang and MSVC 2022 on all six, plus
-AddressSanitizer, UBSan, ThreadSanitizer and coverage on Linux. Other
-compilers with full C++20 support may work but are not tested.
+runs the tests with:
+
+- GCC 12, 13, 14, 15 and 16, and Clang 16 to 22 (with libstdc++, and
+  Clang 22 also with libc++), on Linux x86-64;
+- GCC 14 on Linux arm64, Apple Clang on macOS arm64 and x86-64, and MSVC
+  2022 and clang-cl on Windows (MSVC on x86-64 and arm64);
+- AddressSanitizer, UBSan, ThreadSanitizer, a release build with
+  `CPTR_CHECKED`, and coverage, on Linux.
+
+GCC 11 compiles the library and the examples but crashes on the test
+suite, so it is not tested.
 
 ## Using it in a larger code base
 

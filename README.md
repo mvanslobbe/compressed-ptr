@@ -31,8 +31,8 @@ including [compressed against raw pointers at p50 to p99.5](https://mvanslobbe.g
 
 ## Start in two minutes
 
-Header-only; C++20 and a 64-bit target (Linux, macOS, Windows; GCC, Clang,
-MSVC). A complete project, `CMakeLists.txt`:
+Header-only; C++20 and a 64-bit target (Linux, macOS, Windows; GCC 12+,
+Clang 16+, MSVC 2022). A complete project, `CMakeLists.txt`:
 
 ```cmake
 cmake_minimum_required(VERSION 3.21)

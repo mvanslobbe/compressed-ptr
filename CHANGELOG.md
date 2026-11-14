@@ -48,7 +48,7 @@ First public version.
   `ptr`, `ptr_pair::first()` and `tagged_ptr::get()` on null, and the size
   class functions.
 - Tests, sanitizer and fuzzing CI (including a release build with
-  `CPTR_CHECKED`), benchmarks, and documentation on GitHub Pages.
+  `CPTR_CHECKED`, GCC 12 to 16, Clang 16 to 22, libc++ and clang-cl), benchmarks, and documentation on GitHub Pages.
 
 ### Changed
 
