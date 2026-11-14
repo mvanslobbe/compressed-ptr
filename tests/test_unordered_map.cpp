@@ -74,6 +74,25 @@ static_assert(requires(const string_map& m, std::string_view key) {
   m.count(key);
 });
 
+#if defined(CPTR_HETEROGENEOUS_ERASE)
+TEST(unordered_map_heterogeneous_erase) {
+  string_map m{{"a", 1}, {"bb", 2}};
+  std::string_view key = "bb";
+  CHECK(m.erase(key) == 1);
+  CHECK(m.erase(key) == 0);
+  CHECK(m.erase("a") == 1);
+  CHECK(m.empty());
+  m.emplace("c", 3);
+  m.erase(m.begin());
+  CHECK(m.empty());
+}
+template <class M, class Key>
+concept umap_can_erase = requires(M& m, Key k) { m.erase(k); };
+static_assert(
+    !umap_can_erase<cptr::unordered_map<std::string, int>, std::string_view>);
+static_assert(umap_can_erase<string_map, std::string_view>);
+#endif
+
 template <class A, class B>
 void check_same(const A& mine, const B& ref) {
   CHECK(mine.size() == ref.size());

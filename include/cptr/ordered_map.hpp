@@ -454,7 +454,27 @@ class basic_ordered_map {
     }
     return iterator(last.node_);
   }
-  size_type erase(const K& key) {
+  /// Erases the element with the given key, if there is one; returns how
+  /// many were erased (0 or 1).
+  size_type erase(const K& key) { return erase_key(key); }
+#if defined(CPTR_HETEROGENEOUS_ERASE)
+  /// C++23's heterogeneous erase: erases the element whose key is
+  /// equivalent to `key` without building a `K`. Only with a transparent
+  /// `Compare`, and only when `Key` does not convert to an iterator. Opt in
+  /// by defining `CPTR_HETEROGENEOUS_ERASE` before including this header
+  /// (on every include, so that every translation unit sees the same
+  /// class).
+  template <class Key>
+    requires(kTransparent<Key> && !std::is_convertible_v<Key &&, iterator> &&
+             !std::is_convertible_v<Key &&, const_iterator>)
+  size_type erase(Key&& key) {
+    return erase_key(key);
+  }
+#endif
+
+ private:
+  template <class Key>
+  size_type erase_key(const Key& key) {
     node_base* n = find_node(key);
     if (n == header()) {
       return 0;
@@ -463,6 +483,7 @@ class basic_ordered_map {
     return 1;
   }
 
+ public:
   void clear() noexcept {
     if (!header()) {
       return;
@@ -992,7 +1013,8 @@ class basic_ordered_map {
 /// node) and no get_allocator(); hints are accepted but not used, so a
 /// hinted insertion costs a full search; and copy assignment gives the
 /// strong guarantee. See @ref detail::basic_ordered_map for the full member
-/// list. Lookup is heterogeneous when `Compare::is_transparent` exists.
+/// list. Lookup is heterogeneous when `Compare::is_transparent` exists; so
+/// is erase, C++23 style, when `CPTR_HETEROGENEOUS_ERASE` is defined.
 ///
 /// @code
 /// #include "cptr/ordered_map.hpp"

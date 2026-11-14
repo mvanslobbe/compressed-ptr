@@ -40,7 +40,8 @@ First public version.
   a `memmove`.
 - `unordered_map`: hinted `insert`, `emplace_hint`, hinted and rvalue-key
   `try_emplace` and `insert_or_assign` (so `std::inserter` works),
-  heterogeneous `equal_range`, `max_bucket_count()`. `ordered_map`:
+  heterogeneous `equal_range`, `max_bucket_count()`. C++23's heterogeneous
+  `erase` on both maps, when `CPTR_HETEROGENEOUS_ERASE` is defined. `ordered_map`:
   `try_emplace` and `insert_or_assign` with an rvalue key, and their hinted
   forms.
 - `constexpr` null paths: `get()`, conversions and comparisons of a null

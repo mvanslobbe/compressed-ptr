@@ -235,6 +235,11 @@ the measurements.
   explicit `strict_ptr<T>(raw)` constructor and no assignment from `T*`;
   it still converts to `T*` and to `ptr<T>` implicitly, while a `ptr<T>`
   becomes a `strict_ptr<T>` only explicitly.
+* **Heterogeneous erase is opt-in.** C++23 lets `erase` take any key type a
+  transparent hash and comparator accept (`m.erase(std::string_view(k))`).
+  The maps have it when `CPTR_HETEROGENEOUS_ERASE` is defined. Define it for
+  the whole program (on the command line, not in one source file), because
+  it changes the class.
 * **64-bit only.** A 32-bit target already has 4-byte pointers.
 * **Thread safety is that of the std containers.** Allocating and freeing in
   a cage is thread-safe. A container may be read from several threads at

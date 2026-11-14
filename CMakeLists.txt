@@ -49,6 +49,9 @@ if(COMPRESSED_PTR_BUILD_TESTS)
     tests/test_forward_list.cpp
     $<$<NOT:$<PLATFORM_ID:Windows>>:tests/test_mapped.cpp>)
   target_link_libraries(compressed_ptr_tests PRIVATE compressed_ptr Threads::Threads)
+  # The opt-in C++23 heterogeneous erase is tested here; the other test
+  # executables, the examples and the single-header test build without it.
+  target_compile_definitions(compressed_ptr_tests PRIVATE CPTR_HETEROGENEOUS_ERASE)
   if(MSVC)
     # The tests CHECK constant expressions and pad aligned test types on
     # purpose.

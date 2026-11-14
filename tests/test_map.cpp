@@ -7,6 +7,7 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "check.hpp"
@@ -242,6 +243,28 @@ TEST(map_transparent_lookup) {
   CHECK(m.count("c") == 0);
   CHECK(m.lower_bound("b")->first == "bb");
 }
+
+#if defined(CPTR_HETEROGENEOUS_ERASE)
+TEST(map_heterogeneous_erase) {
+  cptr::ordered_map<std::string, int, std::less<>> m{{"a", 1}, {"bb", 2}};
+  std::string_view key = "bb";
+  CHECK(m.erase(key) == 1);
+  CHECK(m.erase(key) == 0);
+  CHECK(m.erase("a") == 1);
+  CHECK(m.empty());
+  // An iterator still selects erase(iterator).
+  m.emplace("c", 3);
+  m.erase(m.begin());
+  CHECK(m.empty());
+}
+// Without a transparent comparator only erase(const K&) exists.
+template <class M, class Key>
+concept map_can_erase = requires(M& m, Key k) { m.erase(k); };
+static_assert(
+    !map_can_erase<cptr::ordered_map<std::string, int>, std::string_view>);
+static_assert(map_can_erase<cptr::ordered_map<std::string, int, std::less<>>,
+                            std::string_view>);
+#endif
 
 TEST(map_end_stays_valid) {
   cptr::ordered_map<int, int> m;
