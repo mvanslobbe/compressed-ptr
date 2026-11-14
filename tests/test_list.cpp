@@ -4,6 +4,7 @@
 #include <compare>
 #include <list>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -260,4 +261,69 @@ TEST(list_constructors_and_strings) {
   CHECK(a.size() == 1);
   swap(a, c);
   CHECK(a.size() == 3 && c.size() == 1);
+}
+
+namespace {
+
+// A cage of its own, so that allocated_bytes() shows exactly what the list
+// tests leak: ASan cannot see inside the cage.
+struct list_leak_tag {};
+using leak_cage = cptr::cage<list_leak_tag, 24>;
+using leak_list = cptr::list<int, leak_cage>;
+
+// A comparison that throws on its countdown'th call.
+struct throwing_less {
+  int* countdown;
+  bool operator()(int a, int b) const {
+    if ((*countdown)-- == 0) {
+      throw std::runtime_error("comparison failed");
+    }
+    return a < b;
+  }
+};
+
+// The list's links agree in both directions and with size().
+template <class L>
+bool consistent(const L& l) {
+  std::vector<int> forward(l.begin(), l.end());
+  std::vector<int> backward(l.rbegin(), l.rend());
+  std::reverse(backward.begin(), backward.end());
+  return forward.size() == l.size() && forward == backward;
+}
+
+template <class L>
+std::vector<int> sorted_values(const L& l) {
+  std::vector<int> v(l.begin(), l.end());
+  std::sort(v.begin(), v.end());
+  return v;
+}
+
+}  // namespace
+
+TEST(list_sort_with_throwing_comparison_keeps_every_node) {
+  // Before the fix the nodes merged so far were left detached: the list
+  // walked off a null link and leaked them.
+  std::size_t before = leak_cage::allocated_bytes();
+  for (int n : {2, 3, 6, 17, 64}) {
+    for (int at = 0; at < 4 * n; at++) {
+      leak_list l;
+      for (int i = 0; i < n; i++) {
+        l.push_back((i * 7) % n);
+      }
+      std::vector<int> want = sorted_values(l);
+      int countdown = at;
+      bool threw = false;
+      try {
+        l.sort(throwing_less{&countdown});
+      } catch (const std::runtime_error&) {
+        threw = true;
+      }
+      CHECK(consistent(l));
+      CHECK(sorted_values(l) == want);
+      if (!threw) {
+        CHECK(std::is_sorted(l.begin(), l.end()));
+      }
+    }
+  }
+  CHECK(leak_cage::allocated_bytes() == before);
 }

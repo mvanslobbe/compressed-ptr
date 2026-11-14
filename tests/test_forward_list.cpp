@@ -1,9 +1,11 @@
 // cptr::forward_list against std::forward_list: the interface, node size,
 // and a long random sequence of every operation compared step by step.
+#include <algorithm>
 #include <compare>
 #include <forward_list>
 #include <iterator>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -230,4 +232,80 @@ TEST(forward_list_sort_is_stable_and_strings_work) {
   CHECK(s == t);
   cptr::forward_list<std::string> u = std::move(s);
   CHECK(s.empty() && u == t);
+}
+
+namespace {
+
+struct fwd_leak_tag {};
+using leak_cage = cptr::cage<fwd_leak_tag, 24>;
+using leak_list = cptr::forward_list<int, leak_cage>;
+
+// A comparison that throws on its countdown'th call.
+struct throwing_less {
+  int* countdown;
+  bool operator()(int a, int b) const {
+    if ((*countdown)-- == 0) {
+      throw std::runtime_error("comparison failed");
+    }
+    return a < b;
+  }
+};
+
+template <class L>
+std::vector<int> sorted_values(const L& l) {
+  std::vector<int> v(l.begin(), l.end());
+  std::sort(v.begin(), v.end());
+  return v;
+}
+
+}  // namespace
+
+TEST(forward_list_merge_with_throwing_comparison_owns_each_node_once) {
+  // Before the fix the other list kept its head after a throw, so nodes
+  // already merged into this list were owned twice and freed twice.
+  std::size_t before = leak_cage::allocated_bytes();
+  for (int at = 0; at < 8; at++) {
+    leak_list a{1, 3, 5}, b{2, 4, 6};
+    int countdown = at;
+    bool threw = false;
+    try {
+      a.merge(b, throwing_less{&countdown});
+    } catch (const std::runtime_error&) {
+      threw = true;
+    }
+    CHECK(threw == (at < 5));
+    std::vector<int> all(a.begin(), a.end());
+    all.insert(all.end(), b.begin(), b.end());
+    std::sort(all.begin(), all.end());
+    CHECK(all == std::vector<int>({1, 2, 3, 4, 5, 6}));
+    CHECK(std::is_sorted(a.begin(), a.end()));
+    CHECK(std::is_sorted(b.begin(), b.end()));
+  }
+  CHECK(leak_cage::allocated_bytes() == before);
+}
+
+TEST(forward_list_sort_with_throwing_comparison_keeps_every_node) {
+  // Before the fix the runs in the merge bins were lost and leaked.
+  std::size_t before = leak_cage::allocated_bytes();
+  for (int n : {2, 3, 6, 17, 64}) {
+    for (int at = 0; at < 4 * n; at++) {
+      leak_list l;
+      for (int i = 0; i < n; i++) {
+        l.push_front((i * 7) % n);
+      }
+      std::vector<int> want = sorted_values(l);
+      int countdown = at;
+      bool threw = false;
+      try {
+        l.sort(throwing_less{&countdown});
+      } catch (const std::runtime_error&) {
+        threw = true;
+      }
+      CHECK(sorted_values(l) == want);
+      if (!threw) {
+        CHECK(std::is_sorted(l.begin(), l.end()));
+      }
+    }
+  }
+  CHECK(leak_cage::allocated_bytes() == before);
 }

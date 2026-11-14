@@ -1,6 +1,9 @@
 // cptr::unordered_map against std::unordered_map: the interface, node size,
 // and a long random sequence of operations compared step by step.
+#include <bit>
+#include <cstdint>
 #include <map>
+#include <memory>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -16,6 +19,8 @@ using int_map = cptr::unordered_map<int, int>;
 
 static_assert(std::is_nothrow_move_constructible_v<int_map>);
 static_assert(std::forward_iterator<int_map::iterator>);
+// The node, the compressed bucket array and its log2 size.
+static_assert(sizeof(int_map::iterator) == 16);
 static_assert(std::forward_iterator<int_map::const_iterator>);
 // next link and 32-bit hash in 8 bytes, then the pair.
 static_assert(int_map::node_size == 16);
@@ -189,4 +194,70 @@ TEST(unordered_map_grows_and_reserves) {
   for (std::uint32_t i = 0; i < 100000; i++) {
     CHECK(m.at(i) == (i % 4096 == 0 ? i / 4096 : i));
   }
+}
+
+TEST(unordered_map_iterators_survive_move_and_swap) {
+  // Before the fix an iterator held a pointer to the map object, so after a
+  // move it read the moved-from (or freed) map, and after a swap the other
+  // map's buckets, and stopped early or walked freed memory.
+  auto p = std::make_unique<int_map>();
+  for (int i = 0; i < 100; i++) {
+    (*p)[i] = i;
+  }
+  int_map::iterator it = p->begin();
+  int_map moved = std::move(*p);
+  p.reset();
+  std::size_t walked = 0;
+  for (; it != moved.end(); ++it) {
+    walked++;
+  }
+  CHECK(walked == 100);
+
+  int_map a, b;
+  for (int i = 0; i < 100; i++) {
+    a[i] = i;
+  }
+  b[1000] = 1;
+  int_map::const_iterator from_a = a.cbegin();
+  a.swap(b);
+  walked = 0;
+  for (; from_a != b.cend(); ++from_a) {
+    walked++;
+  }
+  CHECK(walked == 100);
+
+  int_map c;
+  c[5] = 5;
+  auto in_c = c.begin();
+  c = std::move(b);
+  CHECK(in_c != c.end());
+  b = int_map{{7, 7}};
+  auto in_b = b.find(7);
+  std::swap(b, c);
+  CHECK(in_b != b.end() && in_b->first == 7 && std::next(in_b) == c.end());
+}
+
+TEST(unordered_map_too_many_buckets_throws_length_error) {
+  // Before the fix rehash computed count * sizeof(link) in size_t, which
+  // wrapped and allocated a tiny array, and reserve(SIZE_MAX) converted an
+  // out-of-range float to an integer (undefined behaviour).
+  int_map m{{1, 1}, {2, 2}};
+  std::size_t buckets = m.bucket_count();
+  auto expect_length_error = [&](auto&& f) {
+    bool threw = false;
+    try {
+      f();
+    } catch (const std::length_error&) {
+      threw = true;
+    }
+    CHECK(threw);
+    CHECK(m.bucket_count() == buckets && m.size() == 2 && m.at(2) == 2);
+  };
+  expect_length_error([&] { m.rehash(std::size_t(1) << 62); });
+  expect_length_error([&] { m.rehash(int_map::max_bucket_count() + 1); });
+  expect_length_error([&] { m.reserve(SIZE_MAX); });
+  expect_length_error([&] { m.max_load_factor(1e-30f); });
+  CHECK(m.max_load_factor() == 1.0f);
+  CHECK(std::has_single_bit(int_map::max_bucket_count()));
+  CHECK(int_map::max_bucket_count() * 4 <= cptr::default_cage::usable_end);
 }

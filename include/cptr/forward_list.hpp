@@ -273,13 +273,23 @@ class basic_forward_list {
   }
 
   /// Merge sorted `other` into this sorted list; stable, this list's
-  /// elements come first among equals.
+  /// elements come first among equals. If `comp` throws, the elements
+  /// merged so far and the rest of this list stay here, the rest of `other`
+  /// stays in `other`, and the exception propagates.
   template <class Compare = std::less<>>
   void merge(basic_forward_list& other, Compare comp = Compare()) {
     if (&other == this) {
       return;
     }
-    head_.next = merge_runs(head_.next, other.head_.next, comp);
+    node_base* a = head_.next;
+    node_base* b = other.head_.next;
+    try {
+      head_.next = merge_runs(a, b, comp);
+    } catch (...) {
+      head_.next = a;
+      other.head_.next = b;
+      throw;
+    }
     other.head_.next = nullptr;
   }
   template <class Compare = std::less<>>
@@ -287,29 +297,18 @@ class basic_forward_list {
     merge(other, comp);
   }
 
-  /// Stable merge sort on the links; no element is copied or moved.
+  /// Stable merge sort on the links; no element is copied or moved. If
+  /// `comp` throws, the list keeps all its elements in an unspecified order
+  /// and the exception propagates.
   template <class Compare = std::less<>>
   void sort(Compare comp = Compare()) {
-    node_base* bins[64] = {};
     node_base* chain = head_.next;
-    while (chain) {
-      node_base* carry = chain;
-      chain = chain->next;
-      carry->next = nullptr;
-      std::size_t i = 0;
-      for (; bins[i]; i++) {
-        carry = merge_runs(bins[i], carry, comp);
-        bins[i] = nullptr;
-      }
-      bins[i] = carry;
+    try {
+      head_.next = sort_chain(chain, comp);
+    } catch (...) {
+      head_.next = chain;
+      throw;
     }
-    node_base* sorted = nullptr;
-    for (node_base* bin : bins) {
-      if (bin) {
-        sorted = merge_runs(bin, sorted, comp);
-      }
-    }
-    head_.next = sorted;
   }
 
   void reverse() noexcept {
@@ -414,23 +413,88 @@ class basic_forward_list {
     }
   }
 
+  /// Merge two null-terminated sorted chains linked through `next`; `a`'s
+  /// elements come first among equals. If `comp` throws, `a` is left
+  /// holding the merged prefix followed by the rest of `a`, and `b` the rest
+  /// of `b`, so no node is lost or linked twice.
   template <class Compare>
-  static node_base* merge_runs(node_base* a, node_base* b, Compare& comp) {
+  static node_base* merge_runs(node_base*& a, node_base*& b, Compare& comp) {
     node_base head;
     node_base* tail = &head;
-    while (a && b) {
-      if (comp(value_of(b), value_of(a))) {
-        tail->next = b;
-        tail = b;
-        b = b->next;
-      } else {
-        tail->next = a;
-        tail = a;
-        a = a->next;
+    try {
+      while (a && b) {
+        if (comp(value_of(b), value_of(a))) {
+          tail->next = b;
+          tail = b;
+          b = b->next;
+        } else {
+          tail->next = a;
+          tail = a;
+          a = a->next;
+        }
       }
+    } catch (...) {
+      tail->next = a;
+      a = head.next;
+      throw;
     }
     tail->next = a ? a : b;
     return head.next;
+  }
+
+  /// Append the null-terminated chain `b` to `a`; for the error paths.
+  static node_base* concat(node_base* a, node_base* b) noexcept {
+    if (!a) {
+      return b;
+    }
+    node_base* tail = a;
+    while (node_base* next = tail->next) {
+      tail = next;
+    }
+    tail->next = b;
+    return a;
+  }
+
+  /// Sort a null-terminated chain by bottom-up merging; returns the sorted
+  /// chain. If `comp` throws, every node is chained back together and the
+  /// chain is stored in `chain` before the exception propagates.
+  template <class Compare>
+  static node_base* sort_chain(node_base*& chain, Compare& comp) {
+    // bins[i] holds a sorted run of 2^i nodes; higher bins hold earlier
+    // elements, so merging a higher bin first keeps the sort stable.
+    node_base* bins[64] = {};
+    node_base* input = chain;
+    node_base* run = nullptr;    // the run being merged into
+    node_base* other = nullptr;  // the run merged with it
+    try {
+      while (input) {
+        run = input;
+        input = input->next;
+        run->next = nullptr;
+        std::size_t i = 0;
+        for (; bins[i]; i++) {
+          other = std::exchange(bins[i], nullptr);
+          run = merge_runs(other, run, comp);
+          other = nullptr;
+        }
+        bins[i] = std::exchange(run, nullptr);
+      }
+      for (node_base*& bin : bins) {
+        if (bin) {
+          other = std::exchange(bin, nullptr);
+          run = merge_runs(other, run, comp);
+          other = nullptr;
+        }
+      }
+    } catch (...) {
+      node_base* all = concat(other, run);
+      for (node_base* bin : bins) {
+        all = concat(bin, all);
+      }
+      chain = concat(all, input);
+      throw;
+    }
+    return run;
   }
 
   template <class Produce>

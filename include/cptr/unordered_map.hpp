@@ -63,8 +63,11 @@ class basic_unordered_map {
   using reference = value_type&;
   using const_reference = const value_type&;
 
-  /// A forward iterator: the node and the map, so that it can move on to
-  /// the next bucket.
+  /// A forward iterator: the node, and the bucket array and its size, so
+  /// that it can move on to the next bucket. It does not refer to the map
+  /// object, so like std's iterators it stays valid when the map is moved
+  /// or swapped; a rehash invalidates it. With compressed links it is 16
+  /// bytes.
   template <bool Const>
   class basic_iterator {
    public:
@@ -78,12 +81,14 @@ class basic_unordered_map {
     template <bool C = Const>
       requires C
     basic_iterator(const basic_iterator<false>& other) noexcept
-        : node_(other.node_), owner_(other.owner_) {}
+        : node_(other.node_),
+          buckets_(other.buckets_),
+          log2_buckets_(other.log2_buckets_) {}
 
     reference operator*() const noexcept { return node_->kv; }
     pointer operator->() const noexcept { return &node_->kv; }
     basic_iterator& operator++() noexcept {
-      node_ = owner_->next_node(node_);
+      node_ = next_node(node_, buckets_, log2_buckets_);
       return *this;
     }
     basic_iterator operator++(int) noexcept {
@@ -98,10 +103,11 @@ class basic_unordered_map {
    private:
     friend class basic_unordered_map;
     friend class basic_iterator<!Const>;
-    basic_iterator(node* n, const basic_unordered_map* owner) noexcept
-        : node_(n), owner_(owner) {}
+    basic_iterator(node* n, link_type* buckets, unsigned log2) noexcept
+        : node_(n), buckets_(buckets), log2_buckets_(log2) {}
     node* node_ = nullptr;
-    const basic_unordered_map* owner_ = nullptr;
+    link<link_type, Cage, Compressed> buckets_ = nullptr;
+    unsigned log2_buckets_ = 0;
   };
 
   using iterator = basic_iterator<false>;
@@ -162,10 +168,10 @@ class basic_unordered_map {
     a.swap(b);
   }
 
-  iterator begin() noexcept { return {first_from(0), this}; }
-  iterator end() noexcept { return {nullptr, this}; }
-  const_iterator begin() const noexcept { return {first_from(0), this}; }
-  const_iterator end() const noexcept { return {nullptr, this}; }
+  iterator begin() noexcept { return make_iterator(first_from(0)); }
+  iterator end() noexcept { return make_iterator(nullptr); }
+  const_iterator begin() const noexcept { return make_iterator(first_from(0)); }
+  const_iterator end() const noexcept { return make_iterator(nullptr); }
   const_iterator cbegin() const noexcept { return begin(); }
   const_iterator cend() const noexcept { return end(); }
 
@@ -182,25 +188,45 @@ class basic_unordered_map {
     return buckets_ ? float(size_) / float(bucket_count()) : 0.0f;
   }
   float max_load_factor() const noexcept { return max_load_; }
+  /// Set the maximum load factor, ignoring values that are not positive, and
+  /// rehash if the map is now over it. If that rehash throws, the old
+  /// maximum is kept.
   void max_load_factor(float f) {
-    max_load_ = f > 0 ? f : max_load_;
-    reserve(size_);
+    if (!(f > 0)) {
+      return;
+    }
+    float old = std::exchange(max_load_, f);
+    try {
+      reserve(size_);
+    } catch (...) {
+      max_load_ = old;
+      throw;
+    }
   }
   hasher hash_function() const { return hash_; }
   key_equal key_eq() const { return eq_; }
 
-  /// Make room for `n` elements without exceeding max_load_factor().
-  void reserve(size_type n) {
-    rehash(size_type(std::ceil(float(n) / max_load_)));
+  /// The most buckets the map can have: a power of two, limited by the
+  /// cage's size and by the 32-bit hashes the nodes keep.
+  static constexpr size_type max_bucket_count() noexcept {
+    return size_type(1) << kMaxLog2Buckets;
   }
 
+  /// Make room for `n` elements without exceeding max_load_factor(). Throws
+  /// std::length_error if that needs more than max_bucket_count() buckets.
+  void reserve(size_type n) { rehash(buckets_for(n)); }
+
   /// Use at least `n` buckets, and enough for max_load_factor(). The count
-  /// is rounded up to a power of two.
+  /// is rounded up to a power of two. Throws std::length_error if that is
+  /// more than max_bucket_count(); iterators are invalidated unless the
+  /// count stays the same.
   void rehash(size_type n) {
-    size_type need =
-        std::max<size_type>(n, size_type(std::ceil(float(size_) / max_load_)));
+    size_type need = std::max(n, buckets_for(size_));
     if (need == 0) {
       return;
+    }
+    if (need > max_bucket_count()) {
+      throw std::length_error("cptr::unordered_map: too many buckets");
     }
     unsigned log2 = unsigned(std::bit_width(need - 1));
     log2 = std::max(log2, 3u);
@@ -234,17 +260,19 @@ class basic_unordered_map {
 
   // Lookup. The template overloads take any key type when both Hash and
   // KeyEqual are transparent.
-  iterator find(const K& key) { return {find_node(key), this}; }
-  const_iterator find(const K& key) const { return {find_node(key), this}; }
+  iterator find(const K& key) { return make_iterator(find_node(key)); }
+  const_iterator find(const K& key) const {
+    return make_iterator(find_node(key));
+  }
   template <class Key>
     requires kTransparent<Key>
   iterator find(const Key& key) {
-    return {find_node(key), this};
+    return make_iterator(find_node(key));
   }
   template <class Key>
     requires kTransparent<Key>
   const_iterator find(const Key& key) const {
-    return {find_node(key), this};
+    return make_iterator(find_node(key));
   }
   bool contains(const K& key) const { return find_node(key) != nullptr; }
   template <class Key>
@@ -286,11 +314,11 @@ class basic_unordered_map {
     std::uint32_t h = hash_of(n->kv.first);
     if (node* existing = find_node(n->kv.first, h)) {
       delete_node(n);
-      return {{existing, this}, false};
+      return {make_iterator(existing), false};
     }
     n->hash = h;
     link_node(n);
-    return {{n, this}, true};
+    return {make_iterator(n), true};
   }
   template <class... Args>
   std::pair<iterator, bool> try_emplace(const K& key, Args&&... args) {
@@ -329,17 +357,17 @@ class basic_unordered_map {
   /// Returns the element after the erased one, in iteration order.
   iterator erase(const_iterator pos) noexcept {
     node* n = pos.node_;
-    node* next = next_node(n);
+    node* next = next_node(n, buckets_, log2_buckets_);
     unlink_node(n);
     delete_node(n);
-    return {next, this};
+    return make_iterator(next);
   }
   iterator erase(iterator pos) noexcept { return erase(const_iterator(pos)); }
   iterator erase(const_iterator first, const_iterator last) noexcept {
     while (first != last) {
       first = erase(first);
     }
-    return {last.node_, this};
+    return make_iterator(last.node_);
   }
   size_type erase(const K& key) {
     node* n = find_node(key);
@@ -412,25 +440,54 @@ class basic_unordered_map {
     return nullptr;
   }
 
+  /// The largest log2 of a bucket count: the array must fit in the cage
+  /// (and its byte size in a size_t), and a bucket index in 31 bits.
+  static constexpr unsigned kMaxLog2Buckets = std::min<unsigned>(
+      31, unsigned(std::bit_width(Cage::usable_end / sizeof(link_type))) - 1);
+
+  /// The bucket count needed for `n` elements at max_load_factor(), in
+  /// double precision so that neither the division nor the conversion back
+  /// overflows or rounds a large count down. Saturates above
+  /// max_bucket_count(), which rehash() rejects.
+  size_type buckets_for(size_type n) const noexcept {
+    double need = std::ceil(double(n) / double(max_load_));
+    return need > double(max_bucket_count()) ? max_bucket_count() + 1
+                                             : size_type(need);
+  }
+
+  iterator make_iterator(node* n) noexcept {
+    return {n, buckets_, log2_buckets_};
+  }
+  const_iterator make_iterator(node* n) const noexcept {
+    return {n, buckets_, log2_buckets_};
+  }
+
   node* first_from(std::size_t i) const noexcept {
-    size_type count = bucket_count();
+    return first_from(i, buckets_, log2_buckets_);
+  }
+  static node* first_from(std::size_t i, link_type* buckets,
+                          unsigned log2) noexcept {
+    if (!buckets) {
+      return nullptr;
+    }
+    size_type count = size_type(1) << log2;
     for (; i < count; i++) {
-      if (node* n = buckets_[i]) {
+      if (node* n = buckets[i]) {
         return n;
       }
     }
     return nullptr;
   }
 
-  node* next_node(node* n) const noexcept {
+  static node* next_node(node* n, link_type* buckets, unsigned log2) noexcept {
     if (node* next = n->next) {
       return next;
     }
-    return first_from(index(n->hash, log2_buckets_) + 1);
+    return first_from(index(n->hash, log2) + 1, buckets, log2);
   }
 
   void link_node(node* n) {
-    if (size_ + 1 > float(bucket_count()) * max_load_) {
+    if (double(size_ + 1) > double(bucket_count()) * double(max_load_)) {
       rehash(std::max<size_type>(bucket_count() * 2, 8));
     }
     link_type& head = buckets_[index(n->hash, log2_buckets_)];
@@ -452,7 +509,7 @@ class basic_unordered_map {
   std::pair<iterator, bool> try_emplace_impl(Key&& key, Args&&... args) {
     std::uint32_t h = hash_of(key);
     if (node* existing = find_node(key, h)) {
-      return {{existing, this}, false};
+      return {make_iterator(existing), false};
     }
     node* n = new_node(std::piecewise_construct,
                        std::forward_as_tuple(std::forward<Key>(key)),
@@ -464,7 +521,7 @@ class basic_unordered_map {
       delete_node(n);
       throw;
     }
-    return {{n, this}, true};
+    return {make_iterator(n), true};
   }
 
   template <class... Args>
