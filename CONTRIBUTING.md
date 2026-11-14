@@ -5,6 +5,22 @@ hardware we have not tried, a fix, a new container, a port, or a clearer
 sentence in the documentation. If you are planning something big, open an
 issue first so we can agree on the approach before you spend time on it.
 
+## Where to start
+
+- **Questions, ideas, show and tell:** use
+  [Discussions](https://github.com/mvanslobbe/compressed-ptr/discussions)
+  rather than an issue.
+- **A first contribution:** issues labelled
+  [good first issue](https://github.com/mvanslobbe/compressed-ptr/labels/good%20first%20issue)
+  are small and self-contained;
+  [help wanted](https://github.com/mvanslobbe/compressed-ptr/labels/help%20wanted)
+  ones are bigger. Comment on one before you start so nobody duplicates
+  your work.
+- **No code needed:** run `./build/example_expect_gains` on your hardware
+  and post the output in
+  [#3](https://github.com/mvanslobbe/compressed-ptr/issues/3). Results from
+  Apple Silicon, AMD, ARM servers and Windows are especially welcome.
+
 ## Reporting a bug
 
 Please include:

@@ -14,6 +14,8 @@ NAV = """<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-s
   padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
   <a href="{root}index.html" style="margin-right: 16px; text-decoration: none;
     color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="{root}why.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Why</a>
   <a href="{root}guide.html" style="margin-right: 16px; color: #0969da;
     text-decoration: none;">Guide</a>
   <a href="{root}benchmarks.html" style="margin-right: 16px; color: #0969da;

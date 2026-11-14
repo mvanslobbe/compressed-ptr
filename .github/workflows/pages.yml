@@ -47,11 +47,12 @@ jobs:
           publish_dir: build-docs/site
           destination_dir: reference
           commit_message: "Update the API reference for ${{ github.sha }}"
-      - name: Render the guide and the benchmarks page
+      - name: Render the guide, the article and the benchmarks page
         run: |
           pip install --quiet markdown
           mkdir -p site
           cp docs/site/*.html site/
+          cp -r docs/assets site/
           python3 scripts/render_docs.py site
       - name: Landing page, guide and benchmarks
         uses: peaceiris/actions-gh-pages@v4

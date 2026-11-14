@@ -27,5 +27,7 @@ First public version.
 - `allocator<T>` and `fancy_allocator<T>`.
 - `CPTR_CHECKED` to keep the misuse checks in release builds.
 - CMake package with `find_package(compressed_ptr)`, `cptr/version.hpp`.
+- A Compiler Explorer example, an introductory article (`docs/why.md`) and
+  a comparison with the alternatives in the README.
 - Tests, sanitizer and fuzzing CI, benchmarks, and documentation on GitHub
   Pages.

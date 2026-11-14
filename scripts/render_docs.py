@@ -18,7 +18,8 @@ import markdown
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(HERE, "..", "docs")
 REPO = "https://github.com/mvanslobbe/compressed-ptr/blob/main/"
-PAGES = {"guide.md": "Guide", "benchmarks.md": "Benchmarks"}
+PAGES = {"guide.md": "Guide", "benchmarks.md": "Benchmarks",
+         "why.md": "Half your pointers are wasted"}
 
 TEMPLATE = """<!doctype html>
 <html lang="en">
@@ -26,6 +27,7 @@ TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>compressed-ptr: {title}</title>
+<meta name="description" content="4-byte pointers and drop-in containers for 64-bit C++: half the memory for lists, maps and trees. Header-only C++20.">
 <style>
   :root {{ --bg: #fff; --fg: #1f2328; --muted: #59636e; --link: #0969da;
           --code: #f6f8fa; --line: #d1d9e0; }}
@@ -79,6 +81,7 @@ TEMPLATE = """<!doctype html>
 <body>
 <nav>
   <a href="index.html"><strong>compressed-ptr</strong></a>
+  <a href="why.html">Why</a>
   <a href="guide.html">Guide</a>
   <a href="benchmarks.html">Benchmarks</a>
   <a href="reference/cptr.html">API reference</a>
@@ -95,7 +98,7 @@ TEMPLATE = """<!doctype html>
 
 
 def fix_links(text):
-    text = re.sub(r"\]\((guide|benchmarks)\.md(#[^)]*)?\)",
+    text = re.sub(r"\]\((guide|benchmarks|why)\.md(#[^)]*)?\)",
                   lambda m: f"]({m.group(1)}.html{m.group(2) or ''})", text)
     text = re.sub(r"\]\(\.\./([^)]+)\)", lambda m: f"]({REPO}{m.group(1)})",
                   text)

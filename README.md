@@ -6,10 +6,16 @@
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)
 ![header-only](https://img.shields.io/badge/header--only-yes-brightgreen)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
+[![Try it on Compiler Explorer](https://img.shields.io/badge/try%20it-Compiler%20Explorer-67c52a)](https://godbolt.org/z/cTz9KfczY)
 
 **Half the memory for pointer-heavy C++.** Header-only C++20 library of
 4-byte pointers and drop-in containers, built on the same trick as
 [V8's pointer compression](https://v8.dev/blog/pointer-compression).
+**[Try it in your browser](https://godbolt.org/z/cTz9KfczY)**, or read
+[why half your pointers are wasted](https://mvanslobbe.github.io/compressed-ptr/why.html).
+
+<p align="center"><img src="docs/assets/hero.svg" width="720"
+  alt="Bytes per element for 1,000,000 uint32_t: list 32.1 to 16.0, map 48.0 to 24.0, unordered_map 43.6 to 20.3"></p>
 
 | 1,000,000 `uint32_t` elements | `std::` | `cptr::` | memory | speed |
 |---|---:|---:|---:|---:|
@@ -170,6 +176,17 @@ needs more than 32 GiB.
   for hot loops over arrays.
 - Each Windows DLL gets its own cage; keep a cage's users in one module.
 
+## Why not something else?
+
+| Instead of compressed-ptr | Good for | Where compressed-ptr differs |
+|---|---|---|
+| Indices into a `std::vector` | One structure you write yourself | A real pointer: dereferences, converts to `T*`, keeps the `std` container interfaces, one cage for every type |
+| `boost::interprocess::offset_ptr` | Shared memory mapped at different addresses | 4 bytes instead of 8; `mapped_cage` gives the same relocatability |
+| The x32 ABI | Whole programs under 4 GiB | Only the structures you choose shrink; the rest of the process stays 64-bit |
+| Doing nothing | Data in arrays and vectors | Nothing to gain there, honestly |
+
+The longer version: [Half your pointers are wasted](https://mvanslobbe.github.io/compressed-ptr/why.html).
+
 ## What you get
 
 | | |
@@ -184,6 +201,9 @@ needs more than 32 GiB.
 
 ## Learn more
 
+- **[Why](https://mvanslobbe.github.io/compressed-ptr/why.html):** the
+  idea, what it buys, what it costs, and the alternatives, in five minutes.
+- **[Try it on Compiler Explorer](https://godbolt.org/z/cTz9KfczY):** edit and run, no install.
 - **[Guide](https://mvanslobbe.github.io/compressed-ptr/guide.html):** how it works, every header, allocators,
   persistence, rules and limitations, building and testing.
 - **[Benchmarks](https://mvanslobbe.github.io/compressed-ptr/benchmarks.html):** compressed against raw pointers at p50/p90/p95/p99/p99.5, memory, and
@@ -199,9 +219,16 @@ AddressSanitizer, UndefinedBehaviorSanitizer, ThreadSanitizer, two libFuzzer
 targets, and CI on Linux, macOS and Windows (x64 and ARM64) with GCC, Clang
 and MSVC.
 
-## Contributing
+## Community
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Questions and ideas:** [Discussions](https://github.com/mvanslobbe/compressed-ptr/discussions).
+- **Numbers from your hardware:** run `./build/example_expect_gains` and
+  post the output in [#3](https://github.com/mvanslobbe/compressed-ptr/issues/3).
+- **First contribution?** Pick a
+  [good first issue](https://github.com/mvanslobbe/compressed-ptr/labels/good%20first%20issue);
+  [CONTRIBUTING.md](CONTRIBUTING.md) explains the rest.
+- **Using it?** Tell us in Discussions; a line in the README for projects
+  that use compressed-ptr is planned.
 
 ## Licence
 
