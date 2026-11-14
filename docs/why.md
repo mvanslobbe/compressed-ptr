@@ -23,8 +23,10 @@ JVM's compressed oops are on by default for heaps under 32 GiB. The idea
 is the same in both:
 
 1. Reserve one region of address space, 4 GiB long and aligned to 4 GiB.
-   This costs address space, not memory: pages are committed as they are
-   used.
+   This costs address space, not memory: nothing is allocated up front, and
+   pages are committed as they are used. A program with a three-element
+   list in its cage shows 4 GiB more under VIRT in `top` and 0.2 MiB more
+   under RES.
 2. Allocate the objects that point at each other inside that region (the
    *cage*).
 3. Store a pointer into the cage as its 32-bit offset from the start.

@@ -43,9 +43,27 @@ allocator, several independent cages, and containers. No V8 code is used.
 ```
 
 * **Cage.** At first use, a cage reserves 4 GiB of address space aligned to
-  4 GiB (`mmap(PROT_NONE)` or `VirtualAlloc(MEM_RESERVE)`). Reserved space
-  costs no memory. Pages are committed in 1 MiB steps as the allocator needs
-  them.
+  4 GiB (`mmap(PROT_NONE)` or `VirtualAlloc(MEM_RESERVE)`). **Nothing is
+  allocated at that point.** Reserved space costs no memory and no swap;
+  it is a range of addresses that nothing else in the process will be given.
+  Pages are committed in 1 MiB steps as the allocator needs them, and given
+  back to the OS when they are free again (see `trim()` below).
+
+  What that looks like from outside, measured on Linux with one list:
+
+  | | virtual size (VIRT, `VmSize`) | resident (RES, `VmRSS`) |
+  |---|---:|---:|
+  | before the first allocation | 6.4 MiB | 3.3 MiB |
+  | after three elements | 4.0 GiB | 3.6 MiB |
+  | after a million elements | 4.0 GiB | 18.8 MiB |
+
+  Tools that show virtual size (VIRT in `top`, VSZ in `ps`) count the
+  reservation; memory accounting (RES, cgroup and container limits, the
+  OOM killer) counts only resident pages. The one limit that sees the
+  reservation is a cap on virtual memory (`ulimit -v`, `RLIMIT_AS`): allow
+  4 GiB per cage, or make the cage smaller with `SizeLog2`. Linux's
+  overcommit setting does not matter, because the reservation is not
+  writable until pages are committed.
 * **Compression.** A pointer is stored as `p - base`, truncated to 32 bits.
 * **Decompression.** `base + bits` is one add. `ptr` maps 0 to `nullptr`,
   which compilers turn into a conditional move or a well-predicted branch.
@@ -76,21 +94,21 @@ allocator, several independent cages, and containers. No V8 code is used.
 | Header | Contents |
 |---|---|
 | `cptr/cage.hpp` | `cage<Tag, SizeLog2 = 32, Shift = 0>`, `default_cage`: reserve, allocate, compress, decompress, `pmr` resource, statistics |
-| `cptr/ptr.hpp` | `ptr<T, Cage>` (nullable, 4 B), `strict_ptr<T, Cage>` (compressing a `T*` is explicit), `nonnull_ptr<T, Cage>`, `make<T>()`, `destroy()`, `std::hash` |
+| `cptr/ptr.hpp` | `ptr<T, Cage>` (nullable, 4 B), `strict_ptr<T, Cage>` (compressing a `T*` is explicit), `nonnull_ptr<T, Cage>`, `make<T>()`, `destroy()`, `make_array<T>(n)`, `destroy_array()`, `deleter<T>` for `std::unique_ptr`, `std::hash`, `std::pointer_traits` |
 | `cptr/pack.hpp` | `ptr_pair` (two pointers in 8 B), `ptr_with_payload` (pointer + 32-bit value in 8 B), `tagged_ptr` (pointer + tag bits in 4 B), `atomic_ptr` (lock-free CAS on 4 B) |
 | `cptr/allocator.hpp` | `cptr::allocator<T>`, so any std container's elements live in the cage |
 | `cptr/fancy_allocator.hpp` | `cptr::fancy_allocator<T>` with `pointer = cptr::ptr<T>`, for containers that support fancy pointers |
 | `cptr/list.hpp` | `cptr::list<T>`: doubly linked list with 4-byte links and the `std::list` interface |
 | `cptr/forward_list.hpp` | `cptr::forward_list<T>`: singly linked list with 4-byte links and the `std::forward_list` interface; 8-byte nodes for 4-byte values |
-| `cptr/unordered_map.hpp` | `cptr::unordered_map<K, V>`: hash map with separate chaining, 4-byte links and buckets, and the `std::unordered_map` interface without node handles and the bucket API |
+| `cptr/unordered_map.hpp` | `cptr::unordered_map<K, V>`: hash map with separate chaining, 4-byte links and buckets, and the `std::unordered_map` interface without node handles and the bucket API; iterators are 16 bytes and survive move and swap |
 | `cptr/ordered_map.hpp` | `cptr::ordered_map<K, V>`: ordered map (red-black tree) with 4-byte links and the `std::map` interface, without node handles |
 | `cptr/user_cage.hpp` | `user_cage<Tag, Allocator, SizeLog2 = 32, Shift = 0>`: a cage whose blocks come from your own allocator; `bump_allocator`; `cptr::vm` commit helpers |
 | `cptr/mapped_cage.hpp` | `mapped_cage<Tag, SizeLog2 = 32>`: a cage whose memory is a file, with a root pointer; POSIX only |
 | `cptr/all.hpp` | All of the above except `user_cage.hpp` and `mapped_cage.hpp` |
 
 Operations that only touch the stored offset are `constexpr`: null,
-pointer arithmetic, comparisons, `bits()` and `from_bits()`, and
-conversions that keep the address. Compressing and decompressing need the
+pointer arithmetic, comparisons, `bits()` and `from_bits()`, conversions
+that keep the address, and `get()` and conversions of a null pointer. Compressing and decompressing need the
 cage's base, which is only known at run time.
 
 `list` and `ordered_map` keep a sentinel node in the cage, so their
@@ -174,7 +192,7 @@ Each example is a short, self-contained program in [`examples/`](../examples):
 Containers that take their internal pointer type from the allocator can
 switch to 4-byte links without changes to their code. `cptr::fancy_allocator`
 has `pointer = cptr::ptr<T>`, and `cptr::ptr` supports the arithmetic,
-`NULL` literals and casts such containers need. With
+null pointer constants (`0`, `NULL`) and casts such containers need. With
 [plf::list](https://github.com/mattreecebentley/plf_list):
 
 ```cpp
@@ -228,8 +246,10 @@ the measurements.
   as the containers' and `ptr`'s `Cage` argument. Pointers from different
   cages do not mix. Across shared libraries, mark your tag `CPTR_VISIBLE`
   (see below).
-* **Freeing.** Free what `cptr::make` created with `cptr::destroy`; the
-  containers free their own nodes. LeakSanitizer cannot see cage memory, so
+* **Freeing.** Free what `cptr::make` created with `cptr::destroy`, or let
+  `std::unique_ptr<T, cptr::deleter<T>>` (4 bytes) do it; free
+  `cptr::make_array<T>(n)` with `cptr::destroy_array(p, n)`. The containers
+  free their own nodes. LeakSanitizer cannot see cage memory, so
   check `allocated_bytes()` on the cage if you suspect a leak.
 * **Standard library containers mostly ignore fancy pointers** for their
   internal links, so `cptr::fancy_allocator` does not shrink `std::list` or

@@ -71,6 +71,14 @@ cmake -B build && cmake --build build && ./build/hello
 # node: 12 bytes (std::list's: 24)
 ```
 
+**The 4 GiB is address space, not memory.** The cage reserves a 4 GiB
+range of addresses and commits pages only as objects are allocated in it.
+`top` shows the reservation under VIRT; the memory you use shows under RES.
+Measured with a three-element list: VIRT grows by 4 GiB, RES by 0.2 MiB;
+after a million elements RES has grown by 15.3 MiB. If you limit a
+process's virtual memory (`ulimit -v`, `RLIMIT_AS`), allow for the 4 GiB;
+container and cgroup memory limits count only what is resident.
+
 No CMake? Copy [`single_include/cptr.hpp`](single_include/cptr.hpp), write
 `#include "cptr.hpp"`, and build with `g++ -std=c++20 main.cpp`. Installed
 copies work with `find_package(compressed_ptr)` and
@@ -163,7 +171,8 @@ are waiting to be merged
 
 **Yes**, if you have many small heap objects linked by pointers (lists,
 trees, graphs, tries, object graphs) and any one structure stays under
-4 GiB, or up to 64 GiB when its objects are 8- or 16-byte aligned.
+4 GiB, or up to 64 GiB when its objects are 8- or 16-byte aligned. The
+cage only reserves that range: memory is used as objects are allocated.
 
 **No**, if your data already lives in arrays and vectors, or one structure
 needs more than 64 GiB.
@@ -197,7 +206,7 @@ The longer version: [Half your pointers are wasted](https://mvanslobbe.github.io
 | `cptr::ptr<T>` | 4-byte pointer, converts to and from `T*`; `strict_ptr`, `nonnull_ptr` |
 | `ptr_pair`, `ptr_with_payload`, `tagged_ptr`, `atomic_ptr` | Two pointers in 8 B, pointer plus 32-bit value, tag bits, lock-free CAS |
 | `list`, `forward_list`, `ordered_map`, `unordered_map` | The std interfaces with 4-byte links |
-| `cage<Tag>` | 4 GiB (up to 64 GiB) region with a fast thread-caching allocator |
+| `cage<Tag>` | 4 GiB (up to 64 GiB) reserved region, committed as it is used, with a fast thread-caching allocator |
 | `user_cage<Tag, Allocator>` | Same, with your own allocator |
 | `mapped_cage<Tag>` | File-backed cage for persistent structures |
 | `allocator<T>`, `fancy_allocator<T>` | Put std containers in the cage; drop-in allocator with 4-byte `pointer` for containers that use it, such as plf::list |
