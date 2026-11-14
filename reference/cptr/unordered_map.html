@@ -425,24 +425,51 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1><a href="../cptr.html">cptr</a>::unordered_map</h1>
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>A hash map with 4-byte links, like std::unordered_map without the allocator parameter, node handles, and the bucket interface. Nodes and buckets are allocated in |Cage|.</p></div><!-- /brief -->
+<p>A hash map with 4-byte links, like <code>std::unordered_map</code> without the allocator parameter, node handles and the bucket interface.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L504">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L522">cptr/unordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class K,
     class V,
     class Hash = std::hash&lt;K&gt;,
     class KeyEqual = std::equal_to&lt;K&gt;,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
-using unordered_map = detail::basic_unordered_map&lt;K, V, Hash, KeyEqual, Cage, true&gt;;</code></pre>
+using unordered_map = <a href="./detail/basic_unordered_map.html">detail::basic_unordered_map&lt;K, V, Hash, KeyEqual, Cage, true&gt;</a>;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>Separate chaining; nodes and buckets are allocated in <code>Cage</code>: about 20 bytes per element for 4-byte keys and values, against 44 for <code>std::unordered_map</code>. Every member behaves like its <code>std::unordered_map</code> counterpart; see <a href="./detail/basic_unordered_map.html"><code>detail::basic_unordered_map</code></a> for the full member list. Lookup is heterogeneous when both <code>Hash</code> and <code>KeyEqual</code> are transparent.</p>
+<pre><code class="language-cpp">
+#include "cptr/unordered_map.hpp"
+
+cptr::unordered_map&lt;std::uint32_t, float&gt; prices;
+prices.reserve(1000);
+prices[42] = 9.5f;
+if (auto it = prices.find(42); it != prices.end()) { /* ... */ }
+</code></pre></div><!-- /description -->
 </div><!-- /symbol -->
 
 </div>

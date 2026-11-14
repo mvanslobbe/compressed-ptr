@@ -425,6 +425,22 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1><a href="../cptr.html">cptr</a>::nonnull_ptr</h1>
 <div class="symbol">
@@ -434,7 +450,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L231">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L289">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
@@ -457,12 +473,12 @@ class nonnull_ptr;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./nonnull_ptr/2constructor-09.html"><code>nonnull_ptr</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
+<tr><td><a href="./nonnull_ptr/2constructor-09.html"><code>nonnull_ptr</code></a>         <span class="small">[constructor]</span></td><td>Compress <code>p</code>, which must be in the cage and must not be null.</td></tr>
 <tr><td><a href="./nonnull_ptr/bits.html"><code>bits</code></a> </td><td></td></tr>
-<tr><td><a href="./nonnull_ptr/get.html"><code>get</code></a> </td><td></td></tr>
-<tr><td><a href="./nonnull_ptr/operator_star.html"><code>operator*</code></a> </td><td></td></tr>
-<tr><td><a href="./nonnull_ptr/operator_ptr.html"><code>operator-&gt;</code></a> </td><td></td></tr>
-<tr><td><a href="./nonnull_ptr/2conversion.html"><code>operator T*</code></a> </td><td>Conversion to <code>T</code></td></tr>
+<tr><td><a href="./nonnull_ptr/get.html"><code>get</code></a> </td><td>The raw pointer: a single add, with no null check.</td></tr>
+<tr><td><a href="./nonnull_ptr/operator_star.html"><code>operator*</code></a> </td><td>The object pointed to.</td></tr>
+<tr><td><a href="./nonnull_ptr/operator_ptr.html"><code>operator-&gt;</code></a> </td><td>Member access.</td></tr>
+<tr><td><a href="./nonnull_ptr/2conversion.html"><code>operator T*</code></a> </td><td>Converts implicitly to the raw pointer.</td></tr>
 </tbody>
 </table>
 

@@ -425,16 +425,32 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1><a href="../cptr.html">cptr</a>::operator+</h1>
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Addition operator</p></div><!-- /brief -->
+<p>The pointer <code>n</code> elements further on.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L146">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L203">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">constexpr
 <a href="./basic_ptr.html">basic_ptr</a>
 operator+(
@@ -450,7 +466,7 @@ requires (!std::is_void_v&lt;T&gt;);</code></pre>
 </div>
 <div class="return-value">
 <h2>Return Value</h2>
-<p>A nullable pointer to a T inside |Cage|, stored in 4 bytes. Use it as ptr&lt;T&gt; or strict_ptr&lt;T&gt;, declared below.</p>
+<p>A nullable pointer to a T inside <code>Cage</code>, stored in 4 bytes. Use it as ptr&lt;T&gt; or strict_ptr&lt;T&gt;, declared below.</p>
 </div><!-- /return-value -->
 <div class="parameters">
 <h2>Parameters</h2>

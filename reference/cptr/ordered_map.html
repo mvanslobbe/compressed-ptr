@@ -425,23 +425,50 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1><a href="../cptr.html">cptr</a>::ordered_map</h1>
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>An ordered map with 4-byte links, like std::map without the allocator parameter and node handles. Nodes are allocated in |Cage|.</p></div><!-- /brief -->
+<p>An ordered map with 4-byte links, like <code>std::map</code> without the allocator parameter and node handles.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L897">cptr/ordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L915">cptr/ordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class K,
     class V,
     class Compare = std::less&lt;K&gt;,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
-using ordered_map = detail::basic_ordered_map&lt;K, V, Compare, Cage, true&gt;;</code></pre>
+using ordered_map = <a href="./detail/basic_ordered_map.html">detail::basic_ordered_map&lt;K, V, Compare, Cage, true&gt;</a>;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>A red-black tree whose nodes are allocated in <code>Cage</code>: 24 bytes per element for 4-byte keys and values, against 48 for <code>std::map</code>. Every member behaves like its <code>std::map</code> counterpart; see <a href="./detail/basic_ordered_map.html"><code>detail::basic_ordered_map</code></a> for the full member list. Lookup is heterogeneous when <code>Compare::is_transparent</code> exists.</p>
+<pre><code class="language-cpp">
+#include "cptr/ordered_map.hpp"
+
+cptr::ordered_map&lt;int, std::string&gt; m;
+m[2] = "two";
+m.emplace(1, "one");
+for (auto&amp; [key, value] : m) { /* in key order */ }
+</code></pre></div><!-- /description -->
 </div><!-- /symbol -->
 
 </div>

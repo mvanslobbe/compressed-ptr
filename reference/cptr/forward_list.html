@@ -425,21 +425,47 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1><a href="../cptr.html">cptr</a>::forward_list</h1>
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>A singly linked list with 4-byte links, like std::forward_list without the allocator parameter. Nodes are allocated in |Cage|.</p></div><!-- /brief -->
+<p>A singly linked list with 4-byte links, like <code>std::forward_list</code> without the allocator parameter.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L474">cptr/forward_list.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L489">cptr/forward_list.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
-using forward_list = detail::basic_forward_list&lt;T, Cage, true&gt;;</code></pre>
+using forward_list = <a href="./detail/basic_forward_list.html">detail::basic_forward_list&lt;T, Cage, true&gt;</a>;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>Nodes are allocated in <code>Cage</code>; an empty list allocates nothing. Every member behaves like its <code>std::forward_list</code> counterpart; see <a href="./detail/basic_forward_list.html"><code>detail::basic_forward_list</code></a> for the full member list.</p>
+<pre><code class="language-cpp">
+#include "cptr/forward_list.hpp"
+
+cptr::forward_list&lt;int&gt; f{3, 1, 2};
+f.push_front(0);
+f.sort();
+</code></pre></div><!-- /description -->
 </div><!-- /symbol -->
 
 </div>

@@ -425,16 +425,32 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1><a href="../cptr.html">cptr</a>::basic_ptr</h1>
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>A nullable pointer to a T inside |Cage|, stored in 4 bytes. Use it as ptr&lt;T&gt; or strict_ptr&lt;T&gt;, declared below.</p></div><!-- /brief -->
+<p>A nullable pointer to a T inside <code>Cage</code>, stored in 4 bytes. Use it as ptr&lt;T&gt; or strict_ptr&lt;T&gt;, declared below.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L28">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L65">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage,
@@ -451,14 +467,14 @@ class basic_ptr;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./basic_ptr/cage_type.html"><code>cage_type</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ptr/difference_type.html"><code>difference_type</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ptr/element_type.html"><code>element_type</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_ptr/cage_type.html"><code>cage_type</code></a> </td><td>The cage the pointer is compressed against.</td></tr>
+<tr><td><a href="./basic_ptr/difference_type.html"><code>difference_type</code></a> </td><td>The iterator and std::pointer_traits types below let ptr serve as an allocator&#x27;s pointer type, which must be a random access iterator.</td></tr>
+<tr><td><a href="./basic_ptr/element_type.html"><code>element_type</code></a> </td><td>The type pointed to.</td></tr>
 <tr><td><a href="./basic_ptr/iterator_category.html"><code>iterator_category</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ptr/pointer.html"><code>pointer</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ptr/rebind.html"><code>rebind</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_ptr/rebind.html"><code>rebind</code></a> </td><td>The same kind of pointer to a <code>U</code>, for std::pointer_traits.</td></tr>
 <tr><td><a href="./basic_ptr/reference.html"><code>reference</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ptr/value_type.html"><code>value_type</code></a> </td><td>An allocator&#x27;s pointer type must be a random access iterator.</td></tr>
+<tr><td><a href="./basic_ptr/value_type.html"><code>value_type</code></a> </td><td>The pointee type without cv-qualifiers, as for an iterator.</td></tr>
 </tbody>
 </table>
 
@@ -471,16 +487,16 @@ class basic_ptr;</code></pre>
 <tr><td><a href="./basic_ptr/2constructor-02.html"><code>basic_ptr</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
 <tr><td><a href="./basic_ptr/operator_assign-02.html"><code>operator&#x3D;</code></a> </td><td>Assignment operators</td></tr>
 <tr><td><a href="./basic_ptr/bits.html"><code>bits</code></a> </td><td>The compressed representation, e.g. for packing it with other data.</td></tr>
-<tr><td><a href="./basic_ptr/get.html"><code>get</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ptr/operator_star.html"><code>operator*</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ptr/operator_inc-0e.html"><code>operator++</code></a> </td><td>Increment operators</td></tr>
-<tr><td><a href="./basic_ptr/operator_plus_eq.html"><code>operator+&#x3D;</code></a> </td><td>Addition assignment operator</td></tr>
-<tr><td><a href="./basic_ptr/operator_dec-05.html"><code>operator--</code></a> </td><td>Decrement operators</td></tr>
-<tr><td><a href="./basic_ptr/operator_minus_eq.html"><code>operator-&#x3D;</code></a> </td><td>Subtraction assignment operator</td></tr>
-<tr><td><a href="./basic_ptr/operator_ptr.html"><code>operator-&gt;</code></a> </td><td>Dereferencing null is undefined, so these skip the null check.</td></tr>
-<tr><td><a href="./basic_ptr/operator_subs.html"><code>operator[]</code></a> </td><td>Pointer arithmetic, so ptr can serve as an allocator&#x27;s pointer type for containers that index into blocks of elements. It works on the compressed offset directly, so it is as cheap as raw pointer arithmetic. In a shifted cage, sizeof(T) must be a multiple of the granularity.</td></tr>
-<tr><td><a href="./basic_ptr/2conversion-03.html"><code>operator T*</code></a> </td><td>Conversion to <code>T</code></td></tr>
-<tr><td><a href="./basic_ptr/2conversion-06.html"><code>operator bool</code></a> </td><td>Conversion to <code>bool</code></td></tr>
+<tr><td><a href="./basic_ptr/get.html"><code>get</code></a> </td><td>The raw pointer, or <code>nullptr</code>: one add and a conditional move.</td></tr>
+<tr><td><a href="./basic_ptr/operator_star.html"><code>operator*</code></a> </td><td>The object pointed to. Like <code>operator-&gt;</code>, it skips the null check.</td></tr>
+<tr><td><a href="./basic_ptr/operator_inc-0e.html"><code>operator++</code></a> </td><td>Advance by one element.</td></tr>
+<tr><td><a href="./basic_ptr/operator_plus_eq.html"><code>operator+&#x3D;</code></a> </td><td>Advance by <code>n</code> elements.</td></tr>
+<tr><td><a href="./basic_ptr/operator_dec-05.html"><code>operator--</code></a> </td><td>Go back by one element.</td></tr>
+<tr><td><a href="./basic_ptr/operator_minus_eq.html"><code>operator-&#x3D;</code></a> </td><td>Go back by <code>n</code> elements.</td></tr>
+<tr><td><a href="./basic_ptr/operator_ptr.html"><code>operator-&gt;</code></a> </td><td>Member access. Dereferencing null is undefined, so this skips the null check and costs a single add.</td></tr>
+<tr><td><a href="./basic_ptr/operator_subs.html"><code>operator[]</code></a> </td><td>Element <code>i</code> counting from this one, as for a raw pointer.</td></tr>
+<tr><td><a href="./basic_ptr/2conversion-03.html"><code>operator T*</code></a> </td><td>Converts implicitly to the raw pointer, so a <code>ptr</code> can be passed wherever a <code>T*</code> is expected.</td></tr>
+<tr><td><a href="./basic_ptr/2conversion-06.html"><code>operator bool</code></a> </td><td>True unless null.</td></tr>
 </tbody>
 </table>
 
@@ -507,10 +523,10 @@ class basic_ptr;</code></pre>
 <tr><td><code><a href="./operator_eq-07a.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
 <tr><td><code><a href="./operator_eq-0e.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
 <tr><td><code><a href="./operator_eq-0c.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
-<tr><td><code><a href="./operator_minus-0b.html">cptr::operator-</a></code></td><td></td></tr>
+<tr><td><code><a href="./operator_minus-0b.html">cptr::operator-</a></code></td><td>The number of elements between two pointers into the same array.</td></tr>
 <tr><td><code><a href="./operator_minus-06.html">cptr::operator-</a></code></td><td>Subtraction operator</td></tr>
 <tr><td><code><a href="./operator_plus-02.html">cptr::operator+</a></code></td><td>Addition operator</td></tr>
-<tr><td><code><a href="./operator_plus-01.html">cptr::operator+</a></code></td><td>Addition operator</td></tr>
+<tr><td><code><a href="./operator_plus-01.html">cptr::operator+</a></code></td><td>The pointer <code>n</code> elements further on.</td></tr>
 </tbody>
 </table>
 </div><!-- /friends -->

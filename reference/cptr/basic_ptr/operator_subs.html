@@ -425,21 +425,41 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../../../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../../../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../../../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../../../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../../../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1><a href="../../cptr.html">cptr</a>::<a href="../basic_ptr.html">basic_ptr</a>::operator[]</h1>
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Pointer arithmetic, so ptr can serve as an allocator&#x27;s pointer type for containers that index into blocks of elements. It works on the compressed offset directly, so it is as cheap as raw pointer arithmetic. In a shifted cage, sizeof(T) must be a multiple of the granularity.</p></div><!-- /brief -->
+<p>Element <code>i</code> counting from this one, as for a raw pointer.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L105">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L157">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class U = T&gt;
 requires (!std::is_void_v&lt;U&gt;)
 U&
 operator[](std::ptrdiff_t i) const noexcept;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>Pointer arithmetic (<code>[]</code>, <code>+</code>, <code>-</code>, <code>+&#x3D;</code>, <code>-&#x3D;</code>, <code>++</code>, <code>--</code>) lets ptr serve as an allocator&#x27;s pointer type for containers that index into blocks of elements. It works on the compressed offset directly, so it costs the same as raw pointer arithmetic, but a loop over an array does not vectorise: convert to <code>T*</code> with get() for hot loops. In a shifted cage, <code>sizeof(T)</code> must be a multiple of the granularity.</p>
+</div><!-- /description -->
 <div class="parameters">
 <h2>Parameters</h2>
 <table style="table-layout: fixed; width: 100%;">

@@ -425,17 +425,65 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1>cptr</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>compressed-ptr: 4-byte pointers and containers for 64-bit C++20.</p></div><!-- /brief -->
 </div><!-- /header -->
+<div class="description">
+<h2>Description</h2>
+<p>Objects live in a <em>cage</em>, a reserved region of up to 4 GiB (or 64 GiB with a shift). A pointer into the cage is stored as a 32-bit offset, which halves the size of every link. Start here:</p>
+<ul>
+<li><p>Containers: <a href="./cptr/list.html"><code>list</code></a>, <a href="./cptr/forward_list.html"><code>forward_list</code></a>, <a href="./cptr/ordered_map.html"><code>ordered_map</code></a> and <a href="./cptr/unordered_map.html"><code>unordered_map</code></a>, the std interfaces with 4-byte links.</p>
+</li>
+<li><p>Your own nodes: allocate with <a href="./cptr/make.html"><code>make</code></a>, point with <a href="./cptr/ptr.html"><code>ptr</code></a> (or <a href="./cptr/nonnull_ptr.html"><code>nonnull_ptr</code></a>), pack two pointers with <a href="./cptr/ptr_pair.html"><code>ptr_pair</code></a>, free with <a href="./cptr/destroy.html"><code>destroy</code></a>.</p>
+</li>
+<li><p>Other containers: <a href="./cptr/allocator.html"><code>allocator</code></a> puts their elements in the cage; <a href="./cptr/fancy_allocator.html"><code>fancy_allocator</code></a> gives containers that support fancy pointers 4-byte links.</p>
+</li>
+<li><p>Cages: <a href="./cptr/default_cage.html"><code>default_cage</code></a>, your own <a href="./cptr/cage-0b.html"><code>cage</code></a>, <a href="./cptr/user_cage.html"><code>user_cage</code></a> with your own allocator, or <a href="./cptr/mapped_cage.html"><code>mapped_cage</code></a> to keep data in a file.</p>
+</li>
+</ul><p>The one rule: only compress pointers to objects allocated in the cage. Debug builds assert it.</p>
+<pre><code class="language-cpp">
+#include "cptr/all.hpp"
+
+struct node {
+  cptr::ptr_pair&lt;node&gt; children;  // two 4-byte pointers
+  int key;
+};
+
+int main() {
+  cptr::list&lt;int&gt; l{1, 2, 3};             // like std::list, half the memory
+  cptr::ptr&lt;node&gt; n = cptr::make&lt;node&gt;();  // a node in the cage
+  n-&gt;key = l.back();
+  cptr::destroy(n);
+}
+</code></pre><p>Guide, benchmarks and examples: https://mvanslobbe.github.io/compressed-ptr/</p>
+</div><!-- /description -->
 <h2>Namespaces</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
+<tr><td><a href="./cptr/detail.html"><code>detail</code></a> </td><td>Implementation classes. Use the aliases in cptr, such as cptr::list.</td></tr>
 <tr><td><a href="./cptr/vm.html"><code>vm</code></a> </td><td>Virtual memory helpers for allocators that manage a cage&#x27;s region. The region starts out reserved but inaccessible: commit a range before using it.</td></tr>
 </tbody>
 </table>
@@ -446,19 +494,19 @@ window.MathJax = {
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./cptr/allocator.html"><code>allocator</code></a> </td><td></td></tr>
+<tr><td><a href="./cptr/allocator.html"><code>allocator</code></a> </td><td>A standard allocator that places objects in the cage, so that any std container&#x27;s elements can be pointed to with a 4-byte cptr::ptr.</td></tr>
 <tr><td><a href="./cptr/atomic_ptr.html"><code>atomic_ptr</code></a> </td><td>A compressed pointer that can be updated atomically.</td></tr>
-<tr><td><a href="./cptr/basic_ptr.html"><code>basic_ptr</code></a> </td><td>A nullable pointer to a T inside |Cage|, stored in 4 bytes. Use it as ptr&lt;T&gt; or strict_ptr&lt;T&gt;, declared below.</td></tr>
+<tr><td><a href="./cptr/basic_ptr.html"><code>basic_ptr</code></a> </td><td>A nullable pointer to a T inside <code>Cage</code>, stored in 4 bytes. Use it as ptr&lt;T&gt; or strict_ptr&lt;T&gt;, declared below.</td></tr>
 <tr><td><a href="./cptr/bump_allocator.html"><code>bump_allocator</code></a> </td><td>A thread-safe bump (monotonic) allocator for user_cage: allocation is a pointer increment, deallocate() does nothing, and memory is committed in 1 MiB steps as it is used. Suited to data that is built once and freed all at once, or never.</td></tr>
 <tr><td><a href="./cptr/cage-0b.html"><code>cage</code></a> </td><td>A cage of 2^SizeLog2 bytes. Compressed pointers are 32-bit offsets shifted right by Shift, so a cage can be up to 2^(32 + Shift) bytes as long as all compressed pointers are aligned to 2^Shift.</td></tr>
 <tr><td><a href="./cptr/default_cage.html"><code>default_cage</code></a> </td><td>The default cage: 4 GiB, byte granularity.</td></tr>
-<tr><td><a href="./cptr/fancy_allocator.html"><code>fancy_allocator</code></a> </td><td></td></tr>
+<tr><td><a href="./cptr/fancy_allocator.html"><code>fancy_allocator</code></a> </td><td>An allocator whose <code>pointer</code> type is cptr::ptr, so that containers that take their link type from the allocator get 4-byte links.</td></tr>
 <tr><td><a href="./cptr/mapped_cage.html"><code>mapped_cage</code></a> </td><td>A cage of 2^SizeLog2 bytes whose memory is the file opened with open(). It has the interface the containers and cptr::ptr need, plus a root pointer stored in the file to find the data again after reopening.</td></tr>
 <tr><td><a href="./cptr/nonnull_ptr.html"><code>nonnull_ptr</code></a> </td><td>Like ptr, but never null, which makes decompression a single add.</td></tr>
 <tr><td><a href="./cptr/ptr_pair.html"><code>ptr_pair</code></a> </td><td>Two compressed pointers in 8 bytes, e.g. a tree node&#x27;s children or a list node&#x27;s links.</td></tr>
 <tr><td><a href="./cptr/ptr_with_payload.html"><code>ptr_with_payload</code></a> </td><td>A compressed pointer and a 32-bit payload in 8 bytes, e.g. a node pointer and a count, hash or flags.</td></tr>
 <tr><td><a href="./cptr/tagged_ptr.html"><code>tagged_ptr</code></a> </td><td>A compressed pointer with TagBits small tag bits stored in its alignment bits, all in 4 bytes. T must be aligned to 2^(TagBits + Cage::shift).</td></tr>
-<tr><td><a href="./cptr/user_cage.html"><code>user_cage</code></a> </td><td>A cage of 2^SizeLog2 bytes, compressed like cage&lt;Tag, SizeLog2, Shift&gt;, whose allocations go to |Allocator|.</td></tr>
+<tr><td><a href="./cptr/user_cage.html"><code>user_cage</code></a> </td><td>A cage of 2^SizeLog2 bytes, compressed like cage&lt;Tag, SizeLog2, Shift&gt;, whose allocations go to <code>Allocator</code>.</td></tr>
 </tbody>
 </table>
 
@@ -468,12 +516,12 @@ window.MathJax = {
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./cptr/forward_list.html"><code>forward_list</code></a> </td><td>A singly linked list with 4-byte links, like std::forward_list without the allocator parameter. Nodes are allocated in |Cage|.</td></tr>
-<tr><td><a href="./cptr/list.html"><code>list</code></a> </td><td>A doubly linked list with 4-byte links, like std::list without the allocator parameter. Nodes are allocated in |Cage|.</td></tr>
-<tr><td><a href="./cptr/ordered_map.html"><code>ordered_map</code></a> </td><td>An ordered map with 4-byte links, like std::map without the allocator parameter and node handles. Nodes are allocated in |Cage|.</td></tr>
+<tr><td><a href="./cptr/forward_list.html"><code>forward_list</code></a> </td><td>A singly linked list with 4-byte links, like <code>std::forward_list</code> without the allocator parameter.</td></tr>
+<tr><td><a href="./cptr/list.html"><code>list</code></a> </td><td>A doubly linked list with 4-byte links, like <code>std::list</code> without the allocator parameter.</td></tr>
+<tr><td><a href="./cptr/ordered_map.html"><code>ordered_map</code></a> </td><td>An ordered map with 4-byte links, like <code>std::map</code> without the allocator parameter and node handles.</td></tr>
 <tr><td><a href="./cptr/ptr.html"><code>ptr</code></a> </td><td>The usual compressed pointer: converts implicitly from and to T*.</td></tr>
 <tr><td><a href="./cptr/strict_ptr.html"><code>strict_ptr</code></a> </td><td>Compressing a T* needs an explicit strict_ptr&lt;T&gt;(p).</td></tr>
-<tr><td><a href="./cptr/unordered_map.html"><code>unordered_map</code></a> </td><td>A hash map with 4-byte links, like std::unordered_map without the allocator parameter, node handles, and the bucket interface. Nodes and buckets are allocated in |Cage|.</td></tr>
+<tr><td><a href="./cptr/unordered_map.html"><code>unordered_map</code></a> </td><td>A hash map with 4-byte links, like <code>std::unordered_map</code> without the allocator parameter, node handles and the bucket interface.</td></tr>
 </tbody>
 </table>
 
@@ -485,8 +533,8 @@ window.MathJax = {
 <tbody>
 <tr><td><a href="./cptr/destroy.html"><code>destroy</code></a> </td><td>Destroy and free an object created by make().</td></tr>
 <tr><td><a href="./cptr/make.html"><code>make</code></a> </td><td>Allocate and construct a T inside the cage.</td></tr>
-<tr><td><a href="./cptr/operator_plus-07.html"><code>operator+</code></a> </td><td>Addition operators</td></tr>
-<tr><td><a href="./cptr/operator_minus-08.html"><code>operator-</code></a> </td><td>Subtraction operators</td></tr>
+<tr><td><a href="./cptr/operator_plus-07.html"><code>operator+</code></a> </td><td>The pointer <code>n</code> elements further on.</td></tr>
+<tr><td><a href="./cptr/operator_minus-08.html"><code>operator-</code></a> </td><td>The number of elements between two pointers into the same array.</td></tr>
 <tr><td><a href="./cptr/operator_eq-09.html"><code>operator&#x3D;&#x3D;</code></a> </td><td>Equality operators</td></tr>
 <tr><td><a href="./cptr/operator_3way-05.html"><code>operator&lt;&#x3D;&gt;</code></a> </td><td>All pointers share the cage base, so offsets order like addresses.</td></tr>
 </tbody>

@@ -43,6 +43,1260 @@
   </member>
 </compound>
 <compound kind="namespace">
+  <name>cptr::detail</name>
+  <filename>cptr/detail.html</filename>
+  <class kind="class">cptr::detail::basic_forward_list</class>
+  <class kind="class">cptr::detail::basic_list</class>
+  <class kind="class">cptr::detail::basic_ordered_map</class>
+  <class kind="class">cptr::detail::basic_unordered_map</class>
+  <class kind="class">cptr::detail::swap</class>
+  <class kind="class">cptr::detail::operator==</class>
+  <class kind="class">cptr::detail::operator&lt;=&gt;</class>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list</name>
+  <filename>cptr/detail/basic_forward_list.html</filename>
+  <class kind="class">cptr::detail::basic_forward_list::const_iterator</class>
+  <class kind="class">cptr::detail::basic_forward_list::const_reference</class>
+  <class kind="class">cptr::detail::basic_forward_list::difference_type</class>
+  <class kind="class">cptr::detail::basic_forward_list::iterator</class>
+  <class kind="class">cptr::detail::basic_forward_list::reference</class>
+  <class kind="class">cptr::detail::basic_forward_list::size_type</class>
+  <class kind="class">cptr::detail::basic_forward_list::value_type</class>
+  <class kind="class">cptr::detail::basic_forward_list::basic_iterator</class>
+  <class kind="class">cptr::detail::basic_forward_list::basic_forward_list</class>
+  <class kind="class">cptr::detail::basic_forward_list::operator=</class>
+  <class kind="class">cptr::detail::basic_forward_list::assign</class>
+  <class kind="class">cptr::detail::basic_forward_list::before_begin</class>
+  <class kind="class">cptr::detail::basic_forward_list::begin</class>
+  <class kind="class">cptr::detail::basic_forward_list::end</class>
+  <class kind="class">cptr::detail::basic_forward_list::erase_after</class>
+  <class kind="class">cptr::detail::basic_forward_list::front</class>
+  <class kind="class">cptr::detail::basic_forward_list::insert_after</class>
+  <class kind="class">cptr::detail::basic_forward_list::merge</class>
+  <class kind="class">cptr::detail::basic_forward_list::push_front</class>
+  <class kind="class">cptr::detail::basic_forward_list::resize</class>
+  <class kind="class">cptr::detail::basic_forward_list::splice_after</class>
+  <class kind="class">cptr::detail::basic_forward_list::node_size</class>
+  <member kind="function">
+    <type>void</type>
+    <name>~basic_forward_list</name>
+    <anchorfile>cptr/detail/basic_forward_list/2destructor.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_iterator</type>
+    <name>cbefore_begin</name>
+    <anchorfile>cptr/detail/basic_forward_list/cbefore_begin.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_iterator</type>
+    <name>cbegin</name>
+    <anchorfile>cptr/detail/basic_forward_list/cbegin.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_iterator</type>
+    <name>cend</name>
+    <anchorfile>cptr/detail/basic_forward_list/cend.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>clear</name>
+    <anchorfile>cptr/detail/basic_forward_list/clear.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>iterator</type>
+    <name>emplace_after</name>
+    <anchorfile>cptr/detail/basic_forward_list/emplace_after.html</anchorfile>
+    <anchor/>
+    <arglist>(const_iterator pos, Args...&amp;&amp; args)</arglist>
+  </member>
+  <member kind="function">
+    <type>T&amp;</type>
+    <name>emplace_front</name>
+    <anchorfile>cptr/detail/basic_forward_list/emplace_front.html</anchorfile>
+    <anchor/>
+    <arglist>(Args...&amp;&amp; args)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>empty</name>
+    <anchorfile>cptr/detail/basic_forward_list/empty.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>max_size</name>
+    <anchorfile>cptr/detail/basic_forward_list/max_size.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>pop_front</name>
+    <anchorfile>cptr/detail/basic_forward_list/pop_front.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>remove</name>
+    <anchorfile>cptr/detail/basic_forward_list/remove.html</anchorfile>
+    <anchor/>
+    <arglist>(const T&amp; value)</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>remove_if</name>
+    <anchorfile>cptr/detail/basic_forward_list/remove_if.html</anchorfile>
+    <anchor/>
+    <arglist>(Pred pred)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>reverse</name>
+    <anchorfile>cptr/detail/basic_forward_list/reverse.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>sort</name>
+    <anchorfile>cptr/detail/basic_forward_list/sort.html</anchorfile>
+    <anchor/>
+    <arglist>(Compare comp)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>swap</name>
+    <anchorfile>cptr/detail/basic_forward_list/swap.html</anchorfile>
+    <anchor/>
+    <arglist>(basic_forward_list&amp; other)</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>unique</name>
+    <anchorfile>cptr/detail/basic_forward_list/unique.html</anchorfile>
+    <anchor/>
+    <arglist>(Pred pred)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::const_iterator</name>
+  <filename>cptr/detail/basic_forward_list/const_iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::const_reference</name>
+  <filename>cptr/detail/basic_forward_list/const_reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::difference_type</name>
+  <filename>cptr/detail/basic_forward_list/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::iterator</name>
+  <filename>cptr/detail/basic_forward_list/iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::reference</name>
+  <filename>cptr/detail/basic_forward_list/reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::size_type</name>
+  <filename>cptr/detail/basic_forward_list/size_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::value_type</name>
+  <filename>cptr/detail/basic_forward_list/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::basic_iterator</name>
+  <filename>cptr/detail/basic_forward_list/basic_iterator.html</filename>
+  <class kind="class">cptr::detail::basic_forward_list::basic_iterator::difference_type</class>
+  <class kind="class">cptr::detail::basic_forward_list::basic_iterator::iterator_category</class>
+  <class kind="class">cptr::detail::basic_forward_list::basic_iterator::pointer</class>
+  <class kind="class">cptr::detail::basic_forward_list::basic_iterator::reference</class>
+  <class kind="class">cptr::detail::basic_forward_list::basic_iterator::value_type</class>
+  <class kind="class">cptr::detail::basic_forward_list::basic_iterator::basic_iterator</class>
+  <class kind="class">cptr::detail::basic_forward_list::basic_iterator::operator++</class>
+  <member kind="function">
+    <type>reference</type>
+    <name>operator*</name>
+    <anchorfile>cptr/detail/basic_forward_list/basic_iterator/operator_star.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>pointer</type>
+    <name>operator-&gt;</name>
+    <anchorfile>cptr/detail/basic_forward_list/basic_iterator/operator_ptr.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::basic_iterator::difference_type</name>
+  <filename>cptr/detail/basic_forward_list/basic_iterator/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::basic_iterator::iterator_category</name>
+  <filename>cptr/detail/basic_forward_list/basic_iterator/iterator_category.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::basic_iterator::pointer</name>
+  <filename>cptr/detail/basic_forward_list/basic_iterator/pointer.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::basic_iterator::reference</name>
+  <filename>cptr/detail/basic_forward_list/basic_iterator/reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::basic_iterator::value_type</name>
+  <filename>cptr/detail/basic_forward_list/basic_iterator/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::basic_iterator::basic_iterator</name>
+  <filename>cptr/detail/basic_forward_list/basic_iterator/2constructor-05.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::basic_iterator::operator++</name>
+  <filename>cptr/detail/basic_forward_list/basic_iterator/operator_inc-05.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::basic_forward_list</name>
+  <filename>cptr/detail/basic_forward_list/2constructor-0e.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::operator=</name>
+  <filename>cptr/detail/basic_forward_list/operator_assign-0d.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::assign</name>
+  <filename>cptr/detail/basic_forward_list/assign-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::before_begin</name>
+  <filename>cptr/detail/basic_forward_list/before_begin-04.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::begin</name>
+  <filename>cptr/detail/basic_forward_list/begin-08.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::end</name>
+  <filename>cptr/detail/basic_forward_list/end-0c.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::erase_after</name>
+  <filename>cptr/detail/basic_forward_list/erase_after-04.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::front</name>
+  <filename>cptr/detail/basic_forward_list/front-02.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::insert_after</name>
+  <filename>cptr/detail/basic_forward_list/insert_after-030.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::merge</name>
+  <filename>cptr/detail/basic_forward_list/merge-08.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::push_front</name>
+  <filename>cptr/detail/basic_forward_list/push_front-06.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::resize</name>
+  <filename>cptr/detail/basic_forward_list/resize-0a.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::splice_after</name>
+  <filename>cptr/detail/basic_forward_list/splice_after-05.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_forward_list::node_size</name>
+  <filename>cptr/detail/basic_forward_list/node_size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list</name>
+  <filename>cptr/detail/basic_list.html</filename>
+  <class kind="class">cptr::detail::basic_list::const_iterator</class>
+  <class kind="class">cptr::detail::basic_list::const_reference</class>
+  <class kind="class">cptr::detail::basic_list::const_reverse_iterator</class>
+  <class kind="class">cptr::detail::basic_list::difference_type</class>
+  <class kind="class">cptr::detail::basic_list::iterator</class>
+  <class kind="class">cptr::detail::basic_list::reference</class>
+  <class kind="class">cptr::detail::basic_list::reverse_iterator</class>
+  <class kind="class">cptr::detail::basic_list::size_type</class>
+  <class kind="class">cptr::detail::basic_list::value_type</class>
+  <class kind="class">cptr::detail::basic_list::basic_iterator</class>
+  <class kind="class">cptr::detail::basic_list::basic_list</class>
+  <class kind="class">cptr::detail::basic_list::operator=</class>
+  <class kind="class">cptr::detail::basic_list::assign</class>
+  <class kind="class">cptr::detail::basic_list::back</class>
+  <class kind="class">cptr::detail::basic_list::begin</class>
+  <class kind="class">cptr::detail::basic_list::end</class>
+  <class kind="class">cptr::detail::basic_list::erase</class>
+  <class kind="class">cptr::detail::basic_list::front</class>
+  <class kind="class">cptr::detail::basic_list::insert</class>
+  <class kind="class">cptr::detail::basic_list::merge</class>
+  <class kind="class">cptr::detail::basic_list::push_back</class>
+  <class kind="class">cptr::detail::basic_list::push_front</class>
+  <class kind="class">cptr::detail::basic_list::rbegin</class>
+  <class kind="class">cptr::detail::basic_list::rend</class>
+  <class kind="class">cptr::detail::basic_list::resize</class>
+  <class kind="class">cptr::detail::basic_list::splice</class>
+  <class kind="class">cptr::detail::basic_list::node_size</class>
+  <member kind="function">
+    <type>void</type>
+    <name>~basic_list</name>
+    <anchorfile>cptr/detail/basic_list/2destructor.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_iterator</type>
+    <name>cbegin</name>
+    <anchorfile>cptr/detail/basic_list/cbegin.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_iterator</type>
+    <name>cend</name>
+    <anchorfile>cptr/detail/basic_list/cend.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>clear</name>
+    <anchorfile>cptr/detail/basic_list/clear.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_reverse_iterator</type>
+    <name>crbegin</name>
+    <anchorfile>cptr/detail/basic_list/crbegin.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_reverse_iterator</type>
+    <name>crend</name>
+    <anchorfile>cptr/detail/basic_list/crend.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>iterator</type>
+    <name>emplace</name>
+    <anchorfile>cptr/detail/basic_list/emplace.html</anchorfile>
+    <anchor/>
+    <arglist>(const_iterator pos, Args...&amp;&amp; args)</arglist>
+  </member>
+  <member kind="function">
+    <type>T&amp;</type>
+    <name>emplace_back</name>
+    <anchorfile>cptr/detail/basic_list/emplace_back.html</anchorfile>
+    <anchor/>
+    <arglist>(Args...&amp;&amp; args)</arglist>
+  </member>
+  <member kind="function">
+    <type>T&amp;</type>
+    <name>emplace_front</name>
+    <anchorfile>cptr/detail/basic_list/emplace_front.html</anchorfile>
+    <anchor/>
+    <arglist>(Args...&amp;&amp; args)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>empty</name>
+    <anchorfile>cptr/detail/basic_list/empty.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>max_size</name>
+    <anchorfile>cptr/detail/basic_list/max_size.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>pop_back</name>
+    <anchorfile>cptr/detail/basic_list/pop_back.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>pop_front</name>
+    <anchorfile>cptr/detail/basic_list/pop_front.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>remove</name>
+    <anchorfile>cptr/detail/basic_list/remove.html</anchorfile>
+    <anchor/>
+    <arglist>(const T&amp; value)</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>remove_if</name>
+    <anchorfile>cptr/detail/basic_list/remove_if.html</anchorfile>
+    <anchor/>
+    <arglist>(Pred pred)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>reverse</name>
+    <anchorfile>cptr/detail/basic_list/reverse.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>size</name>
+    <anchorfile>cptr/detail/basic_list/size.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>sort</name>
+    <anchorfile>cptr/detail/basic_list/sort.html</anchorfile>
+    <anchor/>
+    <arglist>(Compare comp)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>swap</name>
+    <anchorfile>cptr/detail/basic_list/swap.html</anchorfile>
+    <anchor/>
+    <arglist>(basic_list&amp; other)</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>unique</name>
+    <anchorfile>cptr/detail/basic_list/unique.html</anchorfile>
+    <anchor/>
+    <arglist>(Pred pred)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::const_iterator</name>
+  <filename>cptr/detail/basic_list/const_iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::const_reference</name>
+  <filename>cptr/detail/basic_list/const_reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::const_reverse_iterator</name>
+  <filename>cptr/detail/basic_list/const_reverse_iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::difference_type</name>
+  <filename>cptr/detail/basic_list/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::iterator</name>
+  <filename>cptr/detail/basic_list/iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::reference</name>
+  <filename>cptr/detail/basic_list/reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::reverse_iterator</name>
+  <filename>cptr/detail/basic_list/reverse_iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::size_type</name>
+  <filename>cptr/detail/basic_list/size_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::value_type</name>
+  <filename>cptr/detail/basic_list/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_iterator</name>
+  <filename>cptr/detail/basic_list/basic_iterator.html</filename>
+  <class kind="class">cptr::detail::basic_list::basic_iterator::difference_type</class>
+  <class kind="class">cptr::detail::basic_list::basic_iterator::iterator_category</class>
+  <class kind="class">cptr::detail::basic_list::basic_iterator::pointer</class>
+  <class kind="class">cptr::detail::basic_list::basic_iterator::reference</class>
+  <class kind="class">cptr::detail::basic_list::basic_iterator::value_type</class>
+  <class kind="class">cptr::detail::basic_list::basic_iterator::basic_iterator</class>
+  <class kind="class">cptr::detail::basic_list::basic_iterator::operator++</class>
+  <class kind="class">cptr::detail::basic_list::basic_iterator::operator--</class>
+  <member kind="function">
+    <type>reference</type>
+    <name>operator*</name>
+    <anchorfile>cptr/detail/basic_list/basic_iterator/operator_star.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>pointer</type>
+    <name>operator-&gt;</name>
+    <anchorfile>cptr/detail/basic_list/basic_iterator/operator_ptr.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_iterator::difference_type</name>
+  <filename>cptr/detail/basic_list/basic_iterator/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_iterator::iterator_category</name>
+  <filename>cptr/detail/basic_list/basic_iterator/iterator_category.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_iterator::pointer</name>
+  <filename>cptr/detail/basic_list/basic_iterator/pointer.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_iterator::reference</name>
+  <filename>cptr/detail/basic_list/basic_iterator/reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_iterator::value_type</name>
+  <filename>cptr/detail/basic_list/basic_iterator/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_iterator::basic_iterator</name>
+  <filename>cptr/detail/basic_list/basic_iterator/2constructor-0c.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_iterator::operator++</name>
+  <filename>cptr/detail/basic_list/basic_iterator/operator_inc-0d.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_iterator::operator--</name>
+  <filename>cptr/detail/basic_list/basic_iterator/operator_dec-03.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::basic_list</name>
+  <filename>cptr/detail/basic_list/2constructor-06.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::operator=</name>
+  <filename>cptr/detail/basic_list/operator_assign-0e.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::assign</name>
+  <filename>cptr/detail/basic_list/assign-0c.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::back</name>
+  <filename>cptr/detail/basic_list/back-06.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::begin</name>
+  <filename>cptr/detail/basic_list/begin-06.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::end</name>
+  <filename>cptr/detail/basic_list/end-06.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::erase</name>
+  <filename>cptr/detail/basic_list/erase-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::front</name>
+  <filename>cptr/detail/basic_list/front-05.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::insert</name>
+  <filename>cptr/detail/basic_list/insert-0c.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::merge</name>
+  <filename>cptr/detail/basic_list/merge-00.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::push_back</name>
+  <filename>cptr/detail/basic_list/push_back-056c.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::push_front</name>
+  <filename>cptr/detail/basic_list/push_front-02.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::rbegin</name>
+  <filename>cptr/detail/basic_list/rbegin-0f.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::rend</name>
+  <filename>cptr/detail/basic_list/rend-01.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::resize</name>
+  <filename>cptr/detail/basic_list/resize-03.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::splice</name>
+  <filename>cptr/detail/basic_list/splice-03.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_list::node_size</name>
+  <filename>cptr/detail/basic_list/node_size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map</name>
+  <filename>cptr/detail/basic_ordered_map.html</filename>
+  <class kind="class">cptr::detail::basic_ordered_map::const_iterator</class>
+  <class kind="class">cptr::detail::basic_ordered_map::const_reference</class>
+  <class kind="class">cptr::detail::basic_ordered_map::const_reverse_iterator</class>
+  <class kind="class">cptr::detail::basic_ordered_map::difference_type</class>
+  <class kind="class">cptr::detail::basic_ordered_map::iterator</class>
+  <class kind="class">cptr::detail::basic_ordered_map::key_compare</class>
+  <class kind="class">cptr::detail::basic_ordered_map::key_type</class>
+  <class kind="class">cptr::detail::basic_ordered_map::mapped_type</class>
+  <class kind="class">cptr::detail::basic_ordered_map::reference</class>
+  <class kind="class">cptr::detail::basic_ordered_map::reverse_iterator</class>
+  <class kind="class">cptr::detail::basic_ordered_map::size_type</class>
+  <class kind="class">cptr::detail::basic_ordered_map::value_type</class>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_iterator</class>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_ordered_map</class>
+  <class kind="class">cptr::detail::basic_ordered_map::operator=</class>
+  <class kind="class">cptr::detail::basic_ordered_map::at</class>
+  <class kind="class">cptr::detail::basic_ordered_map::begin</class>
+  <class kind="class">cptr::detail::basic_ordered_map::contains</class>
+  <class kind="class">cptr::detail::basic_ordered_map::count</class>
+  <class kind="class">cptr::detail::basic_ordered_map::end</class>
+  <class kind="class">cptr::detail::basic_ordered_map::equal_range</class>
+  <class kind="class">cptr::detail::basic_ordered_map::erase</class>
+  <class kind="class">cptr::detail::basic_ordered_map::find</class>
+  <class kind="class">cptr::detail::basic_ordered_map::insert</class>
+  <class kind="class">cptr::detail::basic_ordered_map::insert_or_assign</class>
+  <class kind="class">cptr::detail::basic_ordered_map::lower_bound</class>
+  <class kind="class">cptr::detail::basic_ordered_map::operator[]</class>
+  <class kind="class">cptr::detail::basic_ordered_map::rbegin</class>
+  <class kind="class">cptr::detail::basic_ordered_map::rend</class>
+  <class kind="class">cptr::detail::basic_ordered_map::try_emplace</class>
+  <class kind="class">cptr::detail::basic_ordered_map::upper_bound</class>
+  <class kind="class">cptr::detail::basic_ordered_map::node_size</class>
+  <member kind="function">
+    <type>void</type>
+    <name>~basic_ordered_map</name>
+    <anchorfile>cptr/detail/basic_ordered_map/2destructor.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_iterator</type>
+    <name>cbegin</name>
+    <anchorfile>cptr/detail/basic_ordered_map/cbegin.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_iterator</type>
+    <name>cend</name>
+    <anchorfile>cptr/detail/basic_ordered_map/cend.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>clear</name>
+    <anchorfile>cptr/detail/basic_ordered_map/clear.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_reverse_iterator</type>
+    <name>crbegin</name>
+    <anchorfile>cptr/detail/basic_ordered_map/crbegin.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_reverse_iterator</type>
+    <name>crend</name>
+    <anchorfile>cptr/detail/basic_ordered_map/crend.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>std::pair&lt;iterator, bool&gt;</type>
+    <name>emplace</name>
+    <anchorfile>cptr/detail/basic_ordered_map/emplace.html</anchorfile>
+    <anchor/>
+    <arglist>(Args...&amp;&amp; args)</arglist>
+  </member>
+  <member kind="function">
+    <type>iterator</type>
+    <name>emplace_hint</name>
+    <anchorfile>cptr/detail/basic_ordered_map/emplace_hint.html</anchorfile>
+    <anchor/>
+    <arglist>(const_iterator, Args...&amp;&amp; args)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>empty</name>
+    <anchorfile>cptr/detail/basic_ordered_map/empty.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>std::size_t</type>
+    <name>height</name>
+    <anchorfile>cptr/detail/basic_ordered_map/height.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>key_compare</type>
+    <name>key_comp</name>
+    <anchorfile>cptr/detail/basic_ordered_map/key_comp.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>max_size</name>
+    <anchorfile>cptr/detail/basic_ordered_map/max_size.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>size</name>
+    <anchorfile>cptr/detail/basic_ordered_map/size.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>swap</name>
+    <anchorfile>cptr/detail/basic_ordered_map/swap.html</anchorfile>
+    <anchor/>
+    <arglist>(basic_ordered_map&amp; other)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>valid</name>
+    <anchorfile>cptr/detail/basic_ordered_map/valid.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::const_iterator</name>
+  <filename>cptr/detail/basic_ordered_map/const_iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::const_reference</name>
+  <filename>cptr/detail/basic_ordered_map/const_reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::const_reverse_iterator</name>
+  <filename>cptr/detail/basic_ordered_map/const_reverse_iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::difference_type</name>
+  <filename>cptr/detail/basic_ordered_map/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::iterator</name>
+  <filename>cptr/detail/basic_ordered_map/iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::key_compare</name>
+  <filename>cptr/detail/basic_ordered_map/key_compare.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::key_type</name>
+  <filename>cptr/detail/basic_ordered_map/key_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::mapped_type</name>
+  <filename>cptr/detail/basic_ordered_map/mapped_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::reference</name>
+  <filename>cptr/detail/basic_ordered_map/reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::reverse_iterator</name>
+  <filename>cptr/detail/basic_ordered_map/reverse_iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::size_type</name>
+  <filename>cptr/detail/basic_ordered_map/size_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::value_type</name>
+  <filename>cptr/detail/basic_ordered_map/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_iterator</name>
+  <filename>cptr/detail/basic_ordered_map/basic_iterator.html</filename>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_iterator::difference_type</class>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_iterator::iterator_category</class>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_iterator::pointer</class>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_iterator::reference</class>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_iterator::value_type</class>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_iterator::basic_iterator</class>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_iterator::operator++</class>
+  <class kind="class">cptr::detail::basic_ordered_map::basic_iterator::operator--</class>
+  <member kind="function">
+    <type>reference</type>
+    <name>operator*</name>
+    <anchorfile>cptr/detail/basic_ordered_map/basic_iterator/operator_star.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>pointer</type>
+    <name>operator-&gt;</name>
+    <anchorfile>cptr/detail/basic_ordered_map/basic_iterator/operator_ptr.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_iterator::difference_type</name>
+  <filename>cptr/detail/basic_ordered_map/basic_iterator/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_iterator::iterator_category</name>
+  <filename>cptr/detail/basic_ordered_map/basic_iterator/iterator_category.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_iterator::pointer</name>
+  <filename>cptr/detail/basic_ordered_map/basic_iterator/pointer.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_iterator::reference</name>
+  <filename>cptr/detail/basic_ordered_map/basic_iterator/reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_iterator::value_type</name>
+  <filename>cptr/detail/basic_ordered_map/basic_iterator/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_iterator::basic_iterator</name>
+  <filename>cptr/detail/basic_ordered_map/basic_iterator/2constructor-0b.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_iterator::operator++</name>
+  <filename>cptr/detail/basic_ordered_map/basic_iterator/operator_inc-06.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_iterator::operator--</name>
+  <filename>cptr/detail/basic_ordered_map/basic_iterator/operator_dec-0e.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::basic_ordered_map</name>
+  <filename>cptr/detail/basic_ordered_map/2constructor-0f7.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::operator=</name>
+  <filename>cptr/detail/basic_ordered_map/operator_assign-08e.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::at</name>
+  <filename>cptr/detail/basic_ordered_map/at-08.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::begin</name>
+  <filename>cptr/detail/basic_ordered_map/begin-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::contains</name>
+  <filename>cptr/detail/basic_ordered_map/contains-01.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::count</name>
+  <filename>cptr/detail/basic_ordered_map/count-0f.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::end</name>
+  <filename>cptr/detail/basic_ordered_map/end-0a.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::equal_range</name>
+  <filename>cptr/detail/basic_ordered_map/equal_range-0f.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::erase</name>
+  <filename>cptr/detail/basic_ordered_map/erase-02.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::find</name>
+  <filename>cptr/detail/basic_ordered_map/find-0c.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::insert</name>
+  <filename>cptr/detail/basic_ordered_map/insert-04.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::insert_or_assign</name>
+  <filename>cptr/detail/basic_ordered_map/insert_or_assign-089.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::lower_bound</name>
+  <filename>cptr/detail/basic_ordered_map/lower_bound-0eb.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::operator[]</name>
+  <filename>cptr/detail/basic_ordered_map/operator_subs-030.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::rbegin</name>
+  <filename>cptr/detail/basic_ordered_map/rbegin-04.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::rend</name>
+  <filename>cptr/detail/basic_ordered_map/rend-08.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::try_emplace</name>
+  <filename>cptr/detail/basic_ordered_map/try_emplace-0d.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::upper_bound</name>
+  <filename>cptr/detail/basic_ordered_map/upper_bound-0d.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_ordered_map::node_size</name>
+  <filename>cptr/detail/basic_ordered_map/node_size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map</name>
+  <filename>cptr/detail/basic_unordered_map.html</filename>
+  <class kind="class">cptr::detail::basic_unordered_map::const_iterator</class>
+  <class kind="class">cptr::detail::basic_unordered_map::const_reference</class>
+  <class kind="class">cptr::detail::basic_unordered_map::difference_type</class>
+  <class kind="class">cptr::detail::basic_unordered_map::hasher</class>
+  <class kind="class">cptr::detail::basic_unordered_map::iterator</class>
+  <class kind="class">cptr::detail::basic_unordered_map::key_equal</class>
+  <class kind="class">cptr::detail::basic_unordered_map::key_type</class>
+  <class kind="class">cptr::detail::basic_unordered_map::mapped_type</class>
+  <class kind="class">cptr::detail::basic_unordered_map::reference</class>
+  <class kind="class">cptr::detail::basic_unordered_map::size_type</class>
+  <class kind="class">cptr::detail::basic_unordered_map::value_type</class>
+  <class kind="class">cptr::detail::basic_unordered_map::basic_iterator</class>
+  <class kind="class">cptr::detail::basic_unordered_map::basic_unordered_map</class>
+  <class kind="class">cptr::detail::basic_unordered_map::operator=</class>
+  <class kind="class">cptr::detail::basic_unordered_map::at</class>
+  <class kind="class">cptr::detail::basic_unordered_map::begin</class>
+  <class kind="class">cptr::detail::basic_unordered_map::contains</class>
+  <class kind="class">cptr::detail::basic_unordered_map::count</class>
+  <class kind="class">cptr::detail::basic_unordered_map::end</class>
+  <class kind="class">cptr::detail::basic_unordered_map::equal_range</class>
+  <class kind="class">cptr::detail::basic_unordered_map::erase</class>
+  <class kind="class">cptr::detail::basic_unordered_map::find</class>
+  <class kind="class">cptr::detail::basic_unordered_map::insert</class>
+  <class kind="class">cptr::detail::basic_unordered_map::max_load_factor</class>
+  <class kind="class">cptr::detail::basic_unordered_map::operator[]</class>
+  <class kind="class">cptr::detail::basic_unordered_map::try_emplace</class>
+  <class kind="class">cptr::detail::basic_unordered_map::node_size</class>
+  <member kind="function">
+    <type>void</type>
+    <name>~basic_unordered_map</name>
+    <anchorfile>cptr/detail/basic_unordered_map/2destructor.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>bucket_count</name>
+    <anchorfile>cptr/detail/basic_unordered_map/bucket_count.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_iterator</type>
+    <name>cbegin</name>
+    <anchorfile>cptr/detail/basic_unordered_map/cbegin.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>const_iterator</type>
+    <name>cend</name>
+    <anchorfile>cptr/detail/basic_unordered_map/cend.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>clear</name>
+    <anchorfile>cptr/detail/basic_unordered_map/clear.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>std::pair&lt;iterator, bool&gt;</type>
+    <name>emplace</name>
+    <anchorfile>cptr/detail/basic_unordered_map/emplace.html</anchorfile>
+    <anchor/>
+    <arglist>(Args...&amp;&amp; args)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>empty</name>
+    <anchorfile>cptr/detail/basic_unordered_map/empty.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>hasher</type>
+    <name>hash_function</name>
+    <anchorfile>cptr/detail/basic_unordered_map/hash_function.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>std::pair&lt;iterator, bool&gt;</type>
+    <name>insert_or_assign</name>
+    <anchorfile>cptr/detail/basic_unordered_map/insert_or_assign.html</anchorfile>
+    <anchor/>
+    <arglist>(const K&amp; key, M&amp;&amp; value)</arglist>
+  </member>
+  <member kind="function">
+    <type>key_equal</type>
+    <name>key_eq</name>
+    <anchorfile>cptr/detail/basic_unordered_map/key_eq.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>float</type>
+    <name>load_factor</name>
+    <anchorfile>cptr/detail/basic_unordered_map/load_factor.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>max_size</name>
+    <anchorfile>cptr/detail/basic_unordered_map/max_size.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>rehash</name>
+    <anchorfile>cptr/detail/basic_unordered_map/rehash.html</anchorfile>
+    <anchor/>
+    <arglist>(size_type n)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>reserve</name>
+    <anchorfile>cptr/detail/basic_unordered_map/reserve.html</anchorfile>
+    <anchor/>
+    <arglist>(size_type n)</arglist>
+  </member>
+  <member kind="function">
+    <type>size_type</type>
+    <name>size</name>
+    <anchorfile>cptr/detail/basic_unordered_map/size.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>swap</name>
+    <anchorfile>cptr/detail/basic_unordered_map/swap.html</anchorfile>
+    <anchor/>
+    <arglist>(basic_unordered_map&amp; other)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::const_iterator</name>
+  <filename>cptr/detail/basic_unordered_map/const_iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::const_reference</name>
+  <filename>cptr/detail/basic_unordered_map/const_reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::difference_type</name>
+  <filename>cptr/detail/basic_unordered_map/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::hasher</name>
+  <filename>cptr/detail/basic_unordered_map/hasher.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::iterator</name>
+  <filename>cptr/detail/basic_unordered_map/iterator.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::key_equal</name>
+  <filename>cptr/detail/basic_unordered_map/key_equal.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::key_type</name>
+  <filename>cptr/detail/basic_unordered_map/key_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::mapped_type</name>
+  <filename>cptr/detail/basic_unordered_map/mapped_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::reference</name>
+  <filename>cptr/detail/basic_unordered_map/reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::size_type</name>
+  <filename>cptr/detail/basic_unordered_map/size_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::value_type</name>
+  <filename>cptr/detail/basic_unordered_map/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::basic_iterator</name>
+  <filename>cptr/detail/basic_unordered_map/basic_iterator.html</filename>
+  <class kind="class">cptr::detail::basic_unordered_map::basic_iterator::difference_type</class>
+  <class kind="class">cptr::detail::basic_unordered_map::basic_iterator::iterator_category</class>
+  <class kind="class">cptr::detail::basic_unordered_map::basic_iterator::pointer</class>
+  <class kind="class">cptr::detail::basic_unordered_map::basic_iterator::reference</class>
+  <class kind="class">cptr::detail::basic_unordered_map::basic_iterator::value_type</class>
+  <class kind="class">cptr::detail::basic_unordered_map::basic_iterator::basic_iterator</class>
+  <class kind="class">cptr::detail::basic_unordered_map::basic_iterator::operator++</class>
+  <member kind="function">
+    <type>reference</type>
+    <name>operator*</name>
+    <anchorfile>cptr/detail/basic_unordered_map/basic_iterator/operator_star.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>pointer</type>
+    <name>operator-&gt;</name>
+    <anchorfile>cptr/detail/basic_unordered_map/basic_iterator/operator_ptr.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::basic_iterator::difference_type</name>
+  <filename>cptr/detail/basic_unordered_map/basic_iterator/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::basic_iterator::iterator_category</name>
+  <filename>cptr/detail/basic_unordered_map/basic_iterator/iterator_category.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::basic_iterator::pointer</name>
+  <filename>cptr/detail/basic_unordered_map/basic_iterator/pointer.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::basic_iterator::reference</name>
+  <filename>cptr/detail/basic_unordered_map/basic_iterator/reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::basic_iterator::value_type</name>
+  <filename>cptr/detail/basic_unordered_map/basic_iterator/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::basic_iterator::basic_iterator</name>
+  <filename>cptr/detail/basic_unordered_map/basic_iterator/2constructor-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::basic_iterator::operator++</name>
+  <filename>cptr/detail/basic_unordered_map/basic_iterator/operator_inc-08.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::basic_unordered_map</name>
+  <filename>cptr/detail/basic_unordered_map/2constructor-0b.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::operator=</name>
+  <filename>cptr/detail/basic_unordered_map/operator_assign-0e.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::at</name>
+  <filename>cptr/detail/basic_unordered_map/at-05.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::begin</name>
+  <filename>cptr/detail/basic_unordered_map/begin-08.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::contains</name>
+  <filename>cptr/detail/basic_unordered_map/contains-00.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::count</name>
+  <filename>cptr/detail/basic_unordered_map/count-0d.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::end</name>
+  <filename>cptr/detail/basic_unordered_map/end-02.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::equal_range</name>
+  <filename>cptr/detail/basic_unordered_map/equal_range-05.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::erase</name>
+  <filename>cptr/detail/basic_unordered_map/erase-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::find</name>
+  <filename>cptr/detail/basic_unordered_map/find-04.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::insert</name>
+  <filename>cptr/detail/basic_unordered_map/insert-08.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::max_load_factor</name>
+  <filename>cptr/detail/basic_unordered_map/max_load_factor-063.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::operator[]</name>
+  <filename>cptr/detail/basic_unordered_map/operator_subs-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::try_emplace</name>
+  <filename>cptr/detail/basic_unordered_map/try_emplace-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::basic_unordered_map::node_size</name>
+  <filename>cptr/detail/basic_unordered_map/node_size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::swap</name>
+  <filename>cptr/detail/swap-05.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::operator==</name>
+  <filename>cptr/detail/operator_eq-0fb.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::detail::operator&lt;=&gt;</name>
+  <filename>cptr/detail/operator_3way-0bb.html</filename>
+</compound>
+<compound kind="namespace">
   <name>cptr::vm</name>
   <filename>cptr/vm.html</filename>
   <member kind="function">

@@ -425,19 +425,46 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1><a href="../cptr.html">cptr</a>::fancy_allocator</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>An allocator whose <code>pointer</code> type is cptr::ptr, so that containers that take their link type from the allocator get 4-byte links.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L14">cptr/fancy_allocator.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L26">cptr/fancy_allocator.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
 class fancy_allocator;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>plf::list is one such container. Its nodes link to a sentinel inside the list object, so the list object must be in the cage as well.</p>
+<pre><code class="language-cpp">
+using list = plf::list&lt;int, cptr::fancy_allocator&lt;int&gt;&gt;;
+cptr::ptr&lt;list&gt; l = cptr::make&lt;list&gt;();  // the list object in the cage
+l-&gt;push_back(1);
+cptr::destroy(l);
+</code></pre></div><!-- /description -->
 <h2>Types</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>

@@ -425,19 +425,45 @@ window.MathJax = {
 <meta charset="utf-8">
 </head>
 <body>
+<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
+  <a href="../../index.html" style="margin-right: 16px; text-decoration: none;
+    color: #0969da;"><strong>compressed-ptr</strong></a>
+  <a href="../../guide.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Guide</a>
+  <a href="../../benchmarks.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">Benchmarks</a>
+  <a href="../../history.html" style="margin-right: 16px; color: #0969da;
+    text-decoration: none;">History</a>
+  <a href="../../reference/cptr.html" style="margin-right: 16px;
+    color: #0969da; text-decoration: none;">API reference</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr" style="color: #0969da;
+    text-decoration: none;">GitHub</a>
+</nav>
+
 <div>
 <h1><a href="../cptr.html">cptr</a>::allocator</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>A standard allocator that places objects in the cage, so that any std container&#x27;s elements can be pointed to with a 4-byte cptr::ptr.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L13">cptr/allocator.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L25">cptr/allocator.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
 class allocator;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>The container&#x27;s own links stay 8 bytes; for 4-byte links use the cptr containers, or <a href="./fancy_allocator.html"><code>fancy_allocator</code></a> with a container that supports fancy pointers.</p>
+<pre><code class="language-cpp">
+std::vector&lt;node, cptr::allocator&lt;node&gt;&gt; nodes;
+nodes.reserve(1000);
+cptr::ptr&lt;node&gt; first = &amp;nodes[0];  // the elements are in the cage
+</code></pre></div><!-- /description -->
 <h2>Types</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>
