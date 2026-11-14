@@ -1,0 +1,1163 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<tagfile>
+<compound kind="namespace">
+  <name>cptr</name>
+  <filename>cptr.html</filename>
+  <class kind="class">cptr::forward_list</class>
+  <class kind="class">cptr::list</class>
+  <class kind="class">cptr::ordered_map</class>
+  <class kind="class">cptr::ptr</class>
+  <class kind="class">cptr::strict_ptr</class>
+  <class kind="class">cptr::unordered_map</class>
+  <class kind="class">cptr::allocator</class>
+  <class kind="class">cptr::atomic_ptr</class>
+  <class kind="class">cptr::basic_ptr</class>
+  <class kind="class">cptr::bump_allocator</class>
+  <class kind="class">cptr::cage</class>
+  <class kind="class">cptr::default_cage</class>
+  <class kind="class">cptr::fancy_allocator</class>
+  <class kind="class">cptr::mapped_cage</class>
+  <class kind="class">cptr::nonnull_ptr</class>
+  <class kind="class">cptr::ptr_pair</class>
+  <class kind="class">cptr::ptr_with_payload</class>
+  <class kind="class">cptr::tagged_ptr</class>
+  <class kind="class">cptr::user_cage</class>
+  <class kind="class">cptr::operator+</class>
+  <class kind="class">cptr::operator-</class>
+  <class kind="class">cptr::operator==</class>
+  <class kind="class">cptr::operator&lt;=&gt;</class>
+  <class kind="class">cptr::region_allocator</class>
+  <member kind="function">
+    <type>void</type>
+    <name>destroy</name>
+    <anchorfile>cptr/destroy.html</anchorfile>
+    <anchor/>
+    <arglist>(basic_ptr&lt;T, Cage, Strict&gt; p)</arglist>
+  </member>
+  <member kind="function">
+    <type>ptr&lt;T, Cage&gt;</type>
+    <name>make</name>
+    <anchorfile>cptr/make.html</anchorfile>
+    <anchor/>
+    <arglist>(Args...&amp;&amp; args)</arglist>
+  </member>
+</compound>
+<compound kind="namespace">
+  <name>cptr::vm</name>
+  <filename>cptr/vm.html</filename>
+  <member kind="function">
+    <type>bool</type>
+    <name>commit</name>
+    <anchorfile>cptr/vm/commit.html</anchorfile>
+    <anchor/>
+    <arglist>(void* p, std::size_t size)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>decommit</name>
+    <anchorfile>cptr/vm/decommit.html</anchorfile>
+    <anchor/>
+    <arglist>(void* p, std::size_t size)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>purge</name>
+    <anchorfile>cptr/vm/purge.html</anchorfile>
+    <anchor/>
+    <arglist>(void* p, std::size_t size)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::forward_list</name>
+  <filename>cptr/forward_list.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::list</name>
+  <filename>cptr/list.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::ordered_map</name>
+  <filename>cptr/ordered_map.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::ptr</name>
+  <filename>cptr/ptr.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::strict_ptr</name>
+  <filename>cptr/strict_ptr.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::unordered_map</name>
+  <filename>cptr/unordered_map.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::allocator</name>
+  <filename>cptr/allocator.html</filename>
+  <class kind="class">cptr::allocator::cage_type</class>
+  <class kind="class">cptr::allocator::value_type</class>
+  <class kind="class">cptr::allocator::rebind</class>
+  <class kind="class">cptr::allocator::allocator</class>
+  <member kind="function">
+    <type>T*</type>
+    <name>allocate</name>
+    <anchorfile>cptr/allocator/allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t n)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>deallocate</name>
+    <anchorfile>cptr/allocator/deallocate.html</anchorfile>
+    <anchor/>
+    <arglist>(T* p, std::size_t)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::allocator::cage_type</name>
+  <filename>cptr/allocator/cage_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::allocator::value_type</name>
+  <filename>cptr/allocator/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::allocator::rebind</name>
+  <filename>cptr/allocator/rebind.html</filename>
+  <class kind="class">cptr::allocator::rebind::other</class>
+</compound>
+<compound kind="class">
+  <name>cptr::allocator::rebind::other</name>
+  <filename>cptr/allocator/rebind/other.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::allocator::allocator</name>
+  <filename>cptr/allocator/2constructor-04.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::atomic_ptr</name>
+  <filename>cptr/atomic_ptr.html</filename>
+  <class kind="class">cptr::atomic_ptr::atomic_ptr</class>
+  <class kind="class">cptr::atomic_ptr::operator=</class>
+  <class kind="class">cptr::atomic_ptr::compare_exchange_strong</class>
+  <class kind="class">cptr::atomic_ptr::compare_exchange_weak</class>
+  <class kind="class">cptr::atomic_ptr::is_always_lock_free</class>
+  <member kind="function">
+    <type>T*</type>
+    <name>exchange</name>
+    <anchorfile>cptr/atomic_ptr/exchange.html</anchorfile>
+    <anchor/>
+    <arglist>(T* p, std::memory_order order)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>is_lock_free</name>
+    <anchorfile>cptr/atomic_ptr/is_lock_free.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>T*</type>
+    <name>load</name>
+    <anchorfile>cptr/atomic_ptr/load.html</anchorfile>
+    <anchor/>
+    <arglist>(std::memory_order order)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>notify_all</name>
+    <anchorfile>cptr/atomic_ptr/notify_all.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>notify_one</name>
+    <anchorfile>cptr/atomic_ptr/notify_one.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>store</name>
+    <anchorfile>cptr/atomic_ptr/store.html</anchorfile>
+    <anchor/>
+    <arglist>(T* p, std::memory_order order)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>wait</name>
+    <anchorfile>cptr/atomic_ptr/wait.html</anchorfile>
+    <anchor/>
+    <arglist>(T* old, std::memory_order order)</arglist>
+  </member>
+  <member kind="function">
+    <type>T*</type>
+    <name>operator T*</name>
+    <anchorfile>cptr/atomic_ptr/2conversion.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::atomic_ptr::atomic_ptr</name>
+  <filename>cptr/atomic_ptr/2constructor-0e4.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::atomic_ptr::operator=</name>
+  <filename>cptr/atomic_ptr/operator_assign-0b.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::atomic_ptr::compare_exchange_strong</name>
+  <filename>cptr/atomic_ptr/compare_exchange_strong-00.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::atomic_ptr::compare_exchange_weak</name>
+  <filename>cptr/atomic_ptr/compare_exchange_weak-04.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::atomic_ptr::is_always_lock_free</name>
+  <filename>cptr/atomic_ptr/is_always_lock_free.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr</name>
+  <filename>cptr/basic_ptr.html</filename>
+  <class kind="class">cptr::basic_ptr::cage_type</class>
+  <class kind="class">cptr::basic_ptr::difference_type</class>
+  <class kind="class">cptr::basic_ptr::element_type</class>
+  <class kind="class">cptr::basic_ptr::iterator_category</class>
+  <class kind="class">cptr::basic_ptr::pointer</class>
+  <class kind="class">cptr::basic_ptr::rebind</class>
+  <class kind="class">cptr::basic_ptr::reference</class>
+  <class kind="class">cptr::basic_ptr::value_type</class>
+  <class kind="class">cptr::basic_ptr::basic_ptr</class>
+  <class kind="class">cptr::basic_ptr::operator=</class>
+  <class kind="class">cptr::basic_ptr::operator++</class>
+  <class kind="class">cptr::basic_ptr::operator--</class>
+  <member kind="function">
+    <type>uint32_t</type>
+    <name>bits</name>
+    <anchorfile>cptr/basic_ptr/bits.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>T*</type>
+    <name>get</name>
+    <anchorfile>cptr/basic_ptr/get.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>U&amp;</type>
+    <name>operator*</name>
+    <anchorfile>cptr/basic_ptr/operator_star.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>basic_ptr&amp;</type>
+    <name>operator+=</name>
+    <anchorfile>cptr/basic_ptr/operator_plus_eq.html</anchorfile>
+    <anchor/>
+    <arglist>(std::ptrdiff_t n)</arglist>
+  </member>
+  <member kind="function">
+    <type>basic_ptr&amp;</type>
+    <name>operator-=</name>
+    <anchorfile>cptr/basic_ptr/operator_minus_eq.html</anchorfile>
+    <anchor/>
+    <arglist>(std::ptrdiff_t n)</arglist>
+  </member>
+  <member kind="function">
+    <type>T*</type>
+    <name>operator-&gt;</name>
+    <anchorfile>cptr/basic_ptr/operator_ptr.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>U&amp;</type>
+    <name>operator[]</name>
+    <anchorfile>cptr/basic_ptr/operator_subs.html</anchorfile>
+    <anchor/>
+    <arglist>(std::ptrdiff_t i)</arglist>
+  </member>
+  <member kind="function">
+    <type>T*</type>
+    <name>operator T*</name>
+    <anchorfile>cptr/basic_ptr/2conversion-03.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>operator bool</name>
+    <anchorfile>cptr/basic_ptr/2conversion-06.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>basic_ptr</type>
+    <name>from_bits</name>
+    <anchorfile>cptr/basic_ptr/from_bits.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t bits)</arglist>
+  </member>
+  <member kind="function">
+    <type>basic_ptr</type>
+    <name>pointer_to</name>
+    <anchorfile>cptr/basic_ptr/pointer_to.html</anchorfile>
+    <anchor/>
+    <arglist>(U&amp; r)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::cage_type</name>
+  <filename>cptr/basic_ptr/cage_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::difference_type</name>
+  <filename>cptr/basic_ptr/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::element_type</name>
+  <filename>cptr/basic_ptr/element_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::iterator_category</name>
+  <filename>cptr/basic_ptr/iterator_category.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::pointer</name>
+  <filename>cptr/basic_ptr/pointer.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::rebind</name>
+  <filename>cptr/basic_ptr/rebind.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::reference</name>
+  <filename>cptr/basic_ptr/reference.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::value_type</name>
+  <filename>cptr/basic_ptr/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::basic_ptr</name>
+  <filename>cptr/basic_ptr/2constructor-02.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::operator=</name>
+  <filename>cptr/basic_ptr/operator_assign-02.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::operator++</name>
+  <filename>cptr/basic_ptr/operator_inc-0e.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::basic_ptr::operator--</name>
+  <filename>cptr/basic_ptr/operator_dec-05.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::bump_allocator</name>
+  <filename>cptr/bump_allocator.html</filename>
+  <member kind="function">
+    <type>void</type>
+    <name>bump_allocator</name>
+    <anchorfile>cptr/bump_allocator/2constructor.html</anchorfile>
+    <anchor/>
+    <arglist>(std::span&lt;std::byte&gt; region)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>allocate</name>
+    <anchorfile>cptr/bump_allocator/allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t bytes, std::size_t align)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>deallocate</name>
+    <anchorfile>cptr/bump_allocator/deallocate.html</anchorfile>
+    <anchor/>
+    <arglist>(void*)</arglist>
+  </member>
+  <member kind="function">
+    <type>std::size_t</type>
+    <name>used</name>
+    <anchorfile>cptr/bump_allocator/used.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::cage</name>
+  <filename>cptr/cage-0b.html</filename>
+  <class kind="class">cptr::cage::tag</class>
+  <class kind="class">cptr::cage::deallocate</class>
+  <class kind="class">cptr::cage::granularity</class>
+  <class kind="class">cptr::cage::shift</class>
+  <class kind="class">cptr::cage::size</class>
+  <class kind="class">cptr::cage::span_count</class>
+  <class kind="class">cptr::cage::span_size</class>
+  <class kind="class">cptr::cage::usable_end</class>
+  <member kind="function">
+    <type>void*</type>
+    <name>allocate</name>
+    <anchorfile>cptr/cage-0b/allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t bytes, std::size_t align)</arglist>
+  </member>
+  <member kind="function">
+    <type>std::size_t</type>
+    <name>allocated_bytes</name>
+    <anchorfile>cptr/cage-0b/allocated_bytes.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>uintptr_t</type>
+    <name>base</name>
+    <anchorfile>cptr/cage-0b/base.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>std::size_t</type>
+    <name>committed_bytes</name>
+    <anchorfile>cptr/cage-0b/committed_bytes.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>uint32_t</type>
+    <name>compress</name>
+    <anchorfile>cptr/cage-0b/compress.html</anchorfile>
+    <anchor/>
+    <arglist>(const void* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>contains</name>
+    <anchorfile>cptr/cage-0b/contains.html</anchorfile>
+    <anchor/>
+    <arglist>(const void* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>decompress</name>
+    <anchorfile>cptr/cage-0b/decompress.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t bits)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>decompress_nonnull</name>
+    <anchorfile>cptr/cage-0b/decompress_nonnull.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t bits)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>init</name>
+    <anchorfile>cptr/cage-0b/init.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>std::pmr::memory_resource*</type>
+    <name>resource</name>
+    <anchorfile>cptr/cage-0b/resource.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>trim</name>
+    <anchorfile>cptr/cage-0b/trim.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>try_allocate</name>
+    <anchorfile>cptr/cage-0b/try_allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t bytes, std::size_t align)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::cage::tag</name>
+  <filename>cptr/cage-0b/tag.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::cage::deallocate</name>
+  <filename>cptr/cage-0b/deallocate-07.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::cage::granularity</name>
+  <filename>cptr/cage-0b/granularity.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::cage::shift</name>
+  <filename>cptr/cage-0b/shift.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::cage::size</name>
+  <filename>cptr/cage-0b/size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::cage::span_count</name>
+  <filename>cptr/cage-0b/span_count.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::cage::span_size</name>
+  <filename>cptr/cage-0b/span_size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::cage::usable_end</name>
+  <filename>cptr/cage-0b/usable_end.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::default_cage</name>
+  <filename>cptr/default_cage.html</filename>
+  <class kind="class">cptr::default_cage::tag</class>
+  <class kind="class">cptr::default_cage::deallocate</class>
+  <class kind="class">cptr::default_cage::granularity</class>
+  <class kind="class">cptr::default_cage::shift</class>
+  <class kind="class">cptr::default_cage::size</class>
+  <class kind="class">cptr::default_cage::span_count</class>
+  <class kind="class">cptr::default_cage::span_size</class>
+  <class kind="class">cptr::default_cage::usable_end</class>
+  <member kind="function">
+    <type>void*</type>
+    <name>allocate</name>
+    <anchorfile>cptr/default_cage/allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t bytes, std::size_t align)</arglist>
+  </member>
+  <member kind="function">
+    <type>std::size_t</type>
+    <name>allocated_bytes</name>
+    <anchorfile>cptr/default_cage/allocated_bytes.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>uintptr_t</type>
+    <name>base</name>
+    <anchorfile>cptr/default_cage/base.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>std::size_t</type>
+    <name>committed_bytes</name>
+    <anchorfile>cptr/default_cage/committed_bytes.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>uint32_t</type>
+    <name>compress</name>
+    <anchorfile>cptr/default_cage/compress.html</anchorfile>
+    <anchor/>
+    <arglist>(const void* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>contains</name>
+    <anchorfile>cptr/default_cage/contains.html</anchorfile>
+    <anchor/>
+    <arglist>(const void* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>decompress</name>
+    <anchorfile>cptr/default_cage/decompress.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t bits)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>decompress_nonnull</name>
+    <anchorfile>cptr/default_cage/decompress_nonnull.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t bits)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>init</name>
+    <anchorfile>cptr/default_cage/init.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>std::pmr::memory_resource*</type>
+    <name>resource</name>
+    <anchorfile>cptr/default_cage/resource.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>trim</name>
+    <anchorfile>cptr/default_cage/trim.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>try_allocate</name>
+    <anchorfile>cptr/default_cage/try_allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t bytes, std::size_t align)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::default_cage::tag</name>
+  <filename>cptr/default_cage/tag.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::default_cage::deallocate</name>
+  <filename>cptr/default_cage/deallocate-0d.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::default_cage::granularity</name>
+  <filename>cptr/default_cage/granularity.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::default_cage::shift</name>
+  <filename>cptr/default_cage/shift.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::default_cage::size</name>
+  <filename>cptr/default_cage/size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::default_cage::span_count</name>
+  <filename>cptr/default_cage/span_count.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::default_cage::span_size</name>
+  <filename>cptr/default_cage/span_size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::default_cage::usable_end</name>
+  <filename>cptr/default_cage/usable_end.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator</name>
+  <filename>cptr/fancy_allocator.html</filename>
+  <class kind="class">cptr::fancy_allocator::const_pointer</class>
+  <class kind="class">cptr::fancy_allocator::const_void_pointer</class>
+  <class kind="class">cptr::fancy_allocator::difference_type</class>
+  <class kind="class">cptr::fancy_allocator::pointer</class>
+  <class kind="class">cptr::fancy_allocator::size_type</class>
+  <class kind="class">cptr::fancy_allocator::value_type</class>
+  <class kind="class">cptr::fancy_allocator::void_pointer</class>
+  <class kind="class">cptr::fancy_allocator::rebind</class>
+  <class kind="class">cptr::fancy_allocator::fancy_allocator</class>
+  <class kind="class">cptr::fancy_allocator::construct</class>
+  <class kind="class">cptr::fancy_allocator::destroy</class>
+  <member kind="function">
+    <type>pointer</type>
+    <name>allocate</name>
+    <anchorfile>cptr/fancy_allocator/allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t n)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>deallocate</name>
+    <anchorfile>cptr/fancy_allocator/deallocate.html</anchorfile>
+    <anchor/>
+    <arglist>(pointer p, std::size_t)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::const_pointer</name>
+  <filename>cptr/fancy_allocator/const_pointer.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::const_void_pointer</name>
+  <filename>cptr/fancy_allocator/const_void_pointer.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::difference_type</name>
+  <filename>cptr/fancy_allocator/difference_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::pointer</name>
+  <filename>cptr/fancy_allocator/pointer.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::size_type</name>
+  <filename>cptr/fancy_allocator/size_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::value_type</name>
+  <filename>cptr/fancy_allocator/value_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::void_pointer</name>
+  <filename>cptr/fancy_allocator/void_pointer.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::rebind</name>
+  <filename>cptr/fancy_allocator/rebind.html</filename>
+  <class kind="class">cptr::fancy_allocator::rebind::other</class>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::rebind::other</name>
+  <filename>cptr/fancy_allocator/rebind/other.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::fancy_allocator</name>
+  <filename>cptr/fancy_allocator/2constructor-0e.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::construct</name>
+  <filename>cptr/fancy_allocator/construct-03.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::fancy_allocator::destroy</name>
+  <filename>cptr/fancy_allocator/destroy-0c8.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::mapped_cage</name>
+  <filename>cptr/mapped_cage.html</filename>
+  <class kind="class">cptr::mapped_cage::tag</class>
+  <class kind="class">cptr::mapped_cage::deallocate</class>
+  <class kind="class">cptr::mapped_cage::granularity</class>
+  <class kind="class">cptr::mapped_cage::shift</class>
+  <class kind="class">cptr::mapped_cage::size</class>
+  <class kind="class">cptr::mapped_cage::span_count</class>
+  <class kind="class">cptr::mapped_cage::span_size</class>
+  <class kind="class">cptr::mapped_cage::usable_end</class>
+  <member kind="function">
+    <type>void*</type>
+    <name>allocate</name>
+    <anchorfile>cptr/mapped_cage/allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t bytes, std::size_t align)</arglist>
+  </member>
+  <member kind="function">
+    <type>std::size_t</type>
+    <name>allocated_bytes</name>
+    <anchorfile>cptr/mapped_cage/allocated_bytes.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>uintptr_t</type>
+    <name>base</name>
+    <anchorfile>cptr/mapped_cage/base.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>close</name>
+    <anchorfile>cptr/mapped_cage/close.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>uint32_t</type>
+    <name>compress</name>
+    <anchorfile>cptr/mapped_cage/compress.html</anchorfile>
+    <anchor/>
+    <arglist>(const void* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>contains</name>
+    <anchorfile>cptr/mapped_cage/contains.html</anchorfile>
+    <anchor/>
+    <arglist>(const void* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>decompress</name>
+    <anchorfile>cptr/mapped_cage/decompress.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t bits)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>decompress_nonnull</name>
+    <anchorfile>cptr/mapped_cage/decompress_nonnull.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t bits)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>flush</name>
+    <anchorfile>cptr/mapped_cage/flush.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>is_open</name>
+    <anchorfile>cptr/mapped_cage/is_open.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>open</name>
+    <anchorfile>cptr/mapped_cage/open.html</anchorfile>
+    <anchor/>
+    <arglist>(const char* path)</arglist>
+  </member>
+  <member kind="function">
+    <type>uintptr_t</type>
+    <name>previous_base</name>
+    <anchorfile>cptr/mapped_cage/previous_base.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>T*</type>
+    <name>root</name>
+    <anchorfile>cptr/mapped_cage/root.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>set_root</name>
+    <anchorfile>cptr/mapped_cage/set_root.html</anchorfile>
+    <anchor/>
+    <arglist>(const void* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>try_allocate</name>
+    <anchorfile>cptr/mapped_cage/try_allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t bytes, std::size_t align)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::mapped_cage::tag</name>
+  <filename>cptr/mapped_cage/tag.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::mapped_cage::deallocate</name>
+  <filename>cptr/mapped_cage/deallocate-0d.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::mapped_cage::granularity</name>
+  <filename>cptr/mapped_cage/granularity.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::mapped_cage::shift</name>
+  <filename>cptr/mapped_cage/shift.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::mapped_cage::size</name>
+  <filename>cptr/mapped_cage/size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::mapped_cage::span_count</name>
+  <filename>cptr/mapped_cage/span_count.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::mapped_cage::span_size</name>
+  <filename>cptr/mapped_cage/span_size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::mapped_cage::usable_end</name>
+  <filename>cptr/mapped_cage/usable_end.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::nonnull_ptr</name>
+  <filename>cptr/nonnull_ptr.html</filename>
+  <class kind="class">cptr::nonnull_ptr::cage_type</class>
+  <class kind="class">cptr::nonnull_ptr::element_type</class>
+  <class kind="class">cptr::nonnull_ptr::nonnull_ptr</class>
+  <member kind="function">
+    <type>uint32_t</type>
+    <name>bits</name>
+    <anchorfile>cptr/nonnull_ptr/bits.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>T*</type>
+    <name>get</name>
+    <anchorfile>cptr/nonnull_ptr/get.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>T&amp;</type>
+    <name>operator*</name>
+    <anchorfile>cptr/nonnull_ptr/operator_star.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>T*</type>
+    <name>operator-&gt;</name>
+    <anchorfile>cptr/nonnull_ptr/operator_ptr.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>T*</type>
+    <name>operator T*</name>
+    <anchorfile>cptr/nonnull_ptr/2conversion.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::nonnull_ptr::cage_type</name>
+  <filename>cptr/nonnull_ptr/cage_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::nonnull_ptr::element_type</name>
+  <filename>cptr/nonnull_ptr/element_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::nonnull_ptr::nonnull_ptr</name>
+  <filename>cptr/nonnull_ptr/2constructor-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::ptr_pair</name>
+  <filename>cptr/ptr_pair.html</filename>
+  <class kind="class">cptr::ptr_pair::ptr_pair</class>
+  <member kind="function">
+    <type>A*</type>
+    <name>first</name>
+    <anchorfile>cptr/ptr_pair/first.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>B*</type>
+    <name>second</name>
+    <anchorfile>cptr/ptr_pair/second.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>set_first</name>
+    <anchorfile>cptr/ptr_pair/set_first.html</anchorfile>
+    <anchor/>
+    <arglist>(A* a)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>set_second</name>
+    <anchorfile>cptr/ptr_pair/set_second.html</anchorfile>
+    <anchor/>
+    <arglist>(B* b)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::ptr_pair::ptr_pair</name>
+  <filename>cptr/ptr_pair/2constructor-01.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::ptr_with_payload</name>
+  <filename>cptr/ptr_with_payload.html</filename>
+  <class kind="class">cptr::ptr_with_payload::ptr_with_payload</class>
+  <member kind="function">
+    <type>T*</type>
+    <name>get</name>
+    <anchorfile>cptr/ptr_with_payload/get.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>uint32_t</type>
+    <name>payload</name>
+    <anchorfile>cptr/ptr_with_payload/payload.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>set</name>
+    <anchorfile>cptr/ptr_with_payload/set.html</anchorfile>
+    <anchor/>
+    <arglist>(T* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>set_payload</name>
+    <anchorfile>cptr/ptr_with_payload/set_payload.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t v)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::ptr_with_payload::ptr_with_payload</name>
+  <filename>cptr/ptr_with_payload/2constructor-0b.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::tagged_ptr</name>
+  <filename>cptr/tagged_ptr.html</filename>
+  <class kind="class">cptr::tagged_ptr::tagged_ptr</class>
+  <member kind="function">
+    <type>T*</type>
+    <name>get</name>
+    <anchorfile>cptr/tagged_ptr/get.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void</type>
+    <name>set</name>
+    <anchorfile>cptr/tagged_ptr/set.html</anchorfile>
+    <anchor/>
+    <arglist>(T* p, uint32_t tag)</arglist>
+  </member>
+  <member kind="function">
+    <type>uint32_t</type>
+    <name>tag</name>
+    <anchorfile>cptr/tagged_ptr/tag.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::tagged_ptr::tagged_ptr</name>
+  <filename>cptr/tagged_ptr/2constructor-04.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::user_cage</name>
+  <filename>cptr/user_cage.html</filename>
+  <class kind="class">cptr::user_cage::allocator_type</class>
+  <class kind="class">cptr::user_cage::tag</class>
+  <class kind="class">cptr::user_cage::deallocate</class>
+  <class kind="class">cptr::user_cage::granularity</class>
+  <class kind="class">cptr::user_cage::shift</class>
+  <class kind="class">cptr::user_cage::size</class>
+  <class kind="class">cptr::user_cage::span_size</class>
+  <class kind="class">cptr::user_cage::usable_end</class>
+  <member kind="function">
+    <type>void*</type>
+    <name>allocate</name>
+    <anchorfile>cptr/user_cage/allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t bytes, std::size_t align)</arglist>
+  </member>
+  <member kind="function">
+    <type>Allocator&amp;</type>
+    <name>allocator</name>
+    <anchorfile>cptr/user_cage/allocator.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>uintptr_t</type>
+    <name>base</name>
+    <anchorfile>cptr/user_cage/base.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>uint32_t</type>
+    <name>compress</name>
+    <anchorfile>cptr/user_cage/compress.html</anchorfile>
+    <anchor/>
+    <arglist>(const void* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>contains</name>
+    <anchorfile>cptr/user_cage/contains.html</anchorfile>
+    <anchor/>
+    <arglist>(const void* p)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>decompress</name>
+    <anchorfile>cptr/user_cage/decompress.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t bits)</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>decompress_nonnull</name>
+    <anchorfile>cptr/user_cage/decompress_nonnull.html</anchorfile>
+    <anchor/>
+    <arglist>(uint32_t bits)</arglist>
+  </member>
+  <member kind="function">
+    <type>bool</type>
+    <name>init</name>
+    <anchorfile>cptr/user_cage/init.html</anchorfile>
+    <anchor/>
+    <arglist>()</arglist>
+  </member>
+  <member kind="function">
+    <type>void*</type>
+    <name>try_allocate</name>
+    <anchorfile>cptr/user_cage/try_allocate.html</anchorfile>
+    <anchor/>
+    <arglist>(std::size_t bytes, std::size_t align)</arglist>
+  </member>
+</compound>
+<compound kind="class">
+  <name>cptr::user_cage::allocator_type</name>
+  <filename>cptr/user_cage/allocator_type.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::user_cage::tag</name>
+  <filename>cptr/user_cage/tag.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::user_cage::deallocate</name>
+  <filename>cptr/user_cage/deallocate-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::user_cage::granularity</name>
+  <filename>cptr/user_cage/granularity.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::user_cage::shift</name>
+  <filename>cptr/user_cage/shift.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::user_cage::size</name>
+  <filename>cptr/user_cage/size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::user_cage::span_size</name>
+  <filename>cptr/user_cage/span_size.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::user_cage::usable_end</name>
+  <filename>cptr/user_cage/usable_end.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::operator+</name>
+  <filename>cptr/operator_plus-07.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::operator-</name>
+  <filename>cptr/operator_minus-08.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::operator==</name>
+  <filename>cptr/operator_eq-09.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::operator&lt;=&gt;</name>
+  <filename>cptr/operator_3way-05.html</filename>
+</compound>
+<compound kind="class">
+  <name>cptr::region_allocator</name>
+  <filename>cptr/region_allocator.html</filename>
+</compound>
+</tagfile>
