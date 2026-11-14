@@ -16,7 +16,9 @@
 
 // Checks for misuse: active when NDEBUG is not defined. Define CPTR_ASSERT
 // before including any cage header to route failures elsewhere.
-#ifndef CPTR_ASSERT
+#ifdef CPTR_ASSERT
+#  define CPTR_DETAIL_USER_ASSERT 1
+#else
 #  define CPTR_ASSERT(cond, msg) assert((cond) && msg)
 #endif
 
@@ -24,10 +26,13 @@
 // one, or building a nonnull_ptr from null. They are assertions by default.
 // Define CPTR_CHECKED to keep them in release builds too, where a failure
 // prints the message and aborts. Each costs a compare and a branch that is
-// never taken. Define CPTR_CHECK yourself to handle failures differently;
-// it must not return.
+// never taken.
+//
+// A CPTR_ASSERT of your own takes these checks too, with or without
+// CPTR_CHECKED, so one handler sees every failure. Define CPTR_CHECK
+// yourself to handle only these differently; it must not return.
 #ifndef CPTR_CHECK
-#  if defined(CPTR_CHECKED)
+#  if defined(CPTR_CHECKED) && !defined(CPTR_DETAIL_USER_ASSERT)
 #    include <cstdio>
 #    include <cstdlib>
 #    define CPTR_CHECK(cond, msg) \
@@ -41,6 +46,12 @@ namespace cptr::detail {
 #  else
 #    define CPTR_CHECK(cond, msg) CPTR_ASSERT(cond, msg)
 #  endif
+#endif
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#  define CPTR_NOINLINE __declspec(noinline)
+#else
+#  define CPTR_NOINLINE __attribute__((noinline))
 #endif
 
 // Gives a cage and its tag default visibility, so that every shared library
@@ -118,6 +129,16 @@ inline void* reserve_aligned(std::size_t size, std::size_t align) noexcept {
 #endif
 }
 
+/// Give back address space from reserve_aligned(), whole.
+inline void release(void* p, std::size_t size) noexcept {
+#if defined(_WIN32)
+  (void)size;
+  VirtualFree(p, 0, MEM_RELEASE);
+#else
+  munmap(p, size);
+#endif
+}
+
 #ifdef CPTR_FAULT_INJECTION
 /// Tests set this to make the next N commits fail.
 inline std::atomic<int> commit_failures_to_inject{0};
@@ -187,11 +208,14 @@ inline void purge(void* p, std::size_t size) noexcept {
 #include <memory_resource>
 #include <new>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 
 // Under AddressSanitizer, freed and not yet handed out cage memory is
-// poisoned, so use-after-free through a compressed pointer is reported.
+// poisoned, and so is the rest of a block past the bytes asked for, so
+// use-after-free through a compressed pointer and overflows into the
+// rounding of a size class or span are reported.
 #if defined(__SANITIZE_ADDRESS__)
 #  define CPTR_ASAN 1
 #elif defined(__has_feature)
@@ -226,9 +250,10 @@ class spin_lock {
   void unlock() noexcept { locked_.store(false, std::memory_order_release); }
 };
 
+template <class Lock>
 struct lock_guard {
-  spin_lock& lock;
-  explicit lock_guard(spin_lock& l) : lock(l) { lock.lock(); }
+  Lock& lock;
+  explicit lock_guard(Lock& l) : lock(l) { lock.lock(); }
   ~lock_guard() { lock.unlock(); }
   lock_guard(const lock_guard&) = delete;
   lock_guard& operator=(const lock_guard&) = delete;
@@ -265,7 +290,57 @@ constexpr std::array<std::uint32_t, class_count()> make_class_sizes() {
 }
 
 inline constexpr auto kClassSizes = make_class_sizes();
+
+/// A cage's base address. An enum rather than a std::uintptr_t, so that
+/// type-based alias analysis knows stores through a std::uintptr_t* or
+/// std::size_t* cannot change it, and compilers keep it in a register
+/// across such stores, as in a loop that follows pointers and counts.
+enum class base_address : std::uintptr_t {};
+
+// Not constexpr: reaching it in a constant expression fails to compile.
+inline void nonnull_pointer_in_constant_expression() noexcept {}
+
+constexpr std::uint32_t compress_constant(const void* p) noexcept {
+  if (p) {
+    nonnull_pointer_in_constant_expression();
+  }
+  return 0;
+}
+
+constexpr void* decompress_constant(std::uint32_t bits) noexcept {
+  if (bits) {
+    nonnull_pointer_in_constant_expression();
+  }
+  return nullptr;
+}
 static_assert(kClassSizes.back() == kMaxSmall && kMaxSmall % 4096 == 0);
+
+/// The smallest class of at least `bytes` (1 to kMaxSmall) whose size is a
+/// multiple of `align` (a power of two up to kMaxSmall). Above 256 bytes
+/// there are four classes per power of two p, p + p/4 ... 2p, so the class
+/// follows from the top three bits of bytes - 1, and as they are multiples
+/// of p/4 >= 64, only alignments above 64 need a short search from there.
+constexpr int size_class(std::size_t bytes, std::size_t align) noexcept {
+  // No class smaller than this can be a multiple of align. Up to 256 the
+  // class of r is itself a multiple of align.
+  std::size_t r = (bytes + align - 1) & ~(align - 1);
+  if (r <= 128) {
+    return static_cast<int>((r + 7) / 8 - 1);
+  }
+  if (r <= 256) {
+    return static_cast<int>(16 + (r - 129) / 16);
+  }
+  std::size_t b = r - 1;
+  auto e = static_cast<unsigned>(std::bit_width(b)) - 1;  // 2^e < r <= 2^(e+1)
+  std::size_t i = 24 + (e - 8) * 4 + ((b >> (e - 2)) & 3);
+  if (align > 64) {
+    // kMaxSmall is a multiple of every alignment allowed, so this stops.
+    while (kClassSizes[i] & (align - 1)) {
+      i++;
+    }
+  }
+  return static_cast<int>(i);
+}
 
 }  // namespace detail
 
@@ -320,50 +395,64 @@ class CPTR_VISIBLE cage {
       if (!p) {
         return false;
       }
+#if !defined(_WIN32)
+      // Hold the lock across fork(), so that the child never starts with it
+      // taken by a thread that does not exist there. Registered once, by the
+      // thread that reserves the cage, and before any other thread can see
+      // the cage ready and take the lock.
+      if (pthread_atfork(&lock_for_fork, &unlock_after_fork,
+                         &unlock_after_fork) != 0) {
+        detail::release(p, size);
+        return false;
+      }
+#endif
       st->bump = span_size;
       st->commit_end = span_size;
-      base_ = reinterpret_cast<std::uintptr_t>(p);
+      base_ = detail::base_address(reinterpret_cast<std::uintptr_t>(p));
       ready_.store(true, std::memory_order_release);
     }
-#if !defined(_WIN32)
-    // Hold the lock across fork(), so that the child never starts with it
-    // taken by a thread that does not exist there. Registered outside the
-    // lock, and only once, by the thread that reserved the cage.
-    pthread_atfork(&lock_for_fork, &unlock_after_fork, &unlock_after_fork);
-#endif
     return true;
   }
 
   /// Zero until init() succeeds. Any thread that obtained a pointer into the
   /// cage is ordered after init(), so reading the base needs no atomics.
-  static std::uintptr_t base() noexcept { return base_; }
+  static std::uintptr_t base() noexcept { return std::uintptr_t(base_); }
 
   static bool contains(const void* p) noexcept {
-    return base_ != 0 && reinterpret_cast<std::uintptr_t>(p) - base_ < size;
+    return base() != 0 && reinterpret_cast<std::uintptr_t>(p) - base() < size;
   }
 
-  static std::uint32_t compress(const void* p) noexcept {
-    if (!p) {
-      return 0;
+  /// The cage is aligned to its own size, so a pointer's offset is its low
+  /// SizeLog2 bits: compressing is a mask and a shift, and nullptr maps to
+  /// 0 with no branch. A pointer from outside the cage is caught only by
+  /// CPTR_CHECK. In a constant expression only nullptr can be compressed.
+  static constexpr std::uint32_t compress(const void* p) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::compress_constant(p);
     }
-    CPTR_CHECK(contains(p), "pointer is outside the cage");
-    std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
+    CPTR_CHECK(!p || contains(p), "pointer is outside the cage");
+    std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) & (size - 1);
     CPTR_CHECK((offset & (granularity - 1)) == 0,
                "pointer is not aligned to the cage granularity");
     return static_cast<std::uint32_t>(offset >> Shift);
   }
 
-  /// Zero maps back to nullptr. Compilers turn this into a conditional move,
-  /// which keeps the null check off the critical path of a pointer chase.
-  static void* decompress(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(bits == 0 || base_ != 0, kUninitialised);
-    std::uintptr_t full = base_ + (std::uintptr_t(bits) << Shift);
+  /// Zero maps back to nullptr. Clang turns the null check into a
+  /// conditional move; GCC into a branch, which is cheap while it predicts
+  /// well, as it does when most pointers are not null. In a constant
+  /// expression only 0 can be decompressed.
+  static constexpr void* decompress(std::uint32_t bits) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::decompress_constant(bits);
+    }
+    CPTR_ASSERT(bits == 0 || base() != 0, kUninitialised);
+    std::uintptr_t full = base() + (std::uintptr_t(bits) << Shift);
     return reinterpret_cast<void*>(bits ? full : std::uintptr_t(0));
   }
 
   static void* decompress_nonnull(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(base_ != 0, kUninitialised);
-    return reinterpret_cast<void*>(base_ + (std::uintptr_t(bits) << Shift));
+    CPTR_ASSERT(base() != 0, kUninitialised);
+    return reinterpret_cast<void*>(base() + (std::uintptr_t(bits) << Shift));
   }
 
   /// Allocate memory inside the cage. Throws std::bad_alloc when the cage is
@@ -393,20 +482,25 @@ class CPTR_VISIBLE cage {
     if (cls >= 0) {
       // Small blocks come from this thread's cache, which is refilled from
       // the slabs a batch at a time.
-      thread_cache& tc = cache();
+      thread_cache* tcp = cache();
+      if (!tcp) [[unlikely]] {
+        return allocate_uncached(cls, bytes);
+      }
+      thread_cache& tc = *tcp;
       std::uint32_t& n = tc.count[cls];
       if (n == 0 && !refill(tc, cls)) {
         return nullptr;
       }
       std::uint32_t block_size = detail::kClassSizes[cls];
       void* p = decompress_nonnull(tc.blocks[cls][--n]);
-      CPTR_UNPOISON(p, block_size);
+      // Only the bytes asked for, so that overflows into the rest of the
+      // block are reported too.
+      CPTR_UNPOISON(p, bytes);
       tc.cached.store(tc.cached.load(std::memory_order_relaxed) - block_size,
                       std::memory_order_relaxed);
       return p;
     }
-    detail::lock_guard g(state().lock);
-    return allocate_large(bytes, align);
+    return allocate_large_locked(bytes, align);
   }
 
   /// Free memory from allocate(). The size is not needed: the span table
@@ -417,13 +511,18 @@ class CPTR_VISIBLE cage {
     }
     CPTR_CHECK(contains(p), "pointer was not allocated from this cage");
     state_type& st = state();
-    std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
+    std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base();
     std::uint32_t span = static_cast<std::uint32_t>(offset / span_size);
     // A live block's span entry does not change, so it can be read without
     // the lock.
     std::uint8_t cls = st.span_class[span];
     if (cls < detail::kClassSizes.size()) {
-      thread_cache& tc = cache();
+      thread_cache* tcp = cache();
+      if (!tcp) [[unlikely]] {
+        free_uncached(p, cls);
+        return;
+      }
+      thread_cache& tc = *tcp;
       if (tc.count[cls] == cache_capacity(cls)) {
         flush(tc, cls, cache_capacity(cls) / 2);
       }
@@ -446,17 +545,21 @@ class CPTR_VISIBLE cage {
   }
 
   /// Bytes handed out and not yet freed, rounded up to the size class.
+  /// While other threads allocate and free, this is a snapshot that can be
+  /// off by the blocks they move meanwhile.
   static std::size_t allocated_bytes() noexcept {
     if (!ready_.load(std::memory_order_acquire)) {
       return 0;
     }
     state_type& st = state();
     detail::lock_guard g(st.lock);
-    std::size_t bytes = st.allocated;
+    // Each thread's cache count is read at a slightly different moment, so
+    // a block moving from one cache to another can be counted twice.
+    std::size_t cached = 0;
     for (thread_cache* c = st.caches; c; c = c->next) {
-      bytes -= c->cached.load(std::memory_order_relaxed);
+      cached += c->cached.load(std::memory_order_relaxed);
     }
-    return bytes;
+    return cached < st.allocated ? st.allocated - cached : 0;
   }
 
   /// Bytes of the cage backed by committed memory.
@@ -469,27 +572,49 @@ class CPTR_VISIBLE cage {
   }
 
   /// Return the memory the allocator keeps for reuse to the OS: this
-  /// thread's cached blocks go back to their slabs, and empty slabs are
-  /// purged. Freed memory is otherwise returned on its own once it has been
-  /// unused for a quarter of a second, checked whenever a slab becomes
-  /// empty; other threads' cached blocks go back when they exit.
+  /// thread's cached blocks go back to their slabs, and every slab with no
+  /// live block is released, including the slab each size class is
+  /// currently carving blocks from, as is the committed but unused end of
+  /// the bump region. Blocks cached by other threads count as live; they go
+  /// back when those threads exit. Without trim(), a slab that becomes
+  /// empty is kept for reuse until it has been empty for a quarter of a
+  /// second (checked whenever a slab becomes empty) or more than 64 MiB of
+  /// empty slabs are kept.
   static void trim() noexcept {
     if (!ready_.load(std::memory_order_acquire)) {
       return;
     }
-    thread_cache& tc = cache();
-    for (std::size_t cls = 0; cls < detail::kClassSizes.size(); cls++) {
-      flush(tc, int(cls), tc.count[cls]);
+    if (thread_cache* tc = cache()) {
+      for (std::size_t cls = 0; cls < detail::kClassSizes.size(); cls++) {
+        flush(*tc, int(cls), tc->count[cls]);
+      }
     }
     state_type& st = state();
     detail::lock_guard g(st.lock);
     purge_empty_slabs(INT64_MAX);
+    for (std::size_t cls = 0; cls < detail::kClassSizes.size(); cls++) {
+      std::uint32_t slab = st.current[cls];
+      if (slab && st.slabs[slab].live == 0) {
+        std::uint32_t spans = slab_spans(detail::kClassSizes[cls]);
+        st.current[cls] = 0;
+        st.slab_cursor[cls] = st.slab_end[cls] = 0;
+        st.committed -= std::size_t(spans) * span_size;
+        release_run(slab, spans, true);
+      }
+    }
+    if (st.commit_end > st.bump) {
+      detail::decommit(reinterpret_cast<void*>(base() + st.bump),
+                       st.commit_end - st.bump);
+      st.committed -= st.commit_end - st.bump;
+      st.commit_end = st.bump;
+    }
   }
 
-  /// A std::pmr::memory_resource that allocates from this cage.
+  /// A std::pmr::memory_resource that allocates from this cage. It is never
+  /// destroyed, so containers with static storage duration can still free
+  /// into it during program exit, after the thread caches are gone: such
+  /// frees go straight to the slabs.
   static std::pmr::memory_resource* resource() noexcept {
-    // Never destroyed, so containers with static storage duration can still
-    // free into it during program exit.
     // Out of memory this early is fatal anyway.
     // NOLINTNEXTLINE(bugprone-unhandled-exception-at-new)
     static resource_type* r = new resource_type;
@@ -519,18 +644,33 @@ class CPTR_VISIBLE cage {
     std::uint32_t in_partial;
   };
 
-  /// Zero-filled by the OS and only backed by memory where it is touched, so
-  /// a 4 GiB cage costs 1.5 MiB of address space but only a page or two per
-  /// 4 MiB of cage in use.
-  static slab_meta* new_slab_table() {
-    std::size_t bytes = span_count * sizeof(slab_meta);
+  /// A table with an entry per span, zero-filled by the OS and only backed
+  /// by memory where it is touched. The three tables cost 29 bytes of address
+  /// space per span (1.8 MiB for a 4 GiB cage, 29 MiB for a 64 GiB one), but
+  /// only the pages that cover the spans in use become resident.
+  template <class T>
+  static T* new_span_table() {
+    std::size_t bytes = span_count * sizeof(T);
     bytes = (bytes + 65535) / 65536 * 65536;
     void* p = detail::reserve_aligned(bytes, 65536);
     if (!p || !detail::commit(p, bytes)) {
       throw std::bad_alloc();
     }
-    return static_cast<slab_meta*>(p);
+    return static_cast<T*>(p);
   }
+
+  /// How each span is used: a size class, or one of the k...Span values.
+  /// Stored inverted, so that the OS's zero fill reads as kUnusedSpan.
+  struct span_kinds {
+    std::uint8_t* raw = new_span_table<std::uint8_t>();
+    std::uint8_t operator[](std::size_t i) const noexcept {
+      return raw[i] ^ kUnusedSpan;
+    }
+    void fill(std::size_t first, std::size_t count,
+              std::uint8_t kind) noexcept {
+      std::memset(raw + first, kind ^ kUnusedSpan, count);
+    }
+  };
 
   struct thread_cache;
 
@@ -548,19 +688,17 @@ class CPTR_VISIBLE cage {
     std::array<std::uint32_t, detail::kClassSizes.size()> partial{};
     /// Every thread's cache, for allocated_bytes().
     thread_cache* caches = nullptr;
-    slab_meta* slabs = new_slab_table();
+    slab_meta* slabs = new_span_table<slab_meta>();
     struct empty_slab {
       std::uint32_t first, count;
       std::int64_t since_ms;
     };
     std::deque<empty_slab> empty;  // oldest first
     std::size_t empty_bytes = 0;
-    std::vector<std::uint8_t> span_class =
-        std::vector<std::uint8_t>(span_count, kUnusedSpan);
+    span_kinds span_class;
     /// For a large allocation or a free run: its length in spans, stored at
     /// its first and last span so that neighbours can be merged.
-    std::vector<std::uint32_t> run_length =
-        std::vector<std::uint32_t>(span_count, 0);
+    std::uint32_t* run_length = new_span_table<std::uint32_t>();
     std::multimap<std::uint32_t, std::uint32_t> free_runs;  // length -> first
   };
 
@@ -595,6 +733,7 @@ class CPTR_VISIBLE cage {
     thread_cache* prev = nullptr;
 
     thread_cache() noexcept {
+      tls_.cache = this;
       state_type& st = state();
       detail::lock_guard g(st.lock);
       next = st.caches;
@@ -607,6 +746,9 @@ class CPTR_VISIBLE cage {
       for (std::size_t cls = 0; cls < count.size(); cls++) {
         flush(*this, int(cls), count[cls]);
       }
+      // From here on this thread allocates and frees without a cache.
+      tls_.cache = nullptr;
+      tls_.gone = true;
       state_type& st = state();
       detail::lock_guard g(st.lock);
       if (prev) {
@@ -622,13 +764,54 @@ class CPTR_VISIBLE cage {
     thread_cache& operator=(const thread_cache&) = delete;
   };
 
-  static thread_cache& cache() noexcept {
-    thread_local thread_cache c;
-    return c;
+  /// This thread's cache, or nullptr once it has been destroyed:
+  /// thread_local objects destroyed after it, and objects with static
+  /// storage duration in the main thread, still allocate and free, and do so
+  /// straight from the slabs. The slot is trivially destructible, so it
+  /// outlives every thread_local destructor, and reading it needs no guard.
+  struct tls_slot {
+    thread_cache* cache;
+    bool gone;
+  };
+  inline static thread_local constinit tls_slot tls_{nullptr, false};
+
+  static thread_cache* cache() noexcept {
+    if (thread_cache* c = tls_.cache) [[likely]] {
+      return c;
+    }
+    return first_cache();
   }
 
-  /// Blocks a thread keeps per class: up to kRecent, and up to 32 KiB.
-  static std::uint32_t cache_capacity(int cls) noexcept {
+  CPTR_NOINLINE static thread_cache* first_cache() noexcept {
+    if (tls_.gone) {
+      return nullptr;
+    }
+    thread_local thread_cache c;
+    return &c;
+  }
+
+  CPTR_NOINLINE static void* allocate_uncached(int cls,
+                                               std::size_t bytes) noexcept {
+    detail::lock_guard g(state().lock);
+    void* p = allocate_from_slab(cls);
+    if (p) {
+      state().allocated += detail::kClassSizes[cls];
+      CPTR_POISON(p, detail::kClassSizes[cls]);
+      CPTR_UNPOISON(p, bytes);
+    }
+    return p;
+  }
+
+  CPTR_NOINLINE static void free_uncached(void* p, int cls) noexcept {
+    detail::lock_guard g(state().lock);
+    CPTR_POISON(p, detail::kClassSizes[cls]);
+    return_to_slab(p, cls);
+    state().allocated -= detail::kClassSizes[cls];
+  }
+
+  /// Blocks a thread keeps per class: up to kRecent, and up to 32 KiB of
+  /// them, but at least 4 (so up to 128 KiB for the largest classes).
+  static constexpr std::uint32_t cache_capacity(int cls) noexcept {
     std::uint32_t n = 32768 / detail::kClassSizes[cls];
     return n < 4 ? 4 : n > kRecent ? kRecent : n;
   }
@@ -686,14 +869,16 @@ class CPTR_VISIBLE cage {
       for (std::uint32_t i = 0; i < k; i++) {
         return_to_slab(decompress_nonnull(blocks[i]), cls);
       }
+      // Both counts change under the lock, so allocated_bytes() never sees
+      // one without the other.
       st.allocated -= std::size_t(k) * block_size;
+      tc.cached.store(tc.cached.load(std::memory_order_relaxed) -
+                          std::size_t(k) * block_size,
+                      std::memory_order_relaxed);
     }
     std::uint32_t& n = tc.count[cls];
     std::memmove(blocks.data(), blocks.data() + k, sizeof(blocks[0]) * (n - k));
     n -= k;
-    tc.cached.store(
-        tc.cached.load(std::memory_order_relaxed) - std::size_t(k) * block_size,
-        std::memory_order_relaxed);
   }
 
 #if !defined(_WIN32)
@@ -701,32 +886,20 @@ class CPTR_VISIBLE cage {
   static void unlock_after_fork() noexcept { state().lock.unlock(); }
 #endif
 
-  static int size_class(std::size_t bytes, std::size_t align) noexcept {
-    if (bytes <= 128 && align <= 8) {
-      return static_cast<int>((bytes + 7) / 8 - 1);
-    }
-    if (bytes <= 256 && align <= 16) {
-      if (bytes <= 128) {
-        return static_cast<int>((bytes + 15) / 16 * 2 - 1);
-      }
-      return static_cast<int>(16 + (bytes - 129) / 16);
-    }
+  /// The size class for a request, or -1 for a large one: above kMaxSmall
+  /// bytes, or aligned to more than 4096 (large runs are 64 KiB aligned).
+  static constexpr int size_class(std::size_t bytes,
+                                  std::size_t align) noexcept {
     if (bytes > detail::kMaxSmall || align > 4096) {
       return -1;
     }
-    // The largest class is a multiple of every alignment up to 4096, so
-    // this always stops.
-    std::size_t i = 0;
-    while (detail::kClassSizes[i] < bytes || detail::kClassSizes[i] % align) {
-      i++;
-    }
-    return static_cast<int>(i);
+    return detail::size_class(bytes, align);
   }
 
   static void set_run(std::uint32_t first, std::uint32_t count,
                       std::uint8_t kind) noexcept {
     state_type& st = state();
-    std::memset(&st.span_class[first], kind, count);
+    st.span_class.fill(first, count, kind);
     st.run_length[first] = count;
     st.run_length[first + count - 1] = count;
   }
@@ -759,8 +932,8 @@ class CPTR_VISIBLE cage {
   static std::uint32_t take_spans(std::uint32_t count) noexcept {
     std::uint32_t first = take_spans_once(count);
     if (!first && state().empty_bytes) {
-      // The cage may be full of parked empty slabs.
-      purge_empty_slabs(0);
+      // The cage may be full of parked empty slabs: purge all of them.
+      purge_empty_slabs(INT64_MAX);
       first = take_spans_once(count);
     }
     return first;
@@ -786,7 +959,7 @@ class CPTR_VISIBLE cage {
   static void park_empty_slab(std::uint32_t first,
                               std::uint32_t count) noexcept {
     state_type& st = state();
-    std::memset(&st.span_class[first], kEmptySlab, count);
+    st.span_class.fill(first, count, kEmptySlab);
     std::int64_t now = now_ms();
     try {
       st.empty.push_back({first, count, now});
@@ -825,7 +998,7 @@ class CPTR_VISIBLE cage {
       std::uint32_t first = run->second;
       std::uint32_t have = run->first;
       void* p =
-          reinterpret_cast<void*>(base_ + std::uintptr_t(first) * span_size);
+          reinterpret_cast<void*>(base() + std::uintptr_t(first) * span_size);
       if (!detail::commit(p, std::size_t(count) * span_size)) {
         return 0;
       }
@@ -848,7 +1021,7 @@ class CPTR_VISIBLE cage {
       if (st.commit_end + grow > usable_end) {
         grow = usable_end - st.commit_end;
       }
-      if (!detail::commit(reinterpret_cast<void*>(base_ + st.commit_end),
+      if (!detail::commit(reinterpret_cast<void*>(base() + st.commit_end),
                           grow)) {
         return 0;
       }
@@ -860,7 +1033,7 @@ class CPTR_VISIBLE cage {
   }
 
   /// Spans per slab: a whole number holding at least 16 blocks.
-  static std::uint32_t slab_spans(std::uint32_t block_size) noexcept {
+  static constexpr std::uint32_t slab_spans(std::uint32_t block_size) noexcept {
     return static_cast<std::uint32_t>(
         (std::size_t(block_size) * 16 + span_size - 1) / span_size);
   }
@@ -889,7 +1062,7 @@ class CPTR_VISIBLE cage {
         return pop_free(m, block_size);
       }
       if (st.slab_cursor[cls] + block_size <= st.slab_end[cls]) {
-        void* p = reinterpret_cast<void*>(base_ + st.slab_cursor[cls]);
+        void* p = reinterpret_cast<void*>(base() + st.slab_cursor[cls]);
         CPTR_UNPOISON(p, block_size);
         st.slab_cursor[cls] += block_size;
         m.live++;
@@ -912,7 +1085,7 @@ class CPTR_VISIBLE cage {
     if (!first) {
       return nullptr;
     }
-    std::memset(&st.span_class[first], cls, spans);
+    st.span_class.fill(first, spans, std::uint8_t(cls));
     for (std::uint32_t i = 0; i < spans; i++) {
       st.slabs[first + i].start = first;
     }
@@ -920,7 +1093,7 @@ class CPTR_VISIBLE cage {
     st.current[cls] = first;
     st.slab_cursor[cls] = std::size_t(first) * span_size;
     st.slab_end[cls] = st.slab_cursor[cls] + std::size_t(spans) * span_size;
-    CPTR_POISON(reinterpret_cast<void*>(base_ + st.slab_cursor[cls]),
+    CPTR_POISON(reinterpret_cast<void*>(base() + st.slab_cursor[cls]),
                 std::size_t(spans) * span_size);
     return allocate_from_slab(cls);
   }
@@ -939,7 +1112,7 @@ class CPTR_VISIBLE cage {
   static void return_to_slab(void* p, int cls) noexcept {
     state_type& st = state();
     std::uint32_t block_size = detail::kClassSizes[cls];
-    std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
+    std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base();
     std::uint32_t slab =
         st.slabs[static_cast<std::uint32_t>(offset / span_size)].start;
     slab_meta& m = st.slabs[slab];
@@ -969,6 +1142,13 @@ class CPTR_VISIBLE cage {
     }
   }
 
+  /// Out of line, so that try_allocate() stays small enough to inline.
+  CPTR_NOINLINE static void* allocate_large_locked(std::size_t bytes,
+                                                   std::size_t align) noexcept {
+    detail::lock_guard g(state().lock);
+    return allocate_large(bytes, align);
+  }
+
   static void* allocate_large(std::size_t bytes, std::size_t align) noexcept {
     if (align > span_size || bytes > size - span_size) {
       return nullptr;
@@ -982,9 +1162,11 @@ class CPTR_VISIBLE cage {
     set_run(first, spans, kLargeSpan);
     state().allocated += std::size_t(spans) * span_size;
     void* p =
-        reinterpret_cast<void*>(base_ + std::uintptr_t(first) * span_size);
-    // The spans may have held a slab whose free blocks were poisoned.
-    CPTR_UNPOISON(p, std::size_t(spans) * span_size);
+        reinterpret_cast<void*>(base() + std::uintptr_t(first) * span_size);
+    // The spans may have held a slab whose free blocks were poisoned; only
+    // the bytes asked for are usable.
+    CPTR_POISON(p, std::size_t(spans) * span_size);
+    CPTR_UNPOISON(p, bytes);
     return p;
   }
 
@@ -1004,7 +1186,7 @@ class CPTR_VISIBLE cage {
                           bool purge = false) noexcept {
     state_type& st = state();
     void* p =
-        reinterpret_cast<void*>(base_ + std::uintptr_t(first) * span_size);
+        reinterpret_cast<void*>(base() + std::uintptr_t(first) * span_size);
     if (purge) {
       detail::purge(p, std::size_t(count) * span_size);
     } else {
@@ -1031,7 +1213,7 @@ class CPTR_VISIBLE cage {
       "decompressing in a cage that was never initialised in this module; "
       "is this a separate copy of the cage, such as in another Windows DLL?";
 
-  inline static std::uintptr_t base_ = 0;
+  inline static detail::base_address base_{};
   inline static std::atomic<bool> ready_{false};
 };
 
@@ -1058,36 +1240,53 @@ namespace cptr {
 /// fancy pointers.
 ///
 /// @code
-/// std::vector<node, cptr::allocator<node>> nodes;
-/// nodes.reserve(1000);
+/// std::vector<node, cptr::allocator<node>> nodes(1000);
 /// cptr::ptr<node> first = &nodes[0];  // the elements are in the cage
 /// @endcode
 template <class T, class Cage = default_cage>
 class allocator {
  public:
+  /// The element type.
   using value_type = T;
+  /// The cage the elements are allocated in.
   using cage_type = Cage;
+  /// The same allocator for another element type.
   template <class U>
   struct rebind {
+    /// The rebound allocator.
     using other = allocator<U, Cage>;
   };
 
-  allocator() noexcept = default;
+  /// Stateless: all allocators for one cage are interchangeable.
+  constexpr allocator() noexcept = default;
+  /// From an allocator for another element type in the same cage.
   template <class U>
-  allocator(const allocator<U, Cage>&) noexcept {}
+  constexpr allocator(const allocator<U, Cage>&) noexcept {}
 
+  /// Memory for `n` T in the cage, uninitialised. Throws
+  /// std::bad_array_new_length if `n` exceeds max_size(), and std::bad_alloc
+  /// when the cage is full.
   T* allocate(std::size_t n) {
-    if (n > std::size_t(-1) / sizeof(T)) {
+    if (n > max_size()) {
       throw std::bad_array_new_length();
     }
     return static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T)));
   }
+  /// Frees memory from allocate(); the elements must already be destroyed.
   void deallocate(T* p, std::size_t) noexcept {
     Cage::deallocate(static_cast<void*>(p));
   }
+  /// The most T that one allocation could hold: no more than fit in the
+  /// cage.
+  constexpr std::size_t max_size() const noexcept {
+    return Cage::size / sizeof(T);
+  }
 
+  /// Always true: memory from one allocator for a cage can be freed by any
+  /// other for the same cage.
   template <class U>
-  friend bool operator==(const allocator&, const allocator<U, Cage>&) noexcept {
+  friend constexpr bool operator==(const allocator&,
+                                   const allocator<U, Cage>&) noexcept {
     return true;
   }
 };
@@ -1103,6 +1302,7 @@ class allocator {
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <type_traits>
 #include <utility>
 
@@ -1146,6 +1346,14 @@ class allocator {
 /// Guide, benchmarks and examples: https://mvanslobbe.github.io/compressed-ptr/
 namespace cptr {
 
+namespace detail {
+struct null_literal_tag;
+/// The parameter type that accepts a literal `0` or `NULL` and nothing else
+/// of integer type: only a null pointer constant converts to a pointer to
+/// member, and no one can name a member of an incomplete struct.
+using null_literal = int null_literal_tag::*;
+}  // namespace detail
+
 /// A nullable pointer to a T inside `Cage`, stored in 4 bytes. Use it as
 /// ptr<T> or strict_ptr<T>, declared below.
 ///
@@ -1163,75 +1371,115 @@ class basic_ptr {
   using element_type = T;
   /// The cage the pointer is compressed against.
   using cage_type = Cage;
-  /// The iterator and std::pointer_traits types below let ptr serve as an
-  /// allocator's pointer type, which must be a random access iterator.
+  /// The signed distance between two pointers, in elements. Together with
+  /// the iterator types below, it lets ptr serve as an allocator's pointer
+  /// type, which must be a random access iterator.
   using difference_type = std::ptrdiff_t;
   /// The same kind of pointer to a `U`, for std::pointer_traits.
   template <class U>
   using rebind = basic_ptr<U, Cage, Strict>;
   /// The pointee type without cv-qualifiers, as for an iterator.
   using value_type = std::remove_cv_t<T>;
+  /// The raw pointer type, as for an iterator.
   using pointer = T*;
+  /// The type `operator*` returns, as for an iterator.
   using reference = std::add_lvalue_reference_t<T>;
+  /// ptr is a random access iterator for code that reads
+  /// std::iterator_traits...
   using iterator_category = std::random_access_iterator_tag;
+  /// ...and a contiguous iterator for the C++20 iterator concepts, so that
+  /// algorithms such as std::copy over a range of ptr lower to memmove.
+  using iterator_concept = std::contiguous_iterator_tag;
 
+  /// Null.
   constexpr basic_ptr() noexcept = default;
-  constexpr basic_ptr(std::nullptr_t) noexcept {}
-  /// Accepts a literal 0 or NULL, which older code uses for null pointers.
-  template <class I>
-    requires std::is_integral_v<I>
-  constexpr basic_ptr([[maybe_unused]] I zero) noexcept {
-    CPTR_ASSERT(zero == 0, "only zero converts to a pointer");
-  }
-  explicit(Strict) basic_ptr(T* p) noexcept : bits_(Cage::compress(p)) {}
+  /// Null.
+  template <class N>
+    requires std::is_null_pointer_v<N>
+  constexpr basic_ptr(N) noexcept {}
+  /// Null, from a literal `0` or `NULL`, which older code and some fancy
+  /// pointer users (plf::list) write for null pointers. Like a raw pointer,
+  /// it accepts only a null pointer constant: an integer variable, a
+  /// non-zero literal or a `bool` does not convert.
+  constexpr basic_ptr(detail::null_literal) noexcept {}
+  /// Compresses `p`, which must be null or point into the cage. Implicit
+  /// for ptr, explicit for strict_ptr. A template on `U` only so that a
+  /// literal `0` picks the constructor above instead of being ambiguous; it
+  /// takes any `U*` that converts implicitly to `T*`.
+  template <class U>
+    requires std::is_convertible_v<U*, T*>
+  explicit(Strict) basic_ptr(U* p) noexcept
+      : bits_(Cage::compress(static_cast<T*>(p))) {}
+  /// Converts from a pointer to `U` where `U*` converts implicitly to `T*`:
+  /// adding cv-qualifiers, to `void`, or derived to base. Only the
+  /// derived-to-base case at a non-zero offset decompresses; the others copy
+  /// the offset.
+  ///
+  /// Implicit, except from ptr to strict_ptr: a ptr may hold a pointer that
+  /// was compressed implicitly, so turning it into a strict_ptr takes an
+  /// explicit `strict_ptr<T>(p)`. strict_ptr to ptr stays implicit.
   template <class U, bool S>
     requires std::is_convertible_v<U*, T*>
-  constexpr basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
-      : bits_(same_address_v<U>
-                  ? other.bits()
-                  : Cage::compress(static_cast<T*>(other.get()))) {}
+  constexpr explicit(Strict && !S)
+      basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
+      : bits_(converted_bits(other)) {}
   /// Explicit casts that static_cast allows, such as base to derived or
-  /// void* to T*.
+  /// `void*` to `T*`.
   template <class U>
     requires(!std::is_convertible_v<U*, T*> &&
              requires(U* u) { static_cast<T*>(u); })
   explicit basic_ptr(U* p) noexcept
       : bits_(Cage::compress(static_cast<T*>(p))) {}
+  /// The same explicit casts from another compressed pointer.
+  /// From `void` the offset is copied (and this is constexpr); base to
+  /// derived goes through a raw pointer, except for null.
   template <class U, bool S>
     requires(!std::is_convertible_v<U*, T*> &&
              requires(U* u) { static_cast<T*>(u); })
-  explicit basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
-      : basic_ptr(static_cast<T*>(other.get())) {}
+  constexpr explicit basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
+      : bits_(cast_bits(other)) {}
 
-  basic_ptr& operator=(T* p) noexcept
+  /// Compresses `p`, which must be null or point into the cage. Not for
+  /// strict_ptr, which needs an explicit `s = strict_ptr<T>(p)`. A literal
+  /// `0` or `NULL` lands here too, and stays constant-evaluable.
+  constexpr basic_ptr& operator=(T* p) noexcept
     requires(!Strict)
   {
-    bits_ = Cage::compress(p);
+    bits_ = p ? Cage::compress(p) : 0;
     return *this;
   }
-  constexpr basic_ptr& operator=(std::nullptr_t) noexcept {
-    bits_ = 0;
-    return *this;
-  }
-  template <class I>
-    requires std::is_integral_v<I>
-  constexpr basic_ptr& operator=([[maybe_unused]] I zero) noexcept {
-    CPTR_ASSERT(zero == 0, "only zero converts to a pointer");
+  /// Null. A template, so that a literal `0` picks the `T*` overload above
+  /// (or, for strict_ptr, the null-literal constructor) instead of being
+  /// ambiguous.
+  template <class N>
+    requires std::is_null_pointer_v<N>
+  constexpr basic_ptr& operator=(N) noexcept {
     bits_ = 0;
     return *this;
   }
 
-  /// The raw pointer, or `nullptr`: one add and a conditional move.
-  T* get() const noexcept { return static_cast<T*>(Cage::decompress(bits_)); }
+  /// The raw pointer, or `nullptr`: an add plus the null check, which clang
+  /// turns into a conditional move and GCC usually into a branch.
+  /// Constant-evaluable when null, since that does not need the cage base.
+  constexpr T* get() const noexcept {
+    // Only in constant evaluation, so the run-time code stays the cage's.
+    if (std::is_constant_evaluated() && !bits_) {
+      return nullptr;
+    }
+    return static_cast<T*>(Cage::decompress(bits_));
+  }
   /// Converts implicitly to the raw pointer, so a `ptr` can be passed
   /// wherever a `T*` is expected.
-  operator T*() const noexcept { return get(); }
-  /// Member access. Dereferencing null is undefined, so this skips the null
-  /// check and costs a single add.
+  constexpr operator T*() const noexcept { return get(); }
+  /// Member access: a single add. Dereferencing null is undefined, so this
+  /// skips the null check: on a null ptr it returns the cage base, not
+  /// `nullptr`, and an access through it faults because the cage's first
+  /// span is never committed. Use get() when the pointer may be null.
   T* operator->() const noexcept {
     return static_cast<T*>(Cage::decompress_nonnull(bits_));
   }
-  /// The object pointed to. Like `operator->`, it skips the null check.
+  /// The object pointed to. Like `operator->`, it skips the null check, so
+  /// the pointer must not be null.
   template <class U = T>
     requires(!std::is_void_v<U>)
   U& operator*() const noexcept {
@@ -1324,31 +1572,89 @@ class basic_ptr {
   }
 
   /// The compressed representation, e.g. for packing it with other data.
+  /// Zero is null; otherwise it is the offset from the cage base, shifted
+  /// right by `Cage::shift`.
   constexpr std::uint32_t bits() const noexcept { return bits_; }
+  /// The pointer whose bits() are `bits`. Only pass bits() of a pointer into
+  /// the same cage: bits from another cage (or another cage type with the
+  /// same T) decode to an unrelated address in this one, and nothing checks
+  /// it.
   static constexpr basic_ptr from_bits(std::uint32_t bits) noexcept {
     basic_ptr p;
     p.bits_ = bits;
     return p;
   }
 
+  /// Same address. Compares the offsets, without touching the cage base.
   friend constexpr bool operator==(basic_ptr a, basic_ptr b) noexcept {
     return a.bits_ == b.bits_;
   }
-  friend constexpr bool operator==(basic_ptr a, std::nullptr_t) noexcept {
+  /// True if null. A template, as are the overloads below, so that only
+  /// one of them takes a literal `0`.
+  template <class N>
+    requires std::is_null_pointer_v<N>
+  friend constexpr bool operator==(basic_ptr a, N) noexcept {
     return !a.bits_;
   }
-  friend bool operator==(basic_ptr a, T* b) noexcept { return a.get() == b; }
-  template <class I>
-    requires std::is_integral_v<I>
-  friend constexpr bool operator==(basic_ptr a,
-                                   [[maybe_unused]] I zero) noexcept {
-    CPTR_ASSERT(zero == 0, "only zero compares as a pointer");
+  /// True if null, for a literal `0` or `NULL`. Any other integer does not
+  /// compile.
+  friend constexpr bool operator==(basic_ptr a, detail::null_literal) noexcept {
     return !a.bits_;
+  }
+  /// Same address as the raw pointer `b`, as `get() == b`. Takes any `U*`
+  /// that converts implicitly to `T*`.
+  template <class U>
+    requires std::is_convertible_v<U*, T*>
+  friend constexpr bool operator==(basic_ptr a, U* b) noexcept {
+    if (!b) {
+      return !a.bits_;
+    }
+    return a.get() == static_cast<T*>(b);
   }
   /// All pointers share the cage base, so offsets order like addresses.
+  /// Null orders first.
   friend constexpr std::strong_ordering operator<=>(basic_ptr a,
                                                     basic_ptr b) noexcept {
     return a.bits_ <=> b.bits_;
+  }
+  /// Orders like `get() <=> b` through std::compare_three_way, so null
+  /// orders first and unrelated pointers get a total order.
+  template <class U>
+    requires std::is_convertible_v<U*, T*>
+  friend constexpr std::strong_ordering operator<=>(basic_ptr a,
+                                                    U* b) noexcept {
+    return std::compare_three_way()(a.get(), static_cast<T*>(b));
+  }
+  /// Same address, between a ptr and a strict_ptr to the same type, which
+  /// would otherwise be ambiguous: each converts to the other.
+  template <bool S>
+    requires(S != Strict)
+  friend constexpr bool operator==(basic_ptr a,
+                                   const basic_ptr<T, Cage, S>& b) noexcept {
+    return a.bits_ == b.bits();
+  }
+  /// Orders a ptr and a strict_ptr to the same type by address.
+  template <bool S>
+    requires(S != Strict)
+  friend constexpr std::strong_ordering operator<=>(
+      basic_ptr a, const basic_ptr<T, Cage, S>& b) noexcept {
+    return a.bits_ <=> b.bits();
+  }
+  /// The number of elements between this pointer and a raw pointer into the
+  /// same array, as `get() - b`.
+  template <class U>
+    requires(!std::is_void_v<T> &&
+             std::is_same_v<std::remove_cv_t<U>, std::remove_cv_t<T>>)
+  friend constexpr std::ptrdiff_t operator-(basic_ptr a, U* b) noexcept {
+    return a.get() - b;
+  }
+  /// The number of elements between a raw pointer and this pointer into the
+  /// same array, as `a - get()`.
+  template <class U>
+    requires(!std::is_void_v<T> &&
+             std::is_same_v<std::remove_cv_t<U>, std::remove_cv_t<T>>)
+  friend constexpr std::ptrdiff_t operator-(U* a, basic_ptr b) noexcept {
+    return a - b.get();
   }
 
  private:
@@ -1359,6 +1665,33 @@ class basic_ptr {
   static constexpr bool same_address_v =
       std::is_void_v<T> ||
       std::is_same_v<std::remove_cv_t<U>, std::remove_cv_t<T>>;
+
+  template <class U, bool S>
+  static constexpr std::uint32_t converted_bits(
+      const basic_ptr<U, Cage, S>& other) noexcept {
+    if constexpr (same_address_v<U>) {
+      return other.bits();
+    } else {
+      // Null stays null without the cage base, so it is constexpr. Only in
+      // constant evaluation: at run time compress() checks for null anyway.
+      if (std::is_constant_evaluated() && !other.bits()) {
+        return 0;
+      }
+      return Cage::compress(static_cast<T*>(other.get()));
+    }
+  }
+  template <class U, bool S>
+  static constexpr std::uint32_t cast_bits(
+      const basic_ptr<U, Cage, S>& other) noexcept {
+    if constexpr (std::is_void_v<U>) {
+      return other.bits();  // static_cast from void* keeps the address
+    } else {
+      if (std::is_constant_evaluated() && !other.bits()) {
+        return 0;
+      }
+      return Cage::compress(static_cast<T*>(other.get()));
+    }
+  }
 
   /// One element, in compressed units.
   static constexpr std::ptrdiff_t step() noexcept {
@@ -1380,17 +1713,38 @@ template <class T, class Cage = default_cage>
 using strict_ptr = basic_ptr<T, Cage, true>;
 
 /// Like ptr, but never null, which makes decompression a single add.
+///
+/// It converts implicitly to ptr and strict_ptr (to the same type, a base or
+/// `void`), and to a nonnull_ptr to a base. destroy() accepts it.
 template <class T, class Cage = default_cage>
 class nonnull_ptr {
  public:
+  /// The type pointed to.
   using element_type = T;
+  /// The cage the pointer is compressed against.
   using cage_type = Cage;
 
-  /// Compress `p`, which must be in the cage and must not be null.
+  /// Compress `p`, which must be in the cage and must not be null (checked
+  /// like the cage check: in debug builds, or always with CPTR_CHECKED).
   nonnull_ptr(T* p) noexcept : bits_(Cage::compress(p)) {
     CPTR_CHECK(p, "nonnull_ptr must not be null");
   }
+  /// Null is not a valid value.
   nonnull_ptr(std::nullptr_t) = delete;
+  /// Derived to base, or to a cv-qualified or `void` pointee. Copies the
+  /// offset (and is constexpr) unless the base sits at a non-zero offset.
+  template <class U>
+    requires(std::is_convertible_v<U*, T*> && !std::is_same_v<U, T>)
+  constexpr nonnull_ptr(const nonnull_ptr<U, Cage>& other) noexcept
+      : bits_(converted_bits(other)) {}
+
+  /// The pointer whose bits() are `bits`, which must not be 0 (that is
+  /// null in a ptr) and must come from a pointer into the same cage; see
+  /// basic_ptr::from_bits.
+  static constexpr nonnull_ptr from_bits(std::uint32_t bits) noexcept {
+    CPTR_ASSERT(bits != 0, "nonnull_ptr must not be null");
+    return nonnull_ptr(bits, raw_bits_tag());
+  }
 
   /// The raw pointer: a single add, with no null check.
   T* get() const noexcept {
@@ -1398,22 +1752,58 @@ class nonnull_ptr {
   }
   /// Converts implicitly to the raw pointer.
   operator T*() const noexcept { return get(); }
+  /// Converts implicitly to a nullable ptr or strict_ptr to `U`, where `T*`
+  /// converts implicitly to `U*`. The pointer is already in the cage, so
+  /// strict_ptr accepts it implicitly too.
+  template <class U, bool S>
+    requires std::is_convertible_v<T*, U*>
+  constexpr operator basic_ptr<U, Cage, S>() const noexcept {
+    if constexpr (std::is_void_v<U> ||
+                  std::is_same_v<std::remove_cv_t<U>, std::remove_cv_t<T>>) {
+      return basic_ptr<U, Cage, S>::from_bits(bits_);
+    } else {
+      return basic_ptr<U, Cage, S>::from_bits(
+          Cage::compress(static_cast<U*>(get())));
+    }
+  }
   /// Member access.
   T* operator->() const noexcept { return get(); }
   /// The object pointed to.
   T& operator*() const noexcept { return *get(); }
 
-  std::uint32_t bits() const noexcept { return bits_; }
+  /// The compressed representation, as for basic_ptr::bits(); never 0.
+  constexpr std::uint32_t bits() const noexcept { return bits_; }
 
-  friend bool operator==(nonnull_ptr a, nonnull_ptr b) noexcept {
+  /// Same address.
+  friend constexpr bool operator==(nonnull_ptr a, nonnull_ptr b) noexcept {
     return a.bits_ == b.bits_;
   }
-  friend std::strong_ordering operator<=>(nonnull_ptr a,
-                                          nonnull_ptr b) noexcept {
+  /// Orders like the addresses.
+  friend constexpr std::strong_ordering operator<=>(nonnull_ptr a,
+                                                    nonnull_ptr b) noexcept {
     return a.bits_ <=> b.bits_;
   }
 
  private:
+  struct raw_bits_tag {};
+  constexpr nonnull_ptr(std::uint32_t bits, raw_bits_tag) noexcept
+      : bits_(bits) {}
+
+  template <class U>
+  static constexpr bool same_address_v =
+      std::is_void_v<T> ||
+      std::is_same_v<std::remove_cv_t<U>, std::remove_cv_t<T>>;
+
+  template <class U>
+  static constexpr std::uint32_t converted_bits(
+      const nonnull_ptr<U, Cage>& other) noexcept {
+    if constexpr (same_address_v<U>) {
+      return other.bits();
+    } else {
+      return Cage::compress(static_cast<T*>(other.get()));
+    }
+  }
+
   std::uint32_t bits_;
 };
 
@@ -1421,7 +1811,11 @@ static_assert(sizeof(ptr<int>) == 4);
 static_assert(sizeof(nonnull_ptr<int>) == 4);
 static_assert(std::is_trivially_copyable_v<ptr<int>>);
 
-/// Allocate and construct a T inside the cage.
+/// Allocate and construct a T inside the cage, as `new T(args...)` does on
+/// the heap; free it with destroy().
+///
+/// Throws std::bad_alloc when the cage is full. If T's constructor throws,
+/// the memory is freed and the exception propagates.
 template <class T, class Cage = default_cage, class... Args>
 ptr<T, Cage> make(Args&&... args) {
   void* mem = Cage::allocate(sizeof(T), alignof(T));
@@ -1433,34 +1827,144 @@ ptr<T, Cage> make(Args&&... args) {
   }
 }
 
-/// Destroy and free an object created by make().
+/// Destroy and free an object created by make(), as `delete` does; null is
+/// a no-op. A pointer to const works, as for `delete`.
+///
+/// Destroying through a pointer to a base class needs a virtual destructor,
+/// as `delete` does; the memory freed is then the whole object's, even with
+/// multiple inheritance.
 template <class T, class Cage, bool Strict>
 void destroy(basic_ptr<T, Cage, Strict> p) noexcept {
-  if (T* raw = p.get()) {
+  using object = std::remove_cv_t<T>;
+  if (object* raw = const_cast<object*>(p.get())) {
     // With multiple inheritance a base pointer can point into the middle of
     // the block, so free the most-derived object's address.
     void* block = raw;
-    if constexpr (std::is_polymorphic_v<T>) {
+    if constexpr (std::is_polymorphic_v<object>) {
       block = dynamic_cast<void*>(raw);
     }
-    raw->~T();
+    raw->~object();
     Cage::deallocate(block);
+  }
+}
+
+/// destroy() for a nonnull_ptr.
+template <class T, class Cage>
+void destroy(nonnull_ptr<T, Cage> p) noexcept {
+  destroy(ptr<T, Cage>(p));
+}
+
+/// A deleter that calls destroy(), so that std::unique_ptr can own an object
+/// created by make(). Its `pointer` is ptr, so the unique_ptr itself is 4
+/// bytes.
+///
+/// @code
+/// using owner = std::unique_ptr<node, cptr::deleter<node>>;
+/// owner n(cptr::make<node>());
+/// @endcode
+template <class T, class Cage = default_cage>
+struct deleter {
+  /// The pointer type std::unique_ptr stores.
+  using pointer = ptr<T, Cage>;
+
+  /// A deleter.
+  constexpr deleter() noexcept = default;
+  /// From the deleter of a derived class, as std::default_delete converts,
+  /// so that a std::unique_ptr to a derived class converts to one to a base
+  /// (which needs a virtual destructor).
+  template <class U>
+    requires std::is_convertible_v<U*, T*>
+  constexpr deleter(const deleter<U, Cage>&) noexcept {}
+
+  /// destroy(p).
+  void operator()(pointer p) const noexcept { destroy(p); }
+};
+
+/// Allocate `n` value-initialised T in one block inside the cage, as
+/// `new T[n]()` does on the heap; free them with destroy_array() and the same
+/// `n`. The count is not stored, which keeps the block the size of the
+/// elements, so it is the caller's to keep, as for std::allocator.
+///
+/// Throws std::bad_array_new_length if `n * sizeof(T)` overflows and
+/// std::bad_alloc when the cage is full. If a constructor throws, the
+/// elements already constructed are destroyed, the memory is freed and the
+/// exception propagates.
+template <class T, class Cage = default_cage>
+ptr<T, Cage> make_array(std::size_t n) {
+  static_assert(!std::is_array_v<T> && !std::is_void_v<T>);
+  if (n > std::size_t(-1) / sizeof(T)) {
+    throw std::bad_array_new_length();
+  }
+  T* first = static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T)));
+  try {
+    std::uninitialized_value_construct_n(first, n);
+  } catch (...) {
+    Cage::deallocate(first);
+    throw;
+  }
+  return ptr<T, Cage>(first);
+}
+
+/// Destroy and free `n` elements created by make_array(n). `n` must be the
+/// count passed to make_array(), and `p` the pointer it returned (not a
+/// pointer to a base class: as for `delete[]`, that is undefined). Null is
+/// a no-op.
+template <class T, class Cage, bool Strict>
+void destroy_array(basic_ptr<T, Cage, Strict> p, std::size_t n) noexcept {
+  using object = std::remove_cv_t<T>;
+  if (object* first = const_cast<object*>(p.get())) {
+    std::destroy_n(first, n);
+    Cage::deallocate(first);
   }
 }
 
 }  // namespace cptr
 
+/// std::pointer_traits for basic_ptr. The primary template would work but
+/// has no to_address(), and std::to_address then falls back to `operator->`,
+/// which skips the null check: std::to_address of a null ptr would return the
+/// cage base instead of nullptr.
+template <class T, class Cage, bool Strict>
+struct std::pointer_traits<cptr::basic_ptr<T, Cage, Strict>> {
+  /// The compressed pointer type.
+  using pointer = cptr::basic_ptr<T, Cage, Strict>;
+  /// The type pointed to.
+  using element_type = T;
+  /// The signed distance between two pointers, in elements.
+  using difference_type = std::ptrdiff_t;
+  /// The same kind of pointer to a `U`.
+  template <class U>
+  using rebind = cptr::basic_ptr<U, Cage, Strict>;
+
+  /// A pointer to `r`, which must be in the cage.
+  template <class U = T>
+    requires(!std::is_void_v<U>)
+  static pointer pointer_to(U& r) noexcept {
+    return pointer::pointer_to(r);
+  }
+  /// The raw pointer, or `nullptr` for a null `p`; what std::to_address
+  /// returns.
+  static constexpr T* to_address(pointer p) noexcept { return p.get(); }
+};
+
+/// Hashes the compressed offset, as std::hash<std::uint32_t> does on the
+/// common standard libraries (the value itself), so it is constexpr.
 template <class T, class Cage, bool Strict>
 struct std::hash<cptr::basic_ptr<T, Cage, Strict>> {
-  std::size_t operator()(cptr::basic_ptr<T, Cage, Strict> p) const noexcept {
-    return std::hash<std::uint32_t>()(p.bits());
+  /// The hash of `p`.
+  constexpr std::size_t operator()(
+      cptr::basic_ptr<T, Cage, Strict> p) const noexcept {
+    return p.bits();
   }
 };
 
+/// Hashes the compressed offset, like std::hash of ptr.
 template <class T, class Cage>
 struct std::hash<cptr::nonnull_ptr<T, Cage>> {
-  std::size_t operator()(cptr::nonnull_ptr<T, Cage> p) const noexcept {
-    return std::hash<std::uint32_t>()(p.bits());
+  /// The hash of `p`.
+  constexpr std::size_t operator()(
+      cptr::nonnull_ptr<T, Cage> p) const noexcept {
+    return p.bits();
   }
 };
 
@@ -1490,30 +1994,50 @@ namespace cptr {
 template <class T, class Cage = default_cage>
 class fancy_allocator {
  public:
+  /// The element type.
   using value_type = T;
+  /// A compressed pointer to an element.
   using pointer = ptr<T, Cage>;
+  /// A compressed pointer to a const element.
   using const_pointer = ptr<const T, Cage>;
+  /// A compressed `void*`.
   using void_pointer = ptr<void, Cage>;
+  /// A compressed `const void*`.
   using const_void_pointer = ptr<const void, Cage>;
+  /// The type of element counts.
   using size_type = std::size_t;
+  /// The type of pointer differences.
   using difference_type = std::ptrdiff_t;
+  /// The same allocator for another element type.
   template <class U>
   struct rebind {
+    /// The rebound allocator.
     using other = fancy_allocator<U, Cage>;
   };
 
-  fancy_allocator() noexcept = default;
+  /// Stateless: all fancy_allocators for one cage are interchangeable.
+  constexpr fancy_allocator() noexcept = default;
+  /// From a fancy_allocator for another element type in the same cage.
   template <class U>
-  fancy_allocator(const fancy_allocator<U, Cage>&) noexcept {}
+  constexpr fancy_allocator(const fancy_allocator<U, Cage>&) noexcept {}
 
+  /// Memory for `n` T in the cage, uninitialised. Throws
+  /// std::bad_array_new_length if `n` exceeds max_size(), and std::bad_alloc
+  /// when the cage is full.
   pointer allocate(std::size_t n) {
-    if (n > std::size_t(-1) / sizeof(T)) {
+    if (n > max_size()) {
       throw std::bad_array_new_length();
     }
     return pointer(static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T))));
   }
+  /// Frees memory from allocate(); the elements must already be destroyed.
   void deallocate(pointer p, std::size_t) noexcept {
     Cage::deallocate(p.get());
+  }
+  /// The most T that one allocation could hold: no more than fit in the
+  /// cage.
+  constexpr size_type max_size() const noexcept {
+    return Cage::size / sizeof(T);
   }
 
   /// std::allocator_traits::construct takes a raw pointer; containers written
@@ -1522,22 +2046,27 @@ class fancy_allocator {
   void construct(U* p, Args&&... args) {
     ::new (static_cast<void*>(p)) U(std::forward<Args>(args)...);
   }
+  /// As above, at a compressed pointer.
   template <class U, class... Args>
   void construct(ptr<U, Cage> p, Args&&... args) {
     construct(p.get(), std::forward<Args>(args)...);
   }
+  /// Destroys the object at `p` without freeing its memory.
   template <class U>
   void destroy(U* p) noexcept {
     p->~U();
   }
+  /// As above, at a compressed pointer.
   template <class U>
   void destroy(ptr<U, Cage> p) noexcept {
     p->~U();
   }
 
+  /// Always true: memory from one fancy_allocator for a cage can be freed by
+  /// any other for the same cage.
   template <class U>
-  friend bool operator==(const fancy_allocator&,
-                         const fancy_allocator<U, Cage>&) noexcept {
+  friend constexpr bool operator==(const fancy_allocator&,
+                                   const fancy_allocator<U, Cage>&) noexcept {
     return true;
   }
 };
@@ -1568,6 +2097,7 @@ using link = std::conditional_t<Compressed, ptr<T, Cage>, T*>;
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -1576,8 +2106,8 @@ using link = std::conditional_t<Compressed, ptr<T, Cage>, T*>;
 namespace cptr {
 namespace detail {
 
-/// The class behind cptr::forward_list; use that alias. Its members behave like
-/// those of `std::forward_list`.
+/// The class behind cptr::forward_list; use that alias. Its members behave
+/// like those of `std::forward_list`; the alias lists the differences.
 ///
 /// The list behind cptr::forward_list. Compressed = false gives the same
 /// list with raw 8-byte links, for the benchmarks.
@@ -1593,8 +2123,34 @@ class basic_forward_list {
     link_type next;
   };
   struct node : node_base {
+    /// Direct-initialises the value, as std's allocator_traits::construct
+    /// does, so that only the conversions std allows are accepted.
+    template <class... Args>
+    explicit node(std::in_place_t, Args&&... args)
+        : node_base{}, value(std::forward<Args>(args)...) {}
     T value;
   };
+
+  /// std's synth-three-way: `<=>` where the element has it, otherwise an
+  /// ordering built from `<`, so that elements with only `operator<` can
+  /// be compared too.
+  struct synth_three_way {
+    template <class U>
+    constexpr auto operator()(const U& a, const U& b) const {
+      if constexpr (std::three_way_comparable<U>) {
+        return a <=> b;
+      } else {
+        return a < b   ? std::weak_ordering::less
+               : b < a ? std::weak_ordering::greater
+                       : std::weak_ordering::equivalent;
+      }
+    }
+  };
+  template <class U>
+  static constexpr bool kSynthComparable =
+      std::three_way_comparable<U> || requires(const U& a) {
+        { a < a } -> std::convertible_to<bool>;
+      };
 
  public:
   using value_type = T;
@@ -1622,7 +2178,7 @@ class basic_forward_list {
       return static_cast<node*>(node_)->value;
     }
     pointer operator->() const noexcept {
-      return &static_cast<node*>(node_)->value;
+      return std::addressof(static_cast<node*>(node_)->value);
     }
     basic_iterator& operator++() noexcept {
       node_ = node_->next;
@@ -1648,12 +2204,14 @@ class basic_forward_list {
   using const_iterator = basic_iterator<true>;
 
   basic_forward_list() noexcept = default;
-  explicit basic_forward_list(size_type n) { resize(n); }
-  basic_forward_list(size_type n, const T& value) {
+  // The constructors that insert delegate to the default one, so that the
+  // destructor frees what was inserted if an element throws.
+  explicit basic_forward_list(size_type n) : basic_forward_list() { resize(n); }
+  basic_forward_list(size_type n, const T& value) : basic_forward_list() {
     insert_after(before_begin(), n, value);
   }
   template <std::input_iterator It>
-  basic_forward_list(It first, It last) {
+  basic_forward_list(It first, It last) : basic_forward_list() {
     insert_after(before_begin(), first, last);
   }
   basic_forward_list(std::initializer_list<T> values)
@@ -1720,13 +2278,18 @@ class basic_forward_list {
   T& front() noexcept { return *begin(); }
   const T& front() const noexcept { return *begin(); }
 
+  /// Construct an element from `args` after `pos`. Like std, it
+  /// direct-initialises the element, so only the conversions std accepts
+  /// compile.
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   iterator emplace_after(const_iterator pos, Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
     link_after(pos.node_, n);
     return iterator(n);
   }
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   T& emplace_front(Args&&... args) {
     return *emplace_after(before_begin(), std::forward<Args>(args)...);
   }
@@ -1831,13 +2394,23 @@ class basic_forward_list {
   }
 
   /// Merge sorted `other` into this sorted list; stable, this list's
-  /// elements come first among equals.
+  /// elements come first among equals. If `comp` throws, the elements
+  /// merged so far and the rest of this list stay here, the rest of `other`
+  /// stays in `other`, and the exception propagates.
   template <class Compare = std::less<>>
   void merge(basic_forward_list& other, Compare comp = Compare()) {
     if (&other == this) {
       return;
     }
-    head_.next = merge_runs(head_.next, other.head_.next, comp);
+    node_base* a = head_.next;
+    node_base* b = other.head_.next;
+    try {
+      head_.next = merge_runs(a, b, comp);
+    } catch (...) {
+      head_.next = a;
+      other.head_.next = b;
+      throw;
+    }
     other.head_.next = nullptr;
   }
   template <class Compare = std::less<>>
@@ -1845,29 +2418,18 @@ class basic_forward_list {
     merge(other, comp);
   }
 
-  /// Stable merge sort on the links; no element is copied or moved.
+  /// Stable merge sort on the links; no element is copied or moved. If
+  /// `comp` throws, the list keeps all its elements in an unspecified order
+  /// and the exception propagates.
   template <class Compare = std::less<>>
   void sort(Compare comp = Compare()) {
-    node_base* bins[64] = {};
     node_base* chain = head_.next;
-    while (chain) {
-      node_base* carry = chain;
-      chain = chain->next;
-      carry->next = nullptr;
-      std::size_t i = 0;
-      for (; bins[i]; i++) {
-        carry = merge_runs(bins[i], carry, comp);
-        bins[i] = nullptr;
-      }
-      bins[i] = carry;
+    try {
+      head_.next = sort_chain(chain, comp);
+    } catch (...) {
+      head_.next = chain;
+      throw;
     }
-    node_base* sorted = nullptr;
-    for (node_base* bin : bins) {
-      if (bin) {
-        sorted = merge_runs(bin, sorted, comp);
-      }
-    }
-    head_.next = sorted;
   }
 
   void reverse() noexcept {
@@ -1882,29 +2444,42 @@ class basic_forward_list {
     head_.next = prev;
   }
 
-  /// Unlinked nodes are destroyed only at the end, so `value` may refer to
-  /// an element of this list.
+  /// Erase the elements equal to `value` and return how many. Unlinked
+  /// nodes are destroyed only at the end, so `value` may refer to an
+  /// element of this list. If a comparison throws, the elements already
+  /// found are erased, the rest are kept, and the exception propagates.
   size_type remove(const T& value) {
     return remove_if([&](const T& v) { return v == value; });
   }
+  /// Erase the elements for which `pred` is true and return how many. If
+  /// `pred` throws, the elements already found are erased, the rest are
+  /// kept, and the exception propagates.
   template <class Pred>
   size_type remove_if(Pred pred) {
     node_base* doomed = nullptr;
     size_type removed = 0;
     node_base* prev = &head_;
-    while (node_base* n = prev->next) {
-      if (pred(value_of(n))) {
-        prev->next = n->next;
-        n->next = doomed;
-        doomed = n;
-        removed++;
-      } else {
-        prev = n;
+    try {
+      while (node_base* n = prev->next) {
+        if (pred(value_of(n))) {
+          prev->next = n->next;
+          n->next = doomed;
+          doomed = n;
+          removed++;
+        } else {
+          prev = n;
+        }
       }
+    } catch (...) {
+      destroy_chain(doomed);
+      throw;
     }
     destroy_chain(doomed);
     return removed;
   }
+  /// Erase all but the first of each run of consecutive elements for which
+  /// `pred` is true, and return how many were erased. If `pred` throws, the
+  /// elements already found are erased and the exception propagates.
   template <class Pred = std::equal_to<>>
   size_type unique(Pred pred = Pred()) {
     node_base* doomed = nullptr;
@@ -1913,15 +2488,20 @@ class basic_forward_list {
     if (!kept) {
       return 0;
     }
-    while (node_base* n = kept->next) {
-      if (pred(value_of(kept), value_of(n))) {
-        kept->next = n->next;
-        n->next = doomed;
-        doomed = n;
-        removed++;
-      } else {
-        kept = n;
+    try {
+      while (node_base* n = kept->next) {
+        if (pred(value_of(kept), value_of(n))) {
+          kept->next = n->next;
+          n->next = doomed;
+          doomed = n;
+          removed++;
+        } else {
+          kept = n;
+        }
       }
+    } catch (...) {
+      destroy_chain(doomed);
+      throw;
     }
     destroy_chain(doomed);
     return removed;
@@ -1931,12 +2511,14 @@ class basic_forward_list {
                          const basic_forward_list& b) {
     return std::equal(a.begin(), a.end(), b.begin(), b.end());
   }
+  /// Lexicographical, with std's synth-three-way: elements that have only
+  /// `operator<` give a std::weak_ordering.
   friend auto operator<=>(const basic_forward_list& a,
                           const basic_forward_list& b)
-    requires std::three_way_comparable<T>
+    requires kSynthComparable<T>
   {
     return std::lexicographical_compare_three_way(a.begin(), a.end(), b.begin(),
-                                                  b.end());
+                                                  b.end(), synth_three_way());
   }
 
   /// Bytes per element, including the link: what the cage hands out.
@@ -1947,7 +2529,7 @@ class basic_forward_list {
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
     try {
-      return ::new (mem) node{{nullptr}, T(std::forward<Args>(args)...)};
+      return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
     } catch (...) {
       Cage::deallocate(mem);
       throw;
@@ -1972,23 +2554,88 @@ class basic_forward_list {
     }
   }
 
+  /// Merge two null-terminated sorted chains linked through `next`; `a`'s
+  /// elements come first among equals. If `comp` throws, `a` is left
+  /// holding the merged prefix followed by the rest of `a`, and `b` the rest
+  /// of `b`, so no node is lost or linked twice.
   template <class Compare>
-  static node_base* merge_runs(node_base* a, node_base* b, Compare& comp) {
+  static node_base* merge_runs(node_base*& a, node_base*& b, Compare& comp) {
     node_base head;
     node_base* tail = &head;
-    while (a && b) {
-      if (comp(value_of(b), value_of(a))) {
-        tail->next = b;
-        tail = b;
-        b = b->next;
-      } else {
-        tail->next = a;
-        tail = a;
-        a = a->next;
+    try {
+      while (a && b) {
+        if (comp(value_of(b), value_of(a))) {
+          tail->next = b;
+          tail = b;
+          b = b->next;
+        } else {
+          tail->next = a;
+          tail = a;
+          a = a->next;
+        }
       }
+    } catch (...) {
+      tail->next = a;
+      a = head.next;
+      throw;
     }
     tail->next = a ? a : b;
     return head.next;
+  }
+
+  /// Append the null-terminated chain `b` to `a`; for the error paths.
+  static node_base* concat(node_base* a, node_base* b) noexcept {
+    if (!a) {
+      return b;
+    }
+    node_base* tail = a;
+    while (node_base* next = tail->next) {
+      tail = next;
+    }
+    tail->next = b;
+    return a;
+  }
+
+  /// Sort a null-terminated chain by bottom-up merging; returns the sorted
+  /// chain. If `comp` throws, every node is chained back together and the
+  /// chain is stored in `chain` before the exception propagates.
+  template <class Compare>
+  static node_base* sort_chain(node_base*& chain, Compare& comp) {
+    // bins[i] holds a sorted run of 2^i nodes; higher bins hold earlier
+    // elements, so merging a higher bin first keeps the sort stable.
+    node_base* bins[64] = {};
+    node_base* input = chain;
+    node_base* run = nullptr;    // the run being merged into
+    node_base* other = nullptr;  // the run merged with it
+    try {
+      while (input) {
+        run = input;
+        input = input->next;
+        run->next = nullptr;
+        std::size_t i = 0;
+        for (; bins[i]; i++) {
+          other = std::exchange(bins[i], nullptr);
+          run = merge_runs(other, run, comp);
+          other = nullptr;
+        }
+        bins[i] = std::exchange(run, nullptr);
+      }
+      for (node_base*& bin : bins) {
+        if (bin) {
+          other = std::exchange(bin, nullptr);
+          run = merge_runs(other, run, comp);
+          other = nullptr;
+        }
+      }
+    } catch (...) {
+      node_base* all = concat(other, run);
+      for (node_base* bin : bins) {
+        all = concat(bin, all);
+      }
+      chain = concat(all, input);
+      throw;
+    }
+    return run;
   }
 
   template <class Produce>
@@ -2033,8 +2680,10 @@ class basic_forward_list {
 /// A singly linked list with 4-byte links, like `std::forward_list` without
 /// the allocator parameter.
 ///
-/// Nodes are allocated in `Cage`; an empty list allocates nothing. Every
-/// member behaves like its `std::forward_list` counterpart; see
+/// Nodes are allocated in `Cage`; an empty list allocates nothing. The
+/// members are those of `std::forward_list` and behave like them, including
+/// the exception guarantees; the only difference is that there is no
+/// allocator parameter (and so no get_allocator()). See
 /// @ref detail::basic_forward_list for the full member list.
 ///
 /// @code
@@ -2059,6 +2708,7 @@ using forward_list = detail::basic_forward_list<T, Cage, true>;
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -2069,7 +2719,7 @@ namespace cptr {
 namespace detail {
 
 /// The class behind cptr::list; use that alias. Its members behave like
-/// those of `std::list`.
+/// those of `std::list`; the alias lists the differences.
 ///
 /// The list behind cptr::list. Compressed = false gives the same list with
 /// raw 8-byte links, which the benchmarks compare against.
@@ -2097,8 +2747,34 @@ class basic_list {
   }
 
   struct node : node_base {
+    /// Direct-initialises the value, as std's allocator_traits::construct
+    /// does, so that only the conversions std allows are accepted.
+    template <class... Args>
+    explicit node(std::in_place_t, Args&&... args)
+        : node_base{}, value(std::forward<Args>(args)...) {}
     T value;
   };
+
+  /// std's synth-three-way: `<=>` where the element has it, otherwise an
+  /// ordering built from `<`, so that elements with only `operator<` can
+  /// be compared too.
+  struct synth_three_way {
+    template <class U>
+    constexpr auto operator()(const U& a, const U& b) const {
+      if constexpr (std::three_way_comparable<U>) {
+        return a <=> b;
+      } else {
+        return a < b   ? std::weak_ordering::less
+               : b < a ? std::weak_ordering::greater
+                       : std::weak_ordering::equivalent;
+      }
+    }
+  };
+  template <class U>
+  static constexpr bool kSynthComparable =
+      std::three_way_comparable<U> || requires(const U& a) {
+        { a < a } -> std::convertible_to<bool>;
+      };
 
  public:
   using value_type = T;
@@ -2126,7 +2802,7 @@ class basic_list {
       return static_cast<node*>(node_)->value;
     }
     pointer operator->() const noexcept {
-      return &static_cast<node*>(node_)->value;
+      return std::addressof(static_cast<node*>(node_)->value);
     }
     basic_iterator& operator++() noexcept {
       node_ = follow(node_->next);
@@ -2222,8 +2898,9 @@ class basic_list {
   friend void swap(basic_list& a, basic_list& b) noexcept { a.swap(b); }
 
   iterator begin() noexcept {
-    return iterator(sentinel() ? static_cast<node_base*>(sentinel()->next)
-                               : nullptr);
+    // The sentinel's next link is never null, so it can skip the null check
+    // of decompression.
+    return iterator(sentinel() ? follow(sentinel()->next) : nullptr);
   }
   iterator end() noexcept { return iterator(sentinel()); }
   const_iterator begin() const noexcept {
@@ -2254,7 +2931,11 @@ class basic_list {
   T& back() noexcept { return *std::prev(end()); }
   const T& back() const noexcept { return *std::prev(end()); }
 
+  /// Construct an element from `args` before `pos`. Like std, it
+  /// direct-initialises the element, so only the conversions std accepts
+  /// compile.
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   iterator emplace(const_iterator pos, Args&&... args) {
     node_base* at = position(pos);
     node* n = new_node(std::forward<Args>(args)...);
@@ -2263,10 +2944,12 @@ class basic_list {
     return iterator(n);
   }
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   T& emplace_back(Args&&... args) {
     return *emplace(end(), std::forward<Args>(args)...);
   }
   template <class... Args>
+    requires std::constructible_from<T, Args...>
   T& emplace_front(Args&&... args) {
     return *emplace(begin(), std::forward<Args>(args)...);
   }
@@ -2376,7 +3059,9 @@ class basic_list {
   }
 
   /// Merge sorted `other` into this sorted list. Stable: of equal elements,
-  /// this list's come first.
+  /// this list's come first. If `comp` throws, the elements moved so far
+  /// stay here, the rest stay in `other`, both sizes are right, and the
+  /// exception propagates.
   template <class Compare = std::less<>>
   void merge(basic_list& other, Compare comp = Compare()) {
     if (&other == this || other.empty()) {
@@ -2385,15 +3070,23 @@ class basic_list {
     position(end());
     node_base* a = sentinel()->next;
     node_base* b = other.sentinel()->next;
-    while (a != sentinel() && b != other.sentinel()) {
-      if (comp(value_of(b), value_of(a))) {
-        node_base* next = b->next;
-        unlink(b);
-        link_before(a, b);
-        b = next;
-      } else {
-        a = a->next;
+    size_type moved = 0;
+    try {
+      while (a != sentinel() && b != other.sentinel()) {
+        if (comp(value_of(b), value_of(a))) {
+          node_base* next = b->next;
+          unlink(b);
+          link_before(a, b);
+          b = next;
+          moved++;
+        } else {
+          a = a->next;
+        }
       }
+    } catch (...) {
+      size_ += moved;
+      other.size_ -= moved;
+      throw;
     }
     if (b != other.sentinel()) {
       transfer(sentinel(), b, other.sentinel());
@@ -2406,7 +3099,9 @@ class basic_list {
     merge(other, comp);
   }
 
-  /// Stable merge sort on the links; no element is copied or moved.
+  /// Stable merge sort on the links; no element is copied or moved. If
+  /// `comp` throws, the list keeps all its elements in an unspecified order
+  /// and the exception propagates.
   template <class Compare = std::less<>>
   void sort(Compare comp = Compare()) {
     if (size_ < 2) {
@@ -2415,35 +3110,13 @@ class basic_list {
     // Detach the nodes as a null-terminated chain through |next|.
     node_base* chain = sentinel()->next;
     sentinel()->prev->next = nullptr;
-    // bins[i] holds a sorted run of 2^i nodes; higher bins hold earlier
-    // elements, so merging a higher bin first keeps the sort stable.
-    node_base* bins[64] = {};
-    while (chain) {
-      node_base* carry = chain;
-      chain = chain->next;
-      carry->next = nullptr;
-      std::size_t i = 0;
-      for (; bins[i]; i++) {
-        carry = merge_runs(bins[i], carry, comp);
-        bins[i] = nullptr;
-      }
-      bins[i] = carry;
+    try {
+      chain = sort_chain(chain, comp);
+    } catch (...) {
+      relink(chain);
+      throw;
     }
-    node_base* sorted = nullptr;
-    for (node_base* bin : bins) {
-      if (bin) {
-        sorted = merge_runs(bin, sorted, comp);
-      }
-    }
-    // Restore the prev links and close the circle.
-    node_base* prev = sentinel();
-    for (node_base* n = sorted; n; n = n->next) {
-      n->prev = prev;
-      prev->next = n;
-      prev = n;
-    }
-    prev->next = sentinel();
-    sentinel()->prev = prev;
+    relink(chain);
   }
 
   void reverse() noexcept {
@@ -2459,16 +3132,24 @@ class basic_list {
     } while (n != sentinel());
   }
 
+  /// Erase the elements equal to `value` and return how many. Unlinked
+  /// nodes are destroyed only at the end, so `value` may refer to an
+  /// element of this list. If a comparison throws, the elements already
+  /// found are erased, the rest are kept, and the exception propagates.
   size_type remove(const T& value) {
-    // Unlinked nodes are destroyed only at the end, so |value| may refer to
-    // an element of this list.
     return remove_if_impl([&](const T& v) { return v == value; });
   }
+  /// Erase the elements for which `pred` is true and return how many. If
+  /// `pred` throws, the elements already found are erased, the rest are
+  /// kept, and the exception propagates.
   template <class Pred>
   size_type remove_if(Pred pred) {
     return remove_if_impl(pred);
   }
 
+  /// Erase all but the first of each run of consecutive elements for which
+  /// `pred` is true, and return how many were erased. If `pred` throws, the
+  /// elements already found are erased and the exception propagates.
   template <class Pred = std::equal_to<>>
   size_type unique(Pred pred = Pred()) {
     if (size_ < 2) {
@@ -2478,17 +3159,23 @@ class basic_list {
     size_type removed = 0;
     node_base* kept = sentinel()->next;
     node_base* n = kept->next;
-    while (n != sentinel()) {
-      node_base* next = n->next;
-      if (pred(value_of(kept), value_of(n))) {
-        unlink(n);
-        n->next = doomed;
-        doomed = n;
-        removed++;
-      } else {
-        kept = n;
+    try {
+      while (n != sentinel()) {
+        node_base* next = n->next;
+        if (pred(value_of(kept), value_of(n))) {
+          unlink(n);
+          n->next = doomed;
+          doomed = n;
+          removed++;
+        } else {
+          kept = n;
+        }
+        n = next;
       }
-      n = next;
+    } catch (...) {
+      destroy_chain(doomed);
+      size_ -= removed;
+      throw;
     }
     destroy_chain(doomed);
     size_ -= removed;
@@ -2498,11 +3185,13 @@ class basic_list {
   friend bool operator==(const basic_list& a, const basic_list& b) {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
   }
+  /// Lexicographical, with std's synth-three-way: elements that have only
+  /// `operator<` give a std::weak_ordering.
   friend auto operator<=>(const basic_list& a, const basic_list& b)
-    requires std::three_way_comparable<T>
+    requires kSynthComparable<T>
   {
     return std::lexicographical_compare_three_way(a.begin(), a.end(), b.begin(),
-                                                  b.end());
+                                                  b.end(), synth_three_way());
   }
 
   /// Bytes per element, including the links: what the cage hands out.
@@ -2531,8 +3220,7 @@ class basic_list {
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
     try {
-      return ::new (mem)
-          node{{nullptr, nullptr}, T(std::forward<Args>(args)...)};
+      return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
     } catch (...) {
       Cage::deallocate(mem);
       throw;
@@ -2586,24 +3274,100 @@ class basic_list {
   }
 
   /// Merge two null-terminated sorted chains linked through `next`; `a`'s
-  /// elements come first among equals.
+  /// elements come first among equals. If `comp` throws, `a` is left
+  /// holding the merged prefix followed by the rest of `a`, and `b` the rest
+  /// of `b`, so no node is lost or linked twice.
   template <class Compare>
-  static node_base* merge_runs(node_base* a, node_base* b, Compare& comp) {
+  static node_base* merge_runs(node_base*& a, node_base*& b, Compare& comp) {
     node_base head;
     node_base* tail = &head;
-    while (a && b) {
-      if (comp(value_of(b), value_of(a))) {
-        tail->next = b;
-        tail = b;
-        b = b->next;
-      } else {
-        tail->next = a;
-        tail = a;
-        a = a->next;
+    try {
+      while (a && b) {
+        if (comp(value_of(b), value_of(a))) {
+          tail->next = b;
+          tail = b;
+          b = b->next;
+        } else {
+          tail->next = a;
+          tail = a;
+          a = a->next;
+        }
       }
+    } catch (...) {
+      tail->next = a;
+      a = head.next;
+      throw;
     }
     tail->next = a ? a : b;
     return head.next;
+  }
+
+  /// Append the null-terminated chain `b` to `a`; for the error paths.
+  static node_base* concat(node_base* a, node_base* b) noexcept {
+    if (!a) {
+      return b;
+    }
+    node_base* tail = a;
+    while (node_base* next = tail->next) {
+      tail = next;
+    }
+    tail->next = b;
+    return a;
+  }
+
+  /// Sort a null-terminated chain by bottom-up merging; returns the sorted
+  /// chain. If `comp` throws, every node is chained back together and the
+  /// chain is stored in `chain` before the exception propagates.
+  template <class Compare>
+  static node_base* sort_chain(node_base*& chain, Compare& comp) {
+    // bins[i] holds a sorted run of 2^i nodes; higher bins hold earlier
+    // elements, so merging a higher bin first keeps the sort stable.
+    node_base* bins[64] = {};
+    node_base* input = chain;
+    node_base* run = nullptr;    // the run being merged into
+    node_base* other = nullptr;  // the run merged with it
+    try {
+      while (input) {
+        run = input;
+        input = input->next;
+        run->next = nullptr;
+        std::size_t i = 0;
+        for (; bins[i]; i++) {
+          other = std::exchange(bins[i], nullptr);
+          run = merge_runs(other, run, comp);
+          other = nullptr;
+        }
+        bins[i] = std::exchange(run, nullptr);
+      }
+      for (node_base*& bin : bins) {
+        if (bin) {
+          other = std::exchange(bin, nullptr);
+          run = merge_runs(other, run, comp);
+          other = nullptr;
+        }
+      }
+    } catch (...) {
+      node_base* all = concat(other, run);
+      for (node_base* bin : bins) {
+        all = concat(bin, all);
+      }
+      chain = concat(all, input);
+      throw;
+    }
+    return run;
+  }
+
+  /// Make the null-terminated chain through `next` the whole list again:
+  /// restore the prev links and close the circle.
+  void relink(node_base* chain) noexcept {
+    node_base* prev = sentinel();
+    for (node_base* n = chain; n; n = n->next) {
+      n->prev = prev;
+      prev->next = n;
+      prev = n;
+    }
+    prev->next = sentinel();
+    sentinel()->prev = prev;
   }
 
   /// Insert the values that `produce` passes to its callback before `pos`.
@@ -2652,15 +3416,21 @@ class basic_list {
     node_base* doomed = nullptr;
     size_type removed = 0;
     node_base* n = sentinel()->next;
-    while (n != sentinel()) {
-      node_base* next = n->next;
-      if (pred(value_of(n))) {
-        unlink(n);
-        n->next = doomed;
-        doomed = n;
-        removed++;
+    try {
+      while (n != sentinel()) {
+        node_base* next = n->next;
+        if (pred(value_of(n))) {
+          unlink(n);
+          n->next = doomed;
+          doomed = n;
+          removed++;
+        }
+        n = next;
       }
-      n = next;
+    } catch (...) {
+      destroy_chain(doomed);
+      size_ -= removed;
+      throw;
     }
     destroy_chain(doomed);
     size_ -= removed;
@@ -2688,8 +3458,11 @@ class basic_list {
 /// A doubly linked list with 4-byte links, like `std::list` without the
 /// allocator parameter.
 ///
-/// Nodes are allocated in `Cage`. Every member behaves like its `std::list`
-/// counterpart; see @ref detail::basic_list for the full member list.
+/// Nodes are allocated in `Cage`. The members are those of `std::list` and
+/// behave like them, including the exception guarantees; the differences
+/// are that there is no allocator parameter (and so no get_allocator()),
+/// and that a moved-from list allocates a new sentinel when it is next
+/// inserted into. See @ref detail::basic_list for the full member list.
 ///
 /// @code
 /// #include "cptr/list.hpp"
@@ -2715,6 +3488,7 @@ using list = detail::basic_list<T, Cage, true>;
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <tuple>
@@ -2725,8 +3499,8 @@ using list = detail::basic_list<T, Cage, true>;
 namespace cptr {
 namespace detail {
 
-/// The class behind cptr::ordered_map; use that alias. Its members behave like
-/// those of `std::map`.
+/// The class behind cptr::ordered_map; use that alias. Its members behave
+/// like those of `std::map`; the alias lists the differences.
 ///
 /// The map behind cptr::ordered_map. Compressed = false gives the same tree
 /// with raw 8-byte links, which the benchmarks compare against.
@@ -2748,12 +3522,39 @@ class basic_ordered_map {
     std::uint8_t color;
   };
   struct node : node_base {
+    /// Direct-initialises the element, as std's allocator_traits::construct
+    /// does.
+    template <class... Args>
+    explicit node(std::in_place_t, Args&&... args)
+        : node_base{nullptr, nullptr, nullptr, kRed},
+          kv(std::forward<Args>(args)...) {}
     std::pair<const K, V> kv;
   };
 
   template <class Key>
   static constexpr bool kTransparent =
       requires { typename Compare::is_transparent; };
+
+  /// std's synth-three-way: `<=>` where the element has it, otherwise an
+  /// ordering built from `<`, so that elements with only `operator<` can
+  /// be compared too.
+  struct synth_three_way {
+    template <class U>
+    constexpr auto operator()(const U& a, const U& b) const {
+      if constexpr (std::three_way_comparable<U>) {
+        return a <=> b;
+      } else {
+        return a < b   ? std::weak_ordering::less
+               : b < a ? std::weak_ordering::greater
+                       : std::weak_ordering::equivalent;
+      }
+    }
+  };
+  template <class U>
+  static constexpr bool kSynthComparable =
+      std::three_way_comparable<U> || requires(const U& a) {
+        { a < a } -> std::convertible_to<bool>;
+      };
 
  public:
   using key_type = K;
@@ -2784,7 +3585,7 @@ class basic_ordered_map {
       return static_cast<node*>(node_)->kv;
     }
     pointer operator->() const noexcept {
-      return &static_cast<node*>(node_)->kv;
+      return std::addressof(static_cast<node*>(node_)->kv);
     }
     basic_iterator& operator++() noexcept {
       node_ = successor(node_);
@@ -2832,10 +3633,11 @@ class basic_ordered_map {
   basic_ordered_map(std::initializer_list<value_type> values,
                     const Compare& comp = Compare())
       : basic_ordered_map(values.begin(), values.end(), comp) {}
-  /// Copies the tree's shape, in linear time.
+  /// Copies the tree's shape, in linear time. `other` may be a moved-from
+  /// map, which has no header.
   basic_ordered_map(const basic_ordered_map& other)
       : basic_ordered_map(other.comp_) {
-    if (node_base* root = other.root()) {
+    if (node_base* root = other.header() ? other.root() : nullptr) {
       node_base* copy = clone(root, header());
       header()->parent = copy;
       header()->left = minimum(copy);
@@ -2995,36 +3797,63 @@ class basic_ordered_map {
   V& operator[](const K& key) { return try_emplace(key).first->second; }
   V& operator[](K&& key) { return try_emplace(std::move(key)).first->second; }
 
-  /// Insertion. As std::map: emplace builds the element first, try_emplace
-  /// only builds the mapped value if the key is new.
+  /// Build the element from `args`, then insert it unless its key is
+  /// present; returns the element with that key and whether it was
+  /// inserted. As for std::map, the element is built first, even when the
+  /// key turns out to be present (try_emplace avoids that). If the
+  /// comparison or an allocation throws, the element is destroyed and the
+  /// map is unchanged.
   template <class... Args>
+    requires std::constructible_from<value_type, Args...>
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
-    auto [parent, left, existing] = find_slot(n->kv.first);
-    if (existing) {
+    slot s;
+    try {
+      s = find_slot(n->kv.first);
+    } catch (...) {
       delete_node(n);
-      return {iterator(existing), false};
+      throw;
     }
-    attach(n, parent, left);
+    if (s.existing) {
+      delete_node(n);
+      return {iterator(s.existing), false};
+    }
+    attach(n, s.parent, s.left);
     return {iterator(n), true};
   }
-  /// The hint is not used; the result is the same as emplace's.
+  /// As emplace(). The hint is accepted for compatibility with std::map
+  /// and generic code such as std::inserter, but not used: the search
+  /// always starts at the root.
   template <class... Args>
+    requires std::constructible_from<value_type, Args...>
   iterator emplace_hint(const_iterator, Args&&... args) {
     return emplace(std::forward<Args>(args)...).first;
   }
+  /// If `key` is absent, insert it with a value built from `args`;
+  /// otherwise do nothing, and leave `args` untouched. Returns the element
+  /// with that key and whether it was inserted. Strong guarantee.
   template <class... Args>
   std::pair<iterator, bool> try_emplace(const K& key, Args&&... args) {
     return try_emplace_impl(key, std::forward<Args>(args)...);
   }
+  /// As above, moving `key` into the map only if it is inserted, so
+  /// move-only keys work.
   template <class... Args>
   std::pair<iterator, bool> try_emplace(K&& key, Args&&... args) {
     return try_emplace_impl(std::move(key), std::forward<Args>(args)...);
   }
+  /// try_emplace() with a hint, which is not used.
   template <class... Args>
   iterator try_emplace(const_iterator, const K& key, Args&&... args) {
     return try_emplace(key, std::forward<Args>(args)...).first;
   }
+  /// try_emplace() with a hint, which is not used, moving `key`.
+  template <class... Args>
+  iterator try_emplace(const_iterator, K&& key, Args&&... args) {
+    return try_emplace(std::move(key), std::forward<Args>(args)...).first;
+  }
+  /// Insert `key` with `value`, or assign `value` to the element that has
+  /// `key`. Returns the element and whether it was inserted.
   template <class M>
   std::pair<iterator, bool> insert_or_assign(const K& key, M&& value) {
     auto result = try_emplace(key, std::forward<M>(value));
@@ -3033,21 +3862,50 @@ class basic_ordered_map {
     }
     return result;
   }
+  /// As above, moving `key` into the map only if it is inserted.
+  template <class M>
+  std::pair<iterator, bool> insert_or_assign(K&& key, M&& value) {
+    auto result = try_emplace(std::move(key), std::forward<M>(value));
+    if (!result.second) {
+      result.first->second = std::forward<M>(value);
+    }
+    return result;
+  }
+  /// insert_or_assign() with a hint, which is not used.
   template <class M>
   iterator insert_or_assign(const_iterator, const K& key, M&& value) {
     return insert_or_assign(key, std::forward<M>(value)).first;
   }
+  /// insert_or_assign() with a hint, which is not used, moving `key`.
+  template <class M>
+  iterator insert_or_assign(const_iterator, K&& key, M&& value) {
+    return insert_or_assign(std::move(key), std::forward<M>(value)).first;
+  }
+  /// Insert a copy of `kv` unless its key is present. Strong guarantee.
   std::pair<iterator, bool> insert(const value_type& kv) {
     return try_emplace(kv.first, kv.second);
   }
+  /// Insert an element built from `kv` (such as a moved pair) unless its
+  /// key is present.
   template <class P>
     requires std::is_constructible_v<value_type, P&&>
   std::pair<iterator, bool> insert(P&& kv) {
     return emplace(std::forward<P>(kv));
   }
+  /// insert() with a hint, which is not used; returns the element with
+  /// the key.
   iterator insert(const_iterator, const value_type& kv) {
     return insert(kv).first;
   }
+  /// insert() with a hint, which is not used; returns the element with
+  /// the key.
+  template <class P>
+    requires std::is_constructible_v<value_type, P&&>
+  iterator insert(const_iterator, P&& kv) {
+    return emplace(std::forward<P>(kv)).first;
+  }
+  /// Insert each element of [first, last) whose key is not present yet.
+  /// If one throws, the elements inserted before it stay.
   template <std::input_iterator It>
   void insert(It first, It last) {
     for (; first != last; ++first) {
@@ -3113,12 +3971,15 @@ class basic_ordered_map {
                          const basic_ordered_map& b) {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
   }
+  /// Lexicographical over the (key, value) pairs, with std's
+  /// synth-three-way: types that have only `operator<` give a
+  /// std::weak_ordering.
   friend auto operator<=>(const basic_ordered_map& a,
                           const basic_ordered_map& b)
-    requires std::three_way_comparable<value_type>
+    requires kSynthComparable<value_type>
   {
     return std::lexicographical_compare_three_way(a.begin(), a.end(), b.begin(),
-                                                  b.end());
+                                                  b.end(), synth_three_way());
   }
 
   /// Checks the red-black and ordering invariants and the header; for tests.
@@ -3171,8 +4032,7 @@ class basic_ordered_map {
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
     try {
-      return ::new (mem) node{{nullptr, nullptr, nullptr, kRed},
-                              value_type(std::forward<Args>(args)...)};
+      return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
     } catch (...) {
       Cage::deallocate(mem);
       throw;
@@ -3602,10 +4462,13 @@ class basic_ordered_map {
 /// parameter and node handles.
 ///
 /// A red-black tree whose nodes are allocated in `Cage`: 24 bytes per
-/// element for 4-byte keys and values, against 48 for `std::map`. Every
-/// member behaves like its `std::map` counterpart; see
-/// @ref detail::basic_ordered_map for the full member list. Lookup is
-/// heterogeneous when `Compare::is_transparent` exists.
+/// element for 4-byte keys and values, against 48 for `std::map`. The
+/// members behave like those of `std::map`, with these differences: there
+/// is no allocator parameter, no node handles (extract, merge, insert of a
+/// node) and no get_allocator(); hints are accepted but not used, so a
+/// hinted insertion costs a full search; and copy assignment gives the
+/// strong guarantee. See @ref detail::basic_ordered_map for the full member
+/// list. Lookup is heterogeneous when `Compare::is_transparent` exists.
 ///
 /// @code
 /// #include "cptr/ordered_map.hpp"
@@ -3631,32 +4494,55 @@ using ordered_map = detail::basic_ordered_map<K, V, Compare, Cage, true>;
 #include <bit>
 #include <cassert>
 #include <cstdint>
+#include <type_traits>
 
 
 namespace cptr {
+
+namespace detail {
+/// Cage::decompress, but constant-evaluable for null: the check runs only in
+/// constant evaluation, so the run-time code is the cage's.
+template <class T, class Cage>
+constexpr T* decompress_as(std::uint32_t bits) noexcept {
+  if (std::is_constant_evaluated() && !bits) {
+    return nullptr;
+  }
+  return static_cast<T*>(Cage::decompress(bits));
+}
+}  // namespace detail
 
 /// Two compressed pointers in 8 bytes, e.g. a tree node's children or a list
 /// node's links.
 template <class A, class B = A, class Cage = default_cage>
 class ptr_pair {
  public:
+  /// Two null pointers.
   constexpr ptr_pair() noexcept = default;
+  /// Compresses `a` and `b`, which must each be null or point into the cage.
   ptr_pair(A* a, B* b) noexcept
       : bits_(std::uint64_t(Cage::compress(a)) |
               std::uint64_t(Cage::compress(b)) << 32) {}
 
-  A* first() const noexcept {
-    return static_cast<A*>(Cage::decompress(std::uint32_t(bits_)));
+  /// The first pointer, or `nullptr`. Constant-evaluable when null.
+  constexpr A* first() const noexcept {
+    return detail::decompress_as<A, Cage>(std::uint32_t(bits_));
   }
-  B* second() const noexcept {
-    return static_cast<B*>(Cage::decompress(std::uint32_t(bits_ >> 32)));
+  /// The second pointer, or `nullptr`. Constant-evaluable when null.
+  constexpr B* second() const noexcept {
+    return detail::decompress_as<B, Cage>(std::uint32_t(bits_ >> 32));
   }
+  /// Replaces the first pointer (null or in the cage), keeping the second.
   void set_first(A* a) noexcept {
     bits_ = (bits_ & ~std::uint64_t(UINT32_MAX)) | Cage::compress(a);
   }
+  /// Replaces the second pointer (null or in the cage), keeping the first.
   void set_second(B* b) noexcept {
     bits_ = (bits_ & UINT32_MAX) | std::uint64_t(Cage::compress(b)) << 32;
   }
+
+  /// Both pointers equal.
+  friend constexpr bool operator==(const ptr_pair&,
+                                   const ptr_pair&) noexcept = default;
 
  private:
   std::uint64_t bits_ = 0;
@@ -3667,23 +4553,33 @@ class ptr_pair {
 template <class T, class Cage = default_cage>
 class ptr_with_payload {
  public:
+  /// Null, with payload 0.
   constexpr ptr_with_payload() noexcept = default;
+  /// Compresses `p`, which must be null or point into the cage.
   ptr_with_payload(T* p, std::uint32_t payload) noexcept
       : bits_(std::uint64_t(Cage::compress(p)) | std::uint64_t(payload) << 32) {
   }
 
-  T* get() const noexcept {
-    return static_cast<T*>(Cage::decompress(std::uint32_t(bits_)));
+  /// The pointer, or `nullptr`. Constant-evaluable when null.
+  constexpr T* get() const noexcept {
+    return detail::decompress_as<T, Cage>(std::uint32_t(bits_));
   }
+  /// The payload.
   constexpr std::uint32_t payload() const noexcept {
     return std::uint32_t(bits_ >> 32);
   }
+  /// Replaces the pointer (null or in the cage), keeping the payload.
   void set(T* p) noexcept {
     bits_ = (bits_ & ~std::uint64_t(UINT32_MAX)) | Cage::compress(p);
   }
+  /// Replaces the payload, keeping the pointer.
   constexpr void set_payload(std::uint32_t v) noexcept {
     bits_ = (bits_ & UINT32_MAX) | std::uint64_t(v) << 32;
   }
+
+  /// Same pointer and same payload.
+  friend constexpr bool operator==(const ptr_with_payload&,
+                                   const ptr_with_payload&) noexcept = default;
 
  private:
   std::uint64_t bits_ = 0;
@@ -3697,14 +4593,21 @@ class tagged_ptr {
   static constexpr std::uint32_t kTagMask = (1u << TagBits) - 1;
 
  public:
+  /// Null, with tag 0.
   constexpr tagged_ptr() noexcept = default;
+  /// As set(p, tag).
   tagged_ptr(T* p, std::uint32_t tag) noexcept { set(p, tag); }
 
-  T* get() const noexcept {
-    std::uint32_t bits = bits_ & ~kTagMask;
-    return static_cast<T*>(Cage::decompress(bits));
+  /// The pointer without the tag, or `nullptr`. Constant-evaluable when
+  /// null.
+  constexpr T* get() const noexcept {
+    return detail::decompress_as<T, Cage>(bits_ & ~kTagMask);
   }
+  /// The tag, below 2^TagBits.
   constexpr std::uint32_t tag() const noexcept { return bits_ & kTagMask; }
+  /// Replaces both. `p` must be null or point into the cage, aligned to
+  /// 2^(TagBits + Cage::shift), and `tag` must fit in TagBits bits (both
+  /// checked by assertions in debug builds).
   void set(T* p, std::uint32_t tag) noexcept {
     CPTR_ASSERT(tag <= kTagMask, "tag does not fit in the tag bits");
     std::uint32_t bits = Cage::compress(p);
@@ -3713,44 +4616,67 @@ class tagged_ptr {
     bits_ = bits | tag;
   }
 
+  /// Same pointer and same tag.
+  friend constexpr bool operator==(tagged_ptr, tagged_ptr) noexcept = default;
+
  private:
   std::uint32_t bits_ = 0;
 };
 
 /// A compressed pointer that can be updated atomically.
+///
+/// It offers the parts of the std::atomic<T*> interface that apply to it
+/// (no arithmetic). Every pointer passed in must be null or point into the
+/// cage.
 template <class T, class Cage = default_cage>
 class atomic_ptr {
  public:
+  /// True when the 32-bit offset is always updated without a lock.
   static constexpr bool is_always_lock_free =
       std::atomic<std::uint32_t>::is_always_lock_free;
 
+  /// Null. Constant-initialised, so a global atomic_ptr can be constinit.
   constexpr atomic_ptr() noexcept = default;
+  /// Holds `p`.
   explicit atomic_ptr(T* p) noexcept : bits_(Cage::compress(p)) {}
   atomic_ptr(const atomic_ptr&) = delete;
   atomic_ptr& operator=(const atomic_ptr&) = delete;
 
-  /// Not bits_.is_lock_free(): clang emits a call to libatomic for it.
-  constexpr bool is_lock_free() const noexcept { return is_always_lock_free; }
+  /// Whether this object's operations are lock-free.
+  constexpr bool is_lock_free() const noexcept {
+    // Not bits_.is_lock_free(): clang emits a call to libatomic for it.
+    return is_always_lock_free;
+  }
 
+  /// The current pointer.
   T* load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
     return unpack(bits_.load(order));
   }
+  /// load().
   operator T*() const noexcept { return load(); }
+  /// Replaces the pointer with `p`.
   void store(T* p,
              std::memory_order order = std::memory_order_seq_cst) noexcept {
     bits_.store(Cage::compress(p), order);
   }
-  // Returns the value, like std::atomic<T*>::operator=.
+  /// store(p), returning `p` like std::atomic<T*>::operator=.
   // NOLINTNEXTLINE(misc-unconventional-assign-operator)
   T* operator=(T* p) noexcept {
     store(p);
     return p;
   }
+  /// Replaces the pointer with `p` and returns the previous one, in one
+  /// atomic step.
   T* exchange(T* p,
               std::memory_order order = std::memory_order_seq_cst) noexcept {
     return unpack(bits_.exchange(Cage::compress(p), order));
   }
 
+  /// If the pointer equals `expected`, replaces it with `desired` and
+  /// returns true; otherwise loads it into `expected` and returns false. As
+  /// std::atomic, the weak form may fail spuriously, so call it in a loop.
+  /// The comparison is on the compressed offsets, which is the same as on
+  /// the addresses.
   bool compare_exchange_weak(T*& expected, T* desired,
                              std::memory_order success,
                              std::memory_order failure) noexcept {
@@ -3760,12 +4686,16 @@ class atomic_ptr {
     expected = unpack(e);
     return ok;
   }
+  /// compare_exchange_weak() with one order, from which the failure order
+  /// is derived as std::atomic does.
   bool compare_exchange_weak(
       T*& expected, T* desired,
       std::memory_order order = std::memory_order_seq_cst) noexcept {
     return compare_exchange_weak(expected, desired, order,
                                  failure_order(order));
   }
+  /// As compare_exchange_weak(), but fails only if the pointer differs
+  /// from `expected`.
   bool compare_exchange_strong(T*& expected, T* desired,
                                std::memory_order success,
                                std::memory_order failure) noexcept {
@@ -3775,6 +4705,8 @@ class atomic_ptr {
     expected = unpack(e);
     return ok;
   }
+  /// compare_exchange_strong() with one order, from which the failure order
+  /// is derived as std::atomic does.
   bool compare_exchange_strong(
       T*& expected, T* desired,
       std::memory_order order = std::memory_order_seq_cst) noexcept {
@@ -3787,7 +4719,9 @@ class atomic_ptr {
                         std::memory_order_seq_cst) const noexcept {
     bits_.wait(Cage::compress(old), order);
   }
+  /// Wakes one thread blocked in wait() on this object, if any.
   void notify_one() noexcept { bits_.notify_one(); }
+  /// Wakes all threads blocked in wait() on this object.
   void notify_all() noexcept { bits_.notify_all(); }
 
  private:
@@ -3829,6 +4763,7 @@ static_assert(sizeof(atomic_ptr<int>) == 4);
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <tuple>
@@ -3840,7 +4775,7 @@ namespace cptr {
 namespace detail {
 
 /// The class behind cptr::unordered_map; use that alias. Its members behave
-/// like those of `std::unordered_map`.
+/// like those of `std::unordered_map`; the alias lists the differences.
 ///
 /// The map behind cptr::unordered_map. Compressed = false gives the same
 /// table with raw 8-byte links, which the benchmarks compare against.
@@ -3857,6 +4792,11 @@ class basic_unordered_map {
   struct node;
   using link_type = link<node, Cage, Compressed>;
   struct node {
+    /// Direct-initialises the element, as std's allocator_traits::construct
+    /// does.
+    template <class... Args>
+    explicit node(std::in_place_t, Args&&... args)
+        : next(nullptr), hash(0), kv(std::forward<Args>(args)...) {}
     link_type next;
     std::uint32_t hash;
     std::pair<const K, V> kv;
@@ -3879,8 +4819,11 @@ class basic_unordered_map {
   using reference = value_type&;
   using const_reference = const value_type&;
 
-  /// A forward iterator: the node and the map, so that it can move on to
-  /// the next bucket.
+  /// A forward iterator: the node, and the bucket array and its size, so
+  /// that it can move on to the next bucket. It does not refer to the map
+  /// object, so like std's iterators it stays valid when the map is moved
+  /// or swapped; a rehash invalidates it. With compressed links it is 16
+  /// bytes.
   template <bool Const>
   class basic_iterator {
    public:
@@ -3894,12 +4837,14 @@ class basic_unordered_map {
     template <bool C = Const>
       requires C
     basic_iterator(const basic_iterator<false>& other) noexcept
-        : node_(other.node_), owner_(other.owner_) {}
+        : node_(other.node_),
+          buckets_(other.buckets_),
+          log2_buckets_(other.log2_buckets_) {}
 
     reference operator*() const noexcept { return node_->kv; }
-    pointer operator->() const noexcept { return &node_->kv; }
+    pointer operator->() const noexcept { return std::addressof(node_->kv); }
     basic_iterator& operator++() noexcept {
-      node_ = owner_->next_node(node_);
+      node_ = next_node(node_, buckets_, log2_buckets_);
       return *this;
     }
     basic_iterator operator++(int) noexcept {
@@ -3914,32 +4859,64 @@ class basic_unordered_map {
    private:
     friend class basic_unordered_map;
     friend class basic_iterator<!Const>;
-    basic_iterator(node* n, const basic_unordered_map* owner) noexcept
-        : node_(n), owner_(owner) {}
+    basic_iterator(node* n, link_type* buckets, unsigned log2) noexcept
+        : node_(n), buckets_(buckets), log2_buckets_(log2) {}
     node* node_ = nullptr;
-    const basic_unordered_map* owner_ = nullptr;
+    link<link_type, Cage, Compressed> buckets_ = nullptr;
+    unsigned log2_buckets_ = 0;
   };
 
   using iterator = basic_iterator<false>;
   using const_iterator = basic_iterator<true>;
 
+  /// An empty map; allocates nothing.
   basic_unordered_map() noexcept = default;
+  /// An empty map with at least `buckets` buckets.
   explicit basic_unordered_map(size_type buckets, const Hash& hash = Hash(),
                                const KeyEqual& eq = KeyEqual())
       : hash_(hash), eq_(eq) {
     rehash(buckets);
   }
+  // The constructors that insert delegate to another one, so that the
+  // destructor frees what was inserted if an element, the hash or an
+  // allocation throws.
+  /// The elements of [first, last); of equal keys, the first is kept.
   template <std::input_iterator It>
-  basic_unordered_map(It first, It last) {
+  basic_unordered_map(It first, It last, size_type buckets = 0,
+                      const Hash& hash = Hash(),
+                      const KeyEqual& eq = KeyEqual())
+      : basic_unordered_map(buckets, hash, eq) {
     insert(first, last);
   }
-  basic_unordered_map(std::initializer_list<value_type> values)
-      : basic_unordered_map(values.begin(), values.end()) {}
+  /// The elements of `values`; of equal keys, the first is kept.
+  basic_unordered_map(std::initializer_list<value_type> values,
+                      size_type buckets = 0, const Hash& hash = Hash(),
+                      const KeyEqual& eq = KeyEqual())
+      : basic_unordered_map(values.begin(), values.end(), buckets, hash, eq) {}
+  /// Copies the elements, the hash function, the key comparison, the
+  /// maximum load factor and the bucket count, so the copy iterates in the
+  /// same order. The keys are not hashed again: each node keeps its hash,
+  /// and the copy goes bucket by bucket.
   basic_unordered_map(const basic_unordered_map& other)
-      : hash_(other.hash_), eq_(other.eq_), max_load_(other.max_load_) {
-    reserve(other.size_);
-    for (const auto& kv : other) {
-      emplace(kv.first, kv.second);
+      : basic_unordered_map(0, other.hash_, other.eq_) {
+    max_load_ = other.max_load_;
+    if (other.size_ == 0) {
+      return;
+    }
+    rehash(other.bucket_count());
+    // Each node is linked as soon as it is made, so if one throws the
+    // destructor frees the rest; first_ must already be a lower bound then.
+    first_ = other.first_;
+    size_type count = bucket_count();
+    for (size_type i = other.first_; i < count; i++) {
+      link_type* tail = &buckets_[i];
+      for (node* n = other.buckets_[i]; n; n = n->next) {
+        node* copy = new_node(n->kv);
+        copy->hash = n->hash;
+        *tail = copy;
+        tail = &copy->next;
+        size_++;
+      }
     }
   }
   basic_unordered_map(basic_unordered_map&& other) noexcept
@@ -3948,7 +4925,8 @@ class basic_unordered_map {
         size_(std::exchange(other.size_, 0)),
         hash_(other.hash_),
         eq_(other.eq_),
-        max_load_(other.max_load_) {}
+        max_load_(other.max_load_),
+        first_(std::exchange(other.first_, 0)) {}
   basic_unordered_map& operator=(const basic_unordered_map& other) {
     if (this != &other) {
       basic_unordered_map(other).swap(*this);
@@ -3973,15 +4951,22 @@ class basic_unordered_map {
     std::swap(hash_, other.hash_);
     std::swap(eq_, other.eq_);
     std::swap(max_load_, other.max_load_);
+    std::swap(first_, other.first_);
   }
   friend void swap(basic_unordered_map& a, basic_unordered_map& b) noexcept {
     a.swap(b);
   }
 
-  iterator begin() noexcept { return {first_from(0), this}; }
-  iterator end() noexcept { return {nullptr, this}; }
-  const_iterator begin() const noexcept { return {first_from(0), this}; }
-  const_iterator end() const noexcept { return {nullptr, this}; }
+  /// The first element. Constant time on average: the map keeps a lower
+  /// bound on its first non-empty bucket, which insertion lowers and
+  /// erase(iterator) raises, so `while (!m.empty()) m.erase(m.begin());` is
+  /// linear. begin() itself writes nothing, so concurrent calls are safe.
+  iterator begin() noexcept { return make_iterator(first_from(first_)); }
+  iterator end() noexcept { return make_iterator(nullptr); }
+  const_iterator begin() const noexcept {
+    return make_iterator(first_from(first_));
+  }
+  const_iterator end() const noexcept { return make_iterator(nullptr); }
   const_iterator cbegin() const noexcept { return begin(); }
   const_iterator cend() const noexcept { return end(); }
 
@@ -3998,25 +4983,45 @@ class basic_unordered_map {
     return buckets_ ? float(size_) / float(bucket_count()) : 0.0f;
   }
   float max_load_factor() const noexcept { return max_load_; }
+  /// Set the maximum load factor, ignoring values that are not positive, and
+  /// rehash if the map is now over it. If that rehash throws, the old
+  /// maximum is kept.
   void max_load_factor(float f) {
-    max_load_ = f > 0 ? f : max_load_;
-    reserve(size_);
+    if (!(f > 0)) {
+      return;
+    }
+    float old = std::exchange(max_load_, f);
+    try {
+      reserve(size_);
+    } catch (...) {
+      max_load_ = old;
+      throw;
+    }
   }
   hasher hash_function() const { return hash_; }
   key_equal key_eq() const { return eq_; }
 
-  /// Make room for `n` elements without exceeding max_load_factor().
-  void reserve(size_type n) {
-    rehash(size_type(std::ceil(float(n) / max_load_)));
+  /// The most buckets the map can have: a power of two, limited by the
+  /// cage's size and by the 32-bit hashes the nodes keep.
+  static constexpr size_type max_bucket_count() noexcept {
+    return size_type(1) << kMaxLog2Buckets;
   }
 
+  /// Make room for `n` elements without exceeding max_load_factor(). Throws
+  /// std::length_error if that needs more than max_bucket_count() buckets.
+  void reserve(size_type n) { rehash(buckets_for(n)); }
+
   /// Use at least `n` buckets, and enough for max_load_factor(). The count
-  /// is rounded up to a power of two.
+  /// is rounded up to a power of two. Throws std::length_error if that is
+  /// more than max_bucket_count(); iterators are invalidated unless the
+  /// count stays the same.
   void rehash(size_type n) {
-    size_type need =
-        std::max<size_type>(n, size_type(std::ceil(float(size_) / max_load_)));
+    size_type need = std::max(n, buckets_for(size_));
     if (need == 0) {
       return;
+    }
+    if (need > max_bucket_count()) {
+      throw std::length_error("cptr::unordered_map: too many buckets");
     }
     unsigned log2 = unsigned(std::bit_width(need - 1));
     log2 = std::max(log2, 3u);
@@ -4029,14 +5034,17 @@ class basic_unordered_map {
     for (size_type i = 0; i < count; i++) {
       ::new (&fresh[i]) link_type(nullptr);
     }
+    size_type first = count;
     if (buckets_) {
       link_type* old = buckets_;
       size_type old_count = bucket_count();
-      for (size_type i = 0; i < old_count; i++) {
+      for (size_type i = first_; i < old_count; i++) {
         node* moving = old[i];
         while (moving) {
           node* next = moving->next;
-          link_type& head = fresh[index(moving->hash, log2)];
+          size_type at = index(moving->hash, log2);
+          first = std::min(first, at);
+          link_type& head = fresh[at];
           moving->next = head;
           head = moving;
           moving = next;
@@ -4046,21 +5054,24 @@ class basic_unordered_map {
     }
     buckets_ = fresh;
     log2_buckets_ = log2;
+    first_ = std::uint32_t(first);
   }
 
   // Lookup. The template overloads take any key type when both Hash and
   // KeyEqual are transparent.
-  iterator find(const K& key) { return {find_node(key), this}; }
-  const_iterator find(const K& key) const { return {find_node(key), this}; }
+  iterator find(const K& key) { return make_iterator(find_node(key)); }
+  const_iterator find(const K& key) const {
+    return make_iterator(find_node(key));
+  }
   template <class Key>
     requires kTransparent<Key>
   iterator find(const Key& key) {
-    return {find_node(key), this};
+    return make_iterator(find_node(key));
   }
   template <class Key>
     requires kTransparent<Key>
   const_iterator find(const Key& key) const {
-    return {find_node(key), this};
+    return make_iterator(find_node(key));
   }
   bool contains(const K& key) const { return find_node(key) != nullptr; }
   template <class Key>
@@ -4082,6 +5093,20 @@ class basic_unordered_map {
     const_iterator it = find(key);
     return {it, it == end() ? it : std::next(it)};
   }
+  /// Heterogeneous equal_range(), as in C++20.
+  template <class Key>
+    requires kTransparent<Key>
+  std::pair<iterator, iterator> equal_range(const Key& key) {
+    iterator it = find(key);
+    return {it, it == end() ? it : std::next(it)};
+  }
+  /// Heterogeneous equal_range(), as in C++20.
+  template <class Key>
+    requires kTransparent<Key>
+  std::pair<const_iterator, const_iterator> equal_range(const Key& key) const {
+    const_iterator it = find(key);
+    return {it, it == end() ? it : std::next(it)};
+  }
 
   V& at(const K& key) {
     node* n = find_node(key);
@@ -4096,26 +5121,62 @@ class basic_unordered_map {
   V& operator[](const K& key) { return try_emplace(key).first->second; }
   V& operator[](K&& key) { return try_emplace(std::move(key)).first->second; }
 
+  /// Build the element from `args`, then insert it unless its key is
+  /// present; returns the element with that key and whether it was
+  /// inserted. As for std::unordered_map, the element is built first, even
+  /// when the key turns out to be present (try_emplace avoids that). If the
+  /// hash, the key comparison or a rehash throws, the element is destroyed
+  /// and the map is unchanged.
   template <class... Args>
+    requires std::constructible_from<value_type, Args...>
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
-    std::uint32_t h = hash_of(n->kv.first);
-    if (node* existing = find_node(n->kv.first, h)) {
+    try {
+      std::uint32_t h = hash_of(n->kv.first);
+      if (node* existing = find_node(n->kv.first, h)) {
+        delete_node(n);
+        return {make_iterator(existing), false};
+      }
+      n->hash = h;
+      link_node(n);
+    } catch (...) {
       delete_node(n);
-      return {{existing, this}, false};
+      throw;
     }
-    n->hash = h;
-    link_node(n);
-    return {{n, this}, true};
+    return {make_iterator(n), true};
   }
+  /// As emplace(). The hint is accepted for compatibility with
+  /// std::unordered_map and generic code, but not used.
+  template <class... Args>
+    requires std::constructible_from<value_type, Args...>
+  iterator emplace_hint(const_iterator, Args&&... args) {
+    return emplace(std::forward<Args>(args)...).first;
+  }
+  /// If `key` is absent, insert it with a value built from `args`;
+  /// otherwise do nothing, and leave `args` untouched. Returns the element
+  /// with that key and whether it was inserted. Strong guarantee.
   template <class... Args>
   std::pair<iterator, bool> try_emplace(const K& key, Args&&... args) {
     return try_emplace_impl(key, std::forward<Args>(args)...);
   }
+  /// As above, moving `key` into the map only if it is inserted, so
+  /// move-only keys work.
   template <class... Args>
   std::pair<iterator, bool> try_emplace(K&& key, Args&&... args) {
     return try_emplace_impl(std::move(key), std::forward<Args>(args)...);
   }
+  /// try_emplace() with a hint, which is not used.
+  template <class... Args>
+  iterator try_emplace(const_iterator, const K& key, Args&&... args) {
+    return try_emplace(key, std::forward<Args>(args)...).first;
+  }
+  /// try_emplace() with a hint, which is not used, moving `key`.
+  template <class... Args>
+  iterator try_emplace(const_iterator, K&& key, Args&&... args) {
+    return try_emplace(std::move(key), std::forward<Args>(args)...).first;
+  }
+  /// Insert `key` with `value`, or assign `value` to the element that has
+  /// `key`. Returns the element and whether it was inserted.
   template <class M>
   std::pair<iterator, bool> insert_or_assign(const K& key, M&& value) {
     auto result = try_emplace(key, std::forward<M>(value));
@@ -4124,14 +5185,50 @@ class basic_unordered_map {
     }
     return result;
   }
+  /// As above, moving `key` into the map only if it is inserted.
+  template <class M>
+  std::pair<iterator, bool> insert_or_assign(K&& key, M&& value) {
+    auto result = try_emplace(std::move(key), std::forward<M>(value));
+    if (!result.second) {
+      result.first->second = std::forward<M>(value);
+    }
+    return result;
+  }
+  /// insert_or_assign() with a hint, which is not used.
+  template <class M>
+  iterator insert_or_assign(const_iterator, const K& key, M&& value) {
+    return insert_or_assign(key, std::forward<M>(value)).first;
+  }
+  /// insert_or_assign() with a hint, which is not used, moving `key`.
+  template <class M>
+  iterator insert_or_assign(const_iterator, K&& key, M&& value) {
+    return insert_or_assign(std::move(key), std::forward<M>(value)).first;
+  }
+  /// Insert a copy of `kv` unless its key is present. Strong guarantee.
   std::pair<iterator, bool> insert(const value_type& kv) {
     return try_emplace(kv.first, kv.second);
   }
+  /// Insert an element built from `kv` (such as a moved pair) unless its
+  /// key is present.
   template <class P>
     requires std::is_constructible_v<value_type, P&&>
   std::pair<iterator, bool> insert(P&& kv) {
     return emplace(std::forward<P>(kv));
   }
+  /// insert() with a hint, which is not used; returns the element with
+  /// the key. With these, std::inserter(m, m.end()) works.
+  iterator insert(const_iterator, const value_type& kv) {
+    return insert(kv).first;
+  }
+  /// insert() with a hint, which is not used; returns the element with
+  /// the key.
+  template <class P>
+    requires std::is_constructible_v<value_type, P&&>
+  iterator insert(const_iterator, P&& kv) {
+    return emplace(std::forward<P>(kv)).first;
+  }
+  /// Insert each element of [first, last) whose key is not present yet.
+  /// If one throws, the elements inserted before it stay.
   template <std::input_iterator It>
   void insert(It first, It last) {
     for (; first != last; ++first) {
@@ -4142,34 +5239,52 @@ class basic_unordered_map {
     insert(values.begin(), values.end());
   }
 
-  /// Returns the element after the erased one, in iteration order.
+  /// Erase the element at `pos`; returns the element after it, in
+  /// iteration order. Finding that element may step over empty buckets.
   iterator erase(const_iterator pos) noexcept {
     node* n = pos.node_;
-    node* next = next_node(n);
+    node* next = next_node(n, buckets_, log2_buckets_);
+    std::size_t at = index(n->hash, log2_buckets_);
     unlink_node(n);
     delete_node(n);
-    return {next, this};
+    if (at == first_ && !buckets_[at]) {
+      // The first bucket is now empty, and |next| is the new first element.
+      first_ = std::uint32_t(next ? index(next->hash, log2_buckets_)
+                                  : bucket_count());
+    }
+    return make_iterator(next);
   }
   iterator erase(iterator pos) noexcept { return erase(const_iterator(pos)); }
   iterator erase(const_iterator first, const_iterator last) noexcept {
     while (first != last) {
       first = erase(first);
     }
-    return {last.node_, this};
+    return make_iterator(last.node_);
   }
+  /// Erase the element with `key`, if any; returns how many were erased.
+  /// One walk of the bucket finds the element and the link to it, and
+  /// nothing looks for the next element.
   size_type erase(const K& key) {
-    node* n = find_node(key);
-    if (!n) {
+    if (!buckets_) {
       return 0;
     }
-    unlink_node(n);
-    delete_node(n);
-    return 1;
+    std::uint32_t h = hash_of(key);
+    link_type* at = &buckets_[index(h, log2_buckets_)];
+    while (node* n = *at) {
+      if (n->hash == h && eq_(n->kv.first, key)) {
+        *at = n->next;
+        delete_node(n);
+        size_--;
+        return 1;
+      }
+      at = &n->next;
+    }
+    return 0;
   }
 
   void clear() noexcept {
     size_type count = bucket_count();
-    for (size_type i = 0; i < count && size_; i++) {
+    for (size_type i = first_; i < count && size_; i++) {
       node* n = buckets_[i];
       buckets_[i] = nullptr;
       while (n) {
@@ -4180,6 +5295,7 @@ class basic_unordered_map {
       }
     }
     size_ = 0;
+    first_ = std::uint32_t(count);
   }
 
   /// Equal if both hold the same keys with equal values.
@@ -4228,31 +5344,62 @@ class basic_unordered_map {
     return nullptr;
   }
 
+  /// The largest log2 of a bucket count: the array must fit in the cage
+  /// (and its byte size in a size_t), and a bucket index in 31 bits.
+  static constexpr unsigned kMaxLog2Buckets = std::min<unsigned>(
+      31, unsigned(std::bit_width(Cage::usable_end / sizeof(link_type))) - 1);
+
+  /// The bucket count needed for `n` elements at max_load_factor(), in
+  /// double precision so that neither the division nor the conversion back
+  /// overflows or rounds a large count down. Saturates above
+  /// max_bucket_count(), which rehash() rejects.
+  size_type buckets_for(size_type n) const noexcept {
+    double need = std::ceil(double(n) / double(max_load_));
+    return need > double(max_bucket_count()) ? max_bucket_count() + 1
+                                             : size_type(need);
+  }
+
+  iterator make_iterator(node* n) noexcept {
+    return {n, buckets_, log2_buckets_};
+  }
+  const_iterator make_iterator(node* n) const noexcept {
+    return {n, buckets_, log2_buckets_};
+  }
+
   node* first_from(std::size_t i) const noexcept {
-    size_type count = bucket_count();
+    return first_from(i, buckets_, log2_buckets_);
+  }
+  static node* first_from(std::size_t i, link_type* buckets,
+                          unsigned log2) noexcept {
+    if (!buckets) {
+      return nullptr;
+    }
+    size_type count = size_type(1) << log2;
     for (; i < count; i++) {
-      if (node* n = buckets_[i]) {
+      if (node* n = buckets[i]) {
         return n;
       }
     }
     return nullptr;
   }
 
-  node* next_node(node* n) const noexcept {
+  static node* next_node(node* n, link_type* buckets, unsigned log2) noexcept {
     if (node* next = n->next) {
       return next;
     }
-    return first_from(index(n->hash, log2_buckets_) + 1);
+    return first_from(index(n->hash, log2) + 1, buckets, log2);
   }
 
   void link_node(node* n) {
-    if (size_ + 1 > float(bucket_count()) * max_load_) {
+    if (double(size_ + 1) > double(bucket_count()) * double(max_load_)) {
       rehash(std::max<size_type>(bucket_count() * 2, 8));
     }
-    link_type& head = buckets_[index(n->hash, log2_buckets_)];
+    std::size_t at = index(n->hash, log2_buckets_);
+    link_type& head = buckets_[at];
     n->next = head;
     head = n;
     size_++;
+    first_ = std::min(first_, std::uint32_t(at));
   }
 
   void unlink_node(node* n) noexcept {
@@ -4268,7 +5415,7 @@ class basic_unordered_map {
   std::pair<iterator, bool> try_emplace_impl(Key&& key, Args&&... args) {
     std::uint32_t h = hash_of(key);
     if (node* existing = find_node(key, h)) {
-      return {{existing, this}, false};
+      return {make_iterator(existing), false};
     }
     node* n = new_node(std::piecewise_construct,
                        std::forward_as_tuple(std::forward<Key>(key)),
@@ -4280,15 +5427,14 @@ class basic_unordered_map {
       delete_node(n);
       throw;
     }
-    return {{n, this}, true};
+    return {make_iterator(n), true};
   }
 
   template <class... Args>
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
     try {
-      return ::new (mem)
-          node{nullptr, 0, value_type(std::forward<Args>(args)...)};
+      return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
     } catch (...) {
       Cage::deallocate(mem);
       throw;
@@ -4313,6 +5459,8 @@ class basic_unordered_map {
   [[no_unique_address]] KeyEqual eq_{};
 #endif
   float max_load_ = 1.0f;
+  /// No bucket below this one holds an element; see begin().
+  std::uint32_t first_ = 0;
 };
 
 }  // namespace detail
@@ -4322,9 +5470,14 @@ class basic_unordered_map {
 ///
 /// Separate chaining; nodes and buckets are allocated in `Cage`: about 20
 /// bytes per element for 4-byte keys and values, against 44 for
-/// `std::unordered_map`. Every member behaves like its
-/// `std::unordered_map` counterpart; see @ref detail::basic_unordered_map
-/// for the full member list. Lookup is heterogeneous when both `Hash` and
+/// `std::unordered_map`. The members behave like those of
+/// `std::unordered_map`, with these differences: there is no allocator
+/// parameter, no node handles (extract, merge, insert of a node), no bucket
+/// interface (bucket(), bucket_size(), local iterators) and no
+/// get_allocator(); bucket counts are powers of two, at most
+/// max_bucket_count(); hints are accepted but not used; and the iteration
+/// order is that of the buckets. See @ref detail::basic_unordered_map for
+/// the full member list. Lookup is heterogeneous when both `Hash` and
 /// `KeyEqual` are transparent.
 ///
 /// @code
@@ -4437,7 +5590,9 @@ class CPTR_VISIBLE user_cage {
   static constexpr std::size_t usable_end = size - span_size;
 
   /// Reserve the cage and construct the allocator. Called lazily by
-  /// allocate(); returns false if the address space could not be reserved.
+  /// allocate(); returns false if the address space could not be reserved
+  /// or the allocator's constructor threw. A failed call gives the address
+  /// space back, and a later call tries again.
   static bool init() noexcept {
     if (ready_.load(std::memory_order_acquire)) {
       return true;
@@ -4455,9 +5610,10 @@ class CPTR_VISIBLE user_cage {
       ::new (static_cast<void*>(storage_))
           Allocator(std::span<std::byte>(first, usable_end - span_size));
     } catch (...) {
+      detail::release(p, size);
       return false;
     }
-    base_ = reinterpret_cast<std::uintptr_t>(p);
+    base_ = detail::base_address(reinterpret_cast<std::uintptr_t>(p));
     ready_.store(true, std::memory_order_release);
     return true;
   }
@@ -4468,32 +5624,43 @@ class CPTR_VISIBLE user_cage {
     return *std::launder(reinterpret_cast<Allocator*>(storage_));
   }
 
-  static std::uintptr_t base() noexcept { return base_; }
+  static std::uintptr_t base() noexcept { return std::uintptr_t(base_); }
 
   static bool contains(const void* p) noexcept {
-    return base_ != 0 && reinterpret_cast<std::uintptr_t>(p) - base_ < size;
+    return base() != 0 && reinterpret_cast<std::uintptr_t>(p) - base() < size;
   }
 
-  static std::uint32_t compress(const void* p) noexcept {
-    if (!p) {
-      return 0;
+  /// The cage is aligned to its own size, so a pointer's offset is its low
+  /// SizeLog2 bits: compressing is a mask and a shift, and nullptr maps to
+  /// 0 with no branch. A pointer from outside the cage is caught only by
+  /// CPTR_CHECK. In a constant expression only nullptr can be compressed.
+  static constexpr std::uint32_t compress(const void* p) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::compress_constant(p);
     }
-    CPTR_CHECK(contains(p), "pointer is outside the cage");
-    std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) - base_;
+    CPTR_CHECK(!p || contains(p), "pointer is outside the cage");
+    std::uintptr_t offset = reinterpret_cast<std::uintptr_t>(p) & (size - 1);
     CPTR_CHECK((offset & (granularity - 1)) == 0,
                "pointer is not aligned to the cage granularity");
     return static_cast<std::uint32_t>(offset >> Shift);
   }
 
-  static void* decompress(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(bits == 0 || base_ != 0, "the cage is not initialised");
-    std::uintptr_t full = base_ + (std::uintptr_t(bits) << Shift);
+  /// Zero maps back to nullptr. Clang turns the null check into a
+  /// conditional move; GCC into a branch, which is cheap while it predicts
+  /// well, as it does when most pointers are not null. In a constant
+  /// expression only 0 can be decompressed.
+  static constexpr void* decompress(std::uint32_t bits) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::decompress_constant(bits);
+    }
+    CPTR_ASSERT(bits == 0 || base() != 0, "the cage is not initialised");
+    std::uintptr_t full = base() + (std::uintptr_t(bits) << Shift);
     return reinterpret_cast<void*>(bits ? full : std::uintptr_t(0));
   }
 
   static void* decompress_nonnull(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(base_ != 0, "the cage is not initialised");
-    return reinterpret_cast<void*>(base_ + (std::uintptr_t(bits) << Shift));
+    CPTR_ASSERT(base() != 0, "the cage is not initialised");
+    return reinterpret_cast<void*>(base() + (std::uintptr_t(bits) << Shift));
   }
 
   /// Throws std::bad_alloc when the allocator returns nullptr.
@@ -4505,16 +5672,21 @@ class CPTR_VISIBLE user_cage {
     throw std::bad_alloc();
   }
 
+  /// As allocate(), but returns nullptr on failure. A request for zero
+  /// bytes asks the allocator for one, so every allocation is distinct.
   static void* try_allocate(std::size_t bytes, std::size_t align = alignof(
                                                    std::max_align_t)) noexcept {
     CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
     if (!init()) {
       return nullptr;
     }
+    if (bytes == 0) {
+      bytes = 1;
+    }
     void* p =
         allocator().allocate(bytes, align < granularity ? granularity : align);
     CPTR_CHECK(!p || (contains(p) &&
-                      reinterpret_cast<std::uintptr_t>(p) - base_ + bytes <=
+                      reinterpret_cast<std::uintptr_t>(p) - base() + bytes <=
                           usable_end),
                "the allocator returned memory outside its region");
     return p;
@@ -4533,14 +5705,86 @@ class CPTR_VISIBLE user_cage {
  private:
   static inline std::atomic<bool> ready_{false};
   static inline detail::spin_lock init_lock_;
-  static inline std::uintptr_t base_ = 0;
+  inline static detail::base_address base_{};
   alignas(Allocator) static inline std::byte storage_[sizeof(Allocator)];
 };
+
+namespace detail {
+
+/// A spin lock that is held across fork(), like cage's own lock, so that a
+/// child never starts with it taken by a thread that does not exist there.
+/// Every live fork_safe_lock is in one list, which a single pthread_atfork
+/// handler locks in order before fork() and unlocks after it.
+class fork_safe_lock {
+ public:
+  fork_safe_lock() noexcept {
+#if !defined(_WIN32)
+    lock_guard g(registry_lock());
+    static bool registered = false;
+    if (!registered) {
+      // If this fails the locks are no safer than before, but still work.
+      registered = pthread_atfork(&lock_all, &unlock_all, &unlock_all) == 0;
+    }
+    next_ = head();
+    if (next_) {
+      next_->prev_ = this;
+    }
+    head() = this;
+#endif
+  }
+  ~fork_safe_lock() {
+#if !defined(_WIN32)
+    lock_guard g(registry_lock());
+    (prev_ ? prev_->next_ : head()) = next_;
+    if (next_) {
+      next_->prev_ = prev_;
+    }
+#endif
+  }
+  fork_safe_lock(const fork_safe_lock&) = delete;
+  fork_safe_lock& operator=(const fork_safe_lock&) = delete;
+
+  void lock() noexcept { lock_.lock(); }
+  void unlock() noexcept { lock_.unlock(); }
+
+ private:
+  // Function-local statics, so that they are usable from any constructor
+  // that runs during static initialisation.
+  static spin_lock& registry_lock() noexcept {
+    static spin_lock l;
+    return l;
+  }
+  static fork_safe_lock*& head() noexcept {
+    static fork_safe_lock* h = nullptr;
+    return h;
+  }
+#if !defined(_WIN32)
+  static void lock_all() noexcept {
+    registry_lock().lock();
+    for (fork_safe_lock* l = head(); l; l = l->next_) {
+      l->lock();
+    }
+  }
+  static void unlock_all() noexcept {
+    for (fork_safe_lock* l = head(); l; l = l->next_) {
+      l->unlock();
+    }
+    registry_lock().unlock();
+  }
+#endif
+
+  spin_lock lock_;
+  fork_safe_lock* next_ = nullptr;
+  fork_safe_lock* prev_ = nullptr;
+};
+
+}  // namespace detail
 
 /// A thread-safe bump (monotonic) allocator for user_cage: allocation is a
 /// pointer increment, deallocate() does nothing, and memory is committed in
 /// 1 MiB steps as it is used. Suited to data that is built once and freed
-/// all at once, or never.
+/// all at once, or never. Its lock is held across fork(), so a child process
+/// can allocate even if another thread was allocating when it forked.
 class bump_allocator {
  public:
   explicit bump_allocator(std::span<std::byte> region) noexcept
@@ -4583,7 +5827,7 @@ class bump_allocator {
 
  private:
   static constexpr std::size_t kCommitStep = std::size_t(1) << 20;
-  mutable detail::spin_lock lock_;
+  mutable detail::fork_safe_lock lock_;
   std::byte* begin_;
   std::byte* next_;
   std::byte* committed_;
@@ -4600,6 +5844,7 @@ class bump_allocator {
 
 
 #include <fcntl.h>
+#include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -4607,6 +5852,7 @@ class bump_allocator {
 #include <algorithm>
 #include <atomic>
 #include <bit>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -4631,10 +5877,13 @@ namespace cptr {
 /// cptr::ordered_map of trivially copyable values qualifies, a std::string
 /// does not.
 ///
-/// The allocator's state is in the file too, behind a lock in the file, so
-/// several processes may allocate in the same file at once. The containers
-/// themselves are not synchronised. A process that dies while holding the
-/// lock leaves the file locked. Freed small blocks are kept per size class;
+/// The allocator's state is in the file too, behind a spin lock in the
+/// file, so several processes may open, create and allocate in the same file
+/// at once (see open()). The containers themselves are not synchronised. A
+/// process that dies while holding the spin lock leaves the file locked, and
+/// one that dies part way through an allocation can leave the allocator
+/// state inconsistent; open() rejects state that is out of range, not every
+/// inconsistency. Freed small blocks are kept per size class;
 /// freed large runs are kept in one list, first fit, without coalescing.
 template <class Tag, unsigned SizeLog2 = 32>
 class CPTR_VISIBLE mapped_cage {
@@ -4655,99 +5904,104 @@ class CPTR_VISIBLE mapped_cage {
 
   /// Map the file at `path` as the cage, creating it if it does not exist.
   /// Fails if a file is already open, if the file is not a cage of this
-  /// size, or if address space or the file cannot be had.
+  /// size, if its allocator state is out of range (a corrupt file), or if
+  /// address space or the file cannot be had.
+  ///
+  /// Several processes may open, and create, the same file at once: open()
+  /// holds an flock() on the file while it checks, creates and formats it,
+  /// so exactly one of them formats a new file and the others wait for it.
+  /// open() fails if the file system does not support flock(). A file whose
+  /// creator failed after making it full size is removed again (or truncated
+  /// to empty, if it existed before), so a later open() can create it.
+  ///
+  /// The checks look at the header, the span table and every free list, so
+  /// open() takes time in proportion to the number of free blocks. Tag is
+  /// not recorded in the file: any mapped_cage of the same SizeLog2 opens it.
   static bool open(const char* path) noexcept {
-    if (base_ != 0) {
+    if (base() != 0) {
       return false;
     }
     void* p = detail::reserve_aligned(size, size);
     if (!p) {
       return false;
     }
-    int fd = ::open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
-    struct stat st;
-    bool ok = fd >= 0 && fstat(fd, &st) == 0;
-    bool fresh = ok && st.st_size == 0;
-    ok = ok && (fresh ? ftruncate(fd, off_t(size)) == 0
-                      : std::size_t(st.st_size) == size);
-    ok = ok && mmap(p, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd,
-                    0) == p;
-    if (fd >= 0) {
-      ::close(fd);
-    }
-    auto* h = static_cast<header*>(p);
-    if (ok && fresh) {
-      format(h);
-    }
-    if (!ok || h->magic != kMagic || h->version != kVersion ||
-        h->size_log2 != SizeLog2) {
+    if (!map_file(path, p)) {
       munmap(p, size);
       return false;
     }
-    previous_base_ = h->base;
-    h->base = reinterpret_cast<std::uintptr_t>(p);
-    base_ = reinterpret_cast<std::uintptr_t>(p);
+    base_ = detail::base_address(reinterpret_cast<std::uintptr_t>(p));
     return true;
   }
 
   /// Write the file's changed pages back and unmap it. Pointers into the
   /// cage are invalid afterwards.
   static void close() noexcept {
-    if (base_ == 0) {
+    if (base() == 0) {
       return;
     }
-    void* p = reinterpret_cast<void*>(base_);
+    void* p = reinterpret_cast<void*>(base());
     msync(p, size, MS_SYNC);
     munmap(p, size);
-    base_ = 0;
+    base_ = detail::base_address(0);
   }
 
   /// Write changed pages back to the file without unmapping it.
   static bool flush() noexcept {
-    return base_ != 0 &&
-           msync(reinterpret_cast<void*>(base_), size, MS_SYNC) == 0;
+    return base() != 0 &&
+           msync(reinterpret_cast<void*>(base()), size, MS_SYNC) == 0;
   }
 
-  static bool is_open() noexcept { return base_ != 0; }
+  static bool is_open() noexcept { return base() != 0; }
 
   /// Zero while no file is open.
-  static std::uintptr_t base() noexcept { return base_; }
+  static std::uintptr_t base() noexcept { return std::uintptr_t(base_); }
 
   /// Where the file was mapped the last time before this open(), or 0 for a
   /// new file.
   static std::uintptr_t previous_base() noexcept { return previous_base_; }
 
-  /// The object the file's user designated with set_root(), or nullptr.
+  /// The object the file's user designated with set_root(), or nullptr,
+  /// also while no file is open.
   template <class T>
   static T* root() noexcept {
-    return static_cast<T*>(decompress(hdr()->root.load()));
+    return base() ? static_cast<T*>(decompress(hdr()->root.load())) : nullptr;
   }
+  /// Designate the object root() returns. Does nothing while no file is
+  /// open.
   static void set_root(const void* p) noexcept {
-    hdr()->root.store(compress(p));
+    if (base()) {
+      hdr()->root.store(compress(p));
+    }
   }
 
   static bool contains(const void* p) noexcept {
-    return base_ != 0 && reinterpret_cast<std::uintptr_t>(p) - base_ < size;
+    return base() != 0 && reinterpret_cast<std::uintptr_t>(p) - base() < size;
   }
 
-  static std::uint32_t compress(const void* p) noexcept {
-    if (!p) {
-      return 0;
+  /// A mask, as the mapping is aligned to the cage size; see
+  /// cage::compress().
+  static constexpr std::uint32_t compress(const void* p) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::compress_constant(p);
     }
-    CPTR_CHECK(contains(p), "pointer is outside the cage");
-    return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(p) -
-                                      base_);
+    CPTR_CHECK(!p || contains(p), "pointer is outside the cage");
+    return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(p) &
+                                      (size - 1));
   }
 
-  static void* decompress(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(bits == 0 || base_ != 0, "the mapped cage is not open");
-    std::uintptr_t full = base_ + bits;
+  /// See cage::decompress().
+  static constexpr void* decompress(std::uint32_t bits) noexcept {
+    if (std::is_constant_evaluated()) {
+      return detail::decompress_constant(bits);
+    }
+    CPTR_ASSERT(bits == 0 || base() != 0, "the mapped cage is not open");
+    std::uintptr_t full = base() + bits;
     return reinterpret_cast<void*>(bits ? full : std::uintptr_t(0));
   }
 
   static void* decompress_nonnull(std::uint32_t bits) noexcept {
-    CPTR_ASSERT(base_ != 0, "the mapped cage is not open");
-    return reinterpret_cast<void*>(base_ + bits);
+    CPTR_ASSERT(base() != 0, "the mapped cage is not open");
+    return reinterpret_cast<void*>(base() + bits);
   }
 
   static void* allocate(std::size_t bytes,
@@ -4758,11 +6012,12 @@ class CPTR_VISIBLE mapped_cage {
     throw std::bad_alloc();
   }
 
-  /// Returns nullptr when the cage is full or no file is open.
+  /// Returns nullptr when the cage is full, no file is open, or `align` is
+  /// above 64 KiB (the span size).
   static void* try_allocate(std::size_t bytes, std::size_t align = alignof(
                                                    std::max_align_t)) noexcept {
     CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
-    if (base_ == 0) {
+    if (base() == 0 || align > span_size) {
       return nullptr;
     }
     header* h = hdr();
@@ -4823,7 +6078,7 @@ class CPTR_VISIBLE mapped_cage {
 
   /// Bytes handed out and not yet freed, rounded up to the size class.
   static std::size_t allocated_bytes() noexcept {
-    return base_ ? std::size_t(hdr()->allocated) : 0;
+    return base() ? std::size_t(hdr()->allocated) : 0;
   }
 
  private:
@@ -4878,36 +6133,182 @@ class CPTR_VISIBLE mapped_cage {
     guard& operator=(const guard&) = delete;
   };
 
+  /// Write a new header. The magic number goes last, so a creator that dies
+  /// half way leaves a file that open() rejects rather than a half-formatted
+  /// one.
   static void format(header* h) noexcept {
     ::new (h) header{};
-    h->magic = kMagic;
     h->version = kVersion;
     h->size_log2 = SizeLog2;
     h->next_span = kFirstSpan;
+    std::atomic_ref<std::uint64_t>(h->magic).store(kMagic,
+                                                   std::memory_order_release);
   }
 
-  static header* hdr() noexcept { return reinterpret_cast<header*>(base_); }
+  /// Open or create the file and map it at `p`, holding an flock() on it
+  /// throughout so that concurrent creators do not both format it.
+  static bool map_file(const char* path, void* p) noexcept {
+    // A creator that fails removes the file; whoever opened it meanwhile
+    // finds it unlinked once they have the lock, and starts again.
+    for (int attempt = 0; attempt < 64; attempt++) {
+      bool created = true;
+      int fd = ::open(path, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+      if (fd < 0 && errno == EEXIST) {
+        created = false;
+        fd = ::open(path, O_RDWR | O_CLOEXEC);
+      }
+      if (fd < 0) {
+        if (errno == ENOENT) {
+          continue;  // removed between the two opens
+        }
+        return false;
+      }
+      int r;
+      do {
+        r = flock(fd, LOCK_EX);
+      } while (r != 0 && errno == EINTR);
+      struct stat st;
+      if (r != 0 || fstat(fd, &st) != 0) {
+        ::close(fd);
+        return false;
+      }
+      if (st.st_nlink == 0) {
+        ::close(fd);
+        continue;
+      }
+      bool ok = map_locked(fd, st, p);
+      if (!ok && created) {
+        // Do not leave a full-size file without a header behind. The path
+        // is removed while the lock is held, so nobody can have formatted
+        // the file in the meantime.
+        ::unlink(path);
+      } else if (!ok && st.st_size == 0) {
+        (void)!ftruncate(fd, 0);
+      }
+      ::close(fd);  // releases the lock
+      return ok;
+    }
+    return false;
+  }
+
+  /// With the file locked: give a new (empty) file its full size and a
+  /// header, map it, and check what it holds.
+  static bool map_locked(int fd, const struct stat& st, void* p) noexcept {
+    bool fresh = st.st_size == 0;
+    if (!fresh && std::uint64_t(st.st_size) != size) {
+      return false;
+    }
+    if ((fresh && ftruncate(fd, off_t(size)) != 0) ||
+        mmap(p, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) !=
+            p) {
+      return false;
+    }
+    auto* h = static_cast<header*>(p);
+    if (fresh) {
+      format(h);
+    }
+    if (!valid(h)) {
+      return false;
+    }
+    previous_base_ = h->base;
+    h->base = reinterpret_cast<std::uintptr_t>(p);
+    return true;
+  }
+
+  /// Whether the allocator state in a mapped file is in range, so that
+  /// using it cannot write outside the mapping or over the header and span
+  /// table. Not a full consistency check: blocks can still be handed out
+  /// twice if the lists of a corrupt file overlap.
+  static bool valid(const header* h) noexcept {
+    if (h->magic != kMagic || h->version != kVersion ||
+        h->size_log2 != SizeLog2) {
+      return false;
+    }
+    std::uint32_t next = h->next_span;
+    if (next < kFirstSpan || next > span_count - 1) {
+      return false;
+    }
+    const std::uint64_t lo = std::uint64_t(kFirstSpan) * span_size;
+    const std::uint64_t hi = std::uint64_t(next) * span_size;
+    if (h->allocated > hi || h->root.load() >= usable_end) {
+      return false;
+    }
+    const auto* tab = reinterpret_cast<const std::uint32_t*>(
+        reinterpret_cast<std::uintptr_t>(h) + span_size);
+    std::uint32_t class_spans[kClasses] = {};
+    for (std::uint32_t i = 0; i < span_count; i++) {
+      std::uint32_t e = tab[i];
+      if (e != 0 && e <= kClasses) {
+        class_spans[e - 1]++;
+      }
+      bool ok = e == 0 ||
+                (i >= kFirstSpan && i < next &&
+                 ((e & kLarge) ? (e & ~kLarge) != 0 && (e & ~kLarge) <= next - i
+                               : e <= kClasses));
+      if (!ok) {
+        return false;
+      }
+    }
+    // The large free runs: inside the used spans, finite.
+    std::uint32_t run = h->free_runs;
+    for (std::uint32_t steps = 0; run != 0; steps++) {
+      if (steps >= span_count || run < kFirstSpan || run >= next) {
+        return false;
+      }
+      const auto* r = reinterpret_cast<const free_run_header*>(
+          reinterpret_cast<std::uintptr_t>(h) + std::uint64_t(run) * span_size);
+      if (r->spans == 0 || r->spans > next - run) {
+        return false;
+      }
+      run = r->next;
+    }
+    for (std::size_t c = 0; c < kClasses; c++) {
+      std::uint32_t block = detail::kClassSizes[c];
+      // The current slab's unused tail: empty, or inside a slab of this
+      // class.
+      std::uint64_t cur = h->slab_cursor[c], end = h->slab_end[c];
+      if (cur > end || end > hi ||
+          (cur < end && (cur < lo || tab[cur / span_size] != c + 1 ||
+                         tab[(end - 1) / span_size] != c + 1))) {
+        return false;
+      }
+      // The free list: blocks in slabs of this class, and no longer than
+      // those slabs could hold.
+      std::uint64_t limit = std::uint64_t(class_spans[c]) * span_size / block;
+      std::uint32_t off = h->free_head[c];
+      for (std::uint64_t steps = 0; off != 0; steps++) {
+        if (steps >= limit || off < lo || off + std::uint64_t(block) > hi ||
+            off % alignof(std::uint32_t) != 0 ||
+            tab[off / span_size] != c + 1) {
+          return false;
+        }
+        off = *reinterpret_cast<const std::uint32_t*>(
+            reinterpret_cast<std::uintptr_t>(h) + off);
+      }
+    }
+    return true;
+  }
+
+  static header* hdr() noexcept { return reinterpret_cast<header*>(base()); }
   static std::uint32_t* table() noexcept {
-    return reinterpret_cast<std::uint32_t*>(base_ + span_size);
+    return reinterpret_cast<std::uint32_t*>(base() + span_size);
   }
   static void* at(std::uint64_t off) noexcept {
-    return reinterpret_cast<void*>(base_ + off);
+    return reinterpret_cast<void*>(base() + off);
   }
 
   /// The smallest class that fits `bytes` and is a multiple of `align`, or
   /// -1 for a large allocation.
-  static int size_class(std::size_t bytes, std::size_t align) noexcept {
-    for (std::size_t i = 0; i < kClasses; i++) {
-      std::uint32_t s = detail::kClassSizes[i];
-      if (s >= bytes && s % align == 0) {
-        return int(i);
-      }
+  static constexpr int size_class(std::size_t bytes,
+                                  std::size_t align) noexcept {
+    if (bytes > detail::kMaxSmall || align > detail::kMaxSmall) {
+      return -1;
     }
-    return -1;
+    return detail::size_class(bytes, align);
   }
 
   /// Enough spans for at least 8 blocks.
-  static std::uint32_t slab_spans(std::uint32_t block) noexcept {
+  static constexpr std::uint32_t slab_spans(std::uint32_t block) noexcept {
     return std::uint32_t((std::size_t(block) * 8 + span_size - 1) / span_size);
   }
 
@@ -4960,7 +6361,7 @@ class CPTR_VISIBLE mapped_cage {
     return at(first * std::uint64_t(span_size));
   }
 
-  static inline std::uintptr_t base_ = 0;
+  inline static detail::base_address base_{};
   static inline std::uintptr_t previous_base_ = 0;
 };
 
