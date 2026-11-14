@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>compressed-ptr: Half your pointers are wasted</title>
+<meta name="description" content="4-byte pointers and drop-in containers for 64-bit C++: half the memory for lists, maps and trees. Header-only C++20.">
+<style>
+  :root { --bg: #fff; --fg: #1f2328; --muted: #59636e; --link: #0969da;
+          --code: #f6f8fa; --line: #d1d9e0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --link: #4493f8;
+            --code: #151b23; --line: #3d444d; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  nav { border-bottom: 1px solid var(--line); padding: 12px 16px; }
+  nav a { margin-right: 16px; }
+  main { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1, h2, h3 { line-height: 1.25; }
+  h2 { border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-top: 2em; }
+  code { background: var(--code); padding: 1px 4px; border-radius: 4px;
+         font-size: 0.9em; }
+  pre { background: var(--code); padding: 12px; border-radius: 6px;
+        overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; display: block; overflow-x: auto;
+          margin: 1em 0; font-variant-numeric: tabular-nums; }
+  th, td { border: 1px solid var(--line); padding: 4px 10px; }
+  th { background: var(--code); }
+  /* Percentile ramp for the comparison chart: one hue, p50 lightest. */
+  :root { --s0: #86b6ef; --s1: #5598e7; --s2: #2a78d6; --s3: #1c5cab;
+          --s4: #0d366b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --s0: #cde2fb; --s1: #86b6ef; --s2: #3987e5; --s3: #256abf;
+            --s4: #184f95; }
+  }
+  .s0 { fill: var(--s0); background: var(--s0); }
+  .s1 { fill: var(--s1); background: var(--s1); }
+  .s2 { fill: var(--s2); background: var(--s2); }
+  .s3 { fill: var(--s3); background: var(--s3); }
+  .s4 { fill: var(--s4); background: var(--s4); }
+  svg.versus { width: 100%; height: auto; display: block; margin: 8px 0 16px; }
+  svg.versus text { fill: var(--fg); font: 12px system-ui, sans-serif; }
+  svg.versus text.tick { fill: var(--muted); font-size: 11px; }
+  svg.versus line.grid { stroke: var(--line); stroke-width: 1; }
+  svg.versus line.zero { stroke: var(--muted); stroke-width: 1.5; }
+  svg.versus rect:hover { opacity: 0.75; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted);
+            font-size: 14px; margin: 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 12px; height: 12px;
+              border-radius: 3px; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="index.html"><strong>compressed-ptr</strong></a>
+  <a href="why.html">Why</a>
+  <a href="guide.html">Guide</a>
+  <a href="benchmarks.html">Benchmarks</a>
+  <a href="reference/cptr.html">API reference</a>
+  <a href="coverage/index.html">Coverage</a>
+  <a href="history.html">History</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr">GitHub</a>
+</nav>
+<main>
+<h1 id="half-your-pointers-are-wasted">Half your pointers are wasted</h1>
+<p><img alt="Bytes per element for 1,000,000 uint32_t: list 32.1 to 16.0, map 48.0 to 24.0, unordered_map 43.6 to 20.3" src="assets/hero.svg" /></p>
+<p>On a 64-bit machine every pointer is 8 bytes. In a linked structure the
+pointers are often most of what you store. A <code>std::list&lt;int&gt;</code> node holds two
+pointers and one 4-byte <code>int</code>: 24 bytes, and 32 once <code>malloc</code> has added its
+header. Four of those bytes are your data. A <code>std::map&lt;int, int&gt;</code> node is
+three pointers, a colour and the pair: 48 bytes resident for 8 bytes of
+data.</p>
+<p>Most of those pointer bits never change. A process rarely spreads one data
+structure over more than 4 GiB of address space, so the top half of each
+pointer repeats the same value in every node.</p>
+<p>compressed-ptr stores only the half that changes.</p>
+<h2 id="the-trick">The trick</h2>
+<p>JavaScript engines and the JVM have done this for years: V8 calls it
+<a href="https://v8.dev/blog/pointer-compression">pointer compression</a>, and the
+JVM's compressed oops are on by default for heaps under 32 GiB. The idea
+is the same in both:</p>
+<ol>
+<li>Reserve one region of address space, 4 GiB long and aligned to 4 GiB.
+   This costs address space, not memory: pages are committed as they are
+   used.</li>
+<li>Allocate the objects that point at each other inside that region (the
+   <em>cage</em>).</li>
+<li>Store a pointer into the cage as its 32-bit offset from the start.
+   Turning it back into an address is one add.</li>
+</ol>
+<pre><code class="language-cpp">#include &quot;cptr/all.hpp&quot;
+
+struct node {
+  cptr::ptr&lt;node&gt; next;  // 4 bytes, not 8
+  int value;
+};
+
+cptr::ptr&lt;node&gt; head = cptr::make&lt;node&gt;(nullptr, 1);  // allocated in the cage
+node* raw = head;                                     // and back to a plain pointer
+</code></pre>
+<p>A <code>cptr::ptr&lt;T&gt;</code> converts to and from <code>T*</code>, so code that takes plain
+pointers keeps working. With 8-byte alignment the offset can be shifted,
+which stretches one cage to 32 GiB.</p>
+<h2 id="what-it-buys">What it buys</h2>
+<p>Swapping the container is the whole migration:</p>
+<pre><code class="language-cpp">cptr::list&lt;int&gt; l;                    // was std::list&lt;int&gt;
+cptr::ordered_map&lt;int, int&gt; m;        // was std::map&lt;int, int&gt;
+cptr::unordered_map&lt;int, int&gt; h;      // was std::unordered_map&lt;int, int&gt;
+</code></pre>
+<p>With a million 4-byte elements on an i7-12700H (GCC 15, <code>-O2</code>):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;"><code>std::</code></th>
+<th style="text-align: right;"><code>cptr::</code></th>
+<th style="text-align: right;">time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>list, walk</td>
+<td style="text-align: right;">32.1 B</td>
+<td style="text-align: right;"><strong>16.0 B</strong></td>
+<td style="text-align: right;"><strong>−31%</strong></td>
+</tr>
+<tr>
+<td>map, find</td>
+<td style="text-align: right;">48.0 B</td>
+<td style="text-align: right;"><strong>24.0 B</strong></td>
+<td style="text-align: right;"><strong>−33%</strong></td>
+</tr>
+<tr>
+<td>unordered_map, find</td>
+<td style="text-align: right;">43.6 B</td>
+<td style="text-align: right;"><strong>20.3 B</strong></td>
+<td style="text-align: right;"><strong>−52%</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The memory halves because the links halve. The time drops because half the
+memory means half the cache lines: once a structure is larger than your
+caches, a walk is a chain of cache misses, and fewer bytes per node means
+fewer misses. You can check this on your own machine with one program,
+<code>examples/expect_gains.cpp</code>, or in the browser on
+<a href="https://godbolt.org/z/cTz9KfczY">Compiler Explorer</a>.</p>
+<h2 id="what-it-costs">What it costs</h2>
+<p>Nothing here is free, and the <a href="benchmarks.html">benchmarks page</a> says where it
+loses:</p>
+<ul>
+<li><strong>Decompression is an add, plus a null check.</strong> When a pointer chase fits
+  in L1, that add is visible: up to 57% slower than raw pointers at the
+  median. <code>cptr::nonnull_ptr</code> drops the null check and the gap to about
+  17%. From L3 outwards the smaller nodes win.</li>
+<li><strong>Everything you compress must live in the cage.</strong> Allocate with
+  <code>cptr::make</code>, the bundled containers, or <code>cptr::allocator</code>. Compressing a
+  pointer from elsewhere is a bug; debug builds assert, and
+  <code>CPTR_CHECKED</code> keeps the check in release builds.</li>
+<li><strong>One structure, one cage, at most 4 GiB</strong> (32 GiB with 8-byte
+  alignment). Several cages are fine, as each has its own type.</li>
+<li><strong>Each Windows DLL gets its own cage.</strong> On Linux and macOS shared
+  libraries share one.</li>
+</ul>
+<p>If your data already lives in arrays and vectors, this library has little to
+offer you: there are no pointers to shrink.</p>
+<h2 id="why-not-something-else">Why not something else?</h2>
+<p><strong>Indices into a <code>std::vector</code>.</strong> Also 4 bytes, and often the right answer
+for a single structure you write yourself. But an index only means
+something next to its vector, you lose the <code>std</code> container interfaces, and
+code that wants a <code>T*</code> needs the vector at hand. A compressed pointer is a
+pointer: it dereferences, converts to <code>T*</code>, and one cage serves every type.</p>
+<p><strong><code>boost::interprocess::offset_ptr</code>.</strong> Built for a different problem: data
+in shared memory mapped at different addresses. It is 8 bytes by default.
+compressed-ptr gets the same property as a side effect: a
+<code>cptr::mapped_cage</code> keeps a whole structure in a file that can be mapped
+anywhere.</p>
+<p><strong>The x32 ABI.</strong> 4-byte pointers for the whole process, which then cannot
+use more than 4 GiB. Few distributions ship x32 libraries. compressed-ptr
+shrinks only the structures you choose.</p>
+<p><strong>A bigger machine.</strong> Sometimes. Halving the memory of your largest
+structures is often cheaper, and faster too.</p>
+<h2 id="try-it">Try it</h2>
+<ul>
+<li><a href="https://godbolt.org/z/cTz9KfczY">Compiler Explorer</a>: edit and run in the
+  browser, no install.</li>
+<li><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/README.md#start-in-two-minutes">Start in two minutes</a>: a complete
+  CMake project.</li>
+<li><a href="guide.html">Guide</a>: how the cage works, every header, the rules.</li>
+</ul>
+<p>compressed-ptr is MIT-licensed and header-only. It needs C++20 and a 64-bit
+target, and CI covers Linux, macOS and Windows with GCC, Clang and MSVC.
+Questions, ideas and benchmark results from your hardware are welcome in
+<a href="https://github.com/mvanslobbe/compressed-ptr/discussions">Discussions</a>.</p>
+</main>
+</body>
+</html>
