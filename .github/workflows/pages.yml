@@ -26,7 +26,7 @@ jobs:
   reference:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install MrDocs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,7 +63,7 @@ jobs:
     needs: reference
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Coverage
         run: LLVM_SUFFIX=-18 CXX=clang++-18 scripts/coverage.sh
       - uses: peaceiris/actions-gh-pages@v4
@@ -80,7 +80,7 @@ jobs:
       # Keep the tree clean: the benchmark action switches to gh-pages.
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCOMPRESSED_PTR_BUILD_TESTS=OFF
