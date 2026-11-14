@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>compressed-ptr: Benchmark history</title>
+<style>
+  :root { --bg: #fff; --fg: #1f2328; --muted: #59636e; --link: #0969da;
+          --code: #f6f8fa; --line: #d1d9e0; --card: #fff;
+          --s0: #86b6ef; --s1: #5598e7; --s2: #2a78d6; --s3: #1c5cab;
+          --s4: #0d366b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --link: #4493f8;
+            --code: #151b23; --line: #3d444d; --card: #0d1117;
+            --s0: #cde2fb; --s1: #86b6ef; --s2: #3987e5; --s3: #256abf;
+            --s4: #184f95; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  nav { border-bottom: 1px solid var(--line); padding: 12px 16px; }
+  nav a { margin-right: 16px; }
+  main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { line-height: 1.25; margin-bottom: 4px; }
+  .lead { color: var(--muted); margin-top: 0; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted);
+            font-size: 14px; margin: 16px 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+  .grid { display: grid; gap: 16px;
+          grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+          background: var(--card); position: relative; }
+  .card h2 { font-size: 15px; margin: 0 0 2px; }
+  .card .now { font-size: 13px; color: var(--muted); margin: 0 0 6px;
+               font-variant-numeric: tabular-nums; }
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+  svg text { fill: var(--muted); font: 11px system-ui, sans-serif; }
+  .gridline { stroke: var(--line); stroke-width: 1; }
+  .par { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .tip { position: absolute; pointer-events: none; background: var(--code);
+         border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
+         font-size: 12px; line-height: 1.4; display: none; z-index: 2;
+         font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tip b { color: var(--fg); }
+  .empty { color: var(--muted); }
+  footer { margin-top: 32px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="index.html"><strong>compressed-ptr</strong></a>
+  <a href="guide.html">Guide</a>
+  <a href="benchmarks.html">Benchmarks</a>
+  <a href="history.html">History</a>
+  <a href="reference/index.html">API reference</a>
+  <a href="coverage/index.html">Coverage</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr">GitHub</a>
+</nav>
+<main>
+  <h1>Compressed against raw pointers, over time</h1>
+  <p class="lead">Each chart is one benchmark: the time with 4-byte compressed
+  pointers as a percentage of the same code with raw 8-byte pointers, at five
+  percentiles, for every push to <code>main</code>. Below the dashed 100% line
+  is faster than raw pointers. Measured on shared GitHub runners with smaller
+  structures (262,144 elements) than the reference machine, so single points
+  are noisy; look for trends. Hover a chart for the values.</p>
+  <p class="legend" id="legend"></p>
+  <div class="grid" id="charts"><p class="empty">Loading…</p></div>
+  <footer>Absolute times for every benchmark and variant:
+    <a href="bench/index.html">all series</a>. Latest full run on the
+    reference machine: <a href="benchmarks.html">benchmarks</a>.</footer>
+</main>
+<script src="bench/data.js"></script>
+<script>
+(function () {
+  "use strict";
+  var GROUP = "compressed as % of raw pointers";
+  var PCTS = ["p50", "p90", "p95", "p99", "p99.5"];
+  var legend = document.getElementById("legend");
+  PCTS.forEach(function (p, i) {
+    var s = document.createElement("span");
+    s.innerHTML = '<i style="background: var(--s' + i + ')"></i>' + p;
+    legend.appendChild(s);
+  });
+  var root = document.getElementById("charts");
+  var data = window.BENCHMARK_DATA;
+  var runs = data && data.entries && data.entries[GROUP];
+  if (!runs || !runs.length) {
+    root.innerHTML = '<p class="empty">No history recorded yet.</p>';
+    return;
+  }
+
+  // label -> percentile -> array (one value per run, or null).
+  var order = [], series = {};
+  runs.forEach(function (run, r) {
+    run.benches.forEach(function (b) {
+      var cut = b.name.lastIndexOf(", ");
+      var label = b.name.slice(0, cut), pct = b.name.slice(cut + 2);
+      if (!series[label]) {
+        series[label] = {};
+        order.push(label);
+      }
+      if (!series[label][pct]) {
+        series[label][pct] = runs.map(function () { return null; });
+      }
+      series[label][pct][r] = b.value;
+    });
+  });
+
+  var NS = "http://www.w3.org/2000/svg";
+  function el(name, attrs, parent) {
+    var e = document.createElementNS(NS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function fmt(v) { return v == null ? "–" : Math.round(v) + "%"; }
+
+  root.innerHTML = "";
+  order.forEach(function (label) {
+    var s = series[label];
+    var card = document.createElement("div");
+    card.className = "card";
+    var h = document.createElement("h2");
+    h.textContent = label;
+    card.appendChild(h);
+    var last = runs.length - 1;
+    var now = document.createElement("p");
+    now.className = "now";
+    now.textContent = "Latest: " + PCTS.map(function (p) {
+      return p + " " + fmt(s[p] && s[p][last]);
+    }).join(" · ");
+    card.appendChild(now);
+
+    var W = 320, H = 170, L = 38, R = 8, T = 8, B = 22;
+    var vals = [100];
+    PCTS.forEach(function (p) {
+      (s[p] || []).forEach(function (v) { if (v != null) vals.push(v); });
+    });
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var step = [5, 10, 20, 25, 50, 100].find(function (t) {
+      return (hi - lo) / t <= 5;
+    }) || 200;
+    lo = Math.floor(lo / step) * step;
+    hi = Math.ceil(hi / step) * step;
+    if (hi === lo) hi = lo + step;
+    var n = runs.length;
+    function x(i) { return L + (n === 1 ? (W - L - R) / 2 : i * (W - L - R) / (n - 1)); }
+    function y(v) { return T + (hi - v) / (hi - lo) * (H - T - B); }
+
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
+                          "aria-label": label + ", compressed as % of raw pointers" });
+    for (var t = lo; t <= hi + 1e-9; t += step) {
+      el("line", { "class": t === 100 ? "par" : "gridline", x1: L, x2: W - R,
+                   y1: y(t), y2: y(t) }, svg);
+      el("text", { x: L - 6, y: y(t) + 4, "text-anchor": "end" }, svg)
+        .textContent = t + "%";
+    }
+    var first = runs[0].commit.id.slice(0, 7);
+    var lastId = runs[last].commit.id.slice(0, 7);
+    el("text", { x: L, y: H - 4 }, svg).textContent = first;
+    if (n > 1) {
+      el("text", { x: W - R, y: H - 4, "text-anchor": "end" }, svg)
+        .textContent = lastId;
+    }
+    PCTS.forEach(function (p, i) {
+      var arr = s[p];
+      if (!arr) return;
+      var d = "";
+      arr.forEach(function (v, k) {
+        if (v == null) return;
+        d += (d ? " L" : "M") + x(k).toFixed(1) + " " + y(v).toFixed(1);
+      });
+      if (d) {
+        el("path", { d: d, fill: "none", stroke: "var(--s" + i + ")",
+                     "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+      }
+      arr.forEach(function (v, k) {
+        if (v == null) return;
+        el("circle", { cx: x(k), cy: y(v), r: n === 1 ? 4 : 2.5,
+                       fill: "var(--s" + i + ")", stroke: "var(--card)",
+                       "stroke-width": 1.5 }, svg);
+      });
+    });
+    var cursor = el("line", { "class": "gridline", x1: 0, x2: 0, y1: T,
+                              y2: H - B, visibility: "hidden" }, svg);
+    var hit = el("rect", { x: L, y: 0, width: W - L - R, height: H,
+                           fill: "transparent" }, svg);
+    card.appendChild(svg);
+    var tip = document.createElement("div");
+    tip.className = "tip";
+    card.appendChild(tip);
+
+    function show(evt) {
+      var box = svg.getBoundingClientRect();
+      var px = (evt.clientX - box.left) / box.width * W;
+      var k = n === 1 ? 0 : Math.round((px - L) / (W - L - R) * (n - 1));
+      k = Math.max(0, Math.min(n - 1, k));
+      cursor.setAttribute("x1", x(k));
+      cursor.setAttribute("x2", x(k));
+      cursor.setAttribute("visibility", "visible");
+      var c = runs[k].commit;
+      tip.innerHTML = "<b>" + c.id.slice(0, 7) + "</b> " +
+        (c.message || "").split("\n")[0].replace(/[<&]/g, "").slice(0, 48) +
+        "<br>" + PCTS.map(function (p) {
+          return p + ": <b>" + fmt(s[p] && s[p][k]) + "</b>";
+        }).join("&nbsp; ");
+      tip.style.display = "block";
+      var cb = card.getBoundingClientRect();
+      var left = evt.clientX - cb.left + 12;
+      if (left + tip.offsetWidth > cb.width) left = evt.clientX - cb.left - tip.offsetWidth - 12;
+      tip.style.left = Math.max(4, left) + "px";
+      tip.style.top = (evt.clientY - cb.top + 12) + "px";
+    }
+    hit.addEventListener("mousemove", show);
+    hit.addEventListener("mouseleave", function () {
+      tip.style.display = "none";
+      cursor.setAttribute("visibility", "hidden");
+    });
+    hit.addEventListener("click", function () {
+      var k = Math.round(((parseFloat(cursor.getAttribute("x1")) - L) /
+                          (W - L - R)) * (n - 1)) || 0;
+      if (runs[k] && runs[k].commit.url) window.open(runs[k].commit.url, "_blank");
+    });
+    root.appendChild(card);
+  });
+})();
+</script>
+</body>
+</html>

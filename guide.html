@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>compressed-ptr: Guide</title>
+<style>
+  :root { --bg: #fff; --fg: #1f2328; --muted: #59636e; --link: #0969da;
+          --code: #f6f8fa; --line: #d1d9e0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --link: #4493f8;
+            --code: #151b23; --line: #3d444d; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  nav { border-bottom: 1px solid var(--line); padding: 12px 16px; }
+  nav a { margin-right: 16px; }
+  main { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1, h2, h3 { line-height: 1.25; }
+  h2 { border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-top: 2em; }
+  code { background: var(--code); padding: 1px 4px; border-radius: 4px;
+         font-size: 0.9em; }
+  pre { background: var(--code); padding: 12px; border-radius: 6px;
+        overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; display: block; overflow-x: auto;
+          margin: 1em 0; font-variant-numeric: tabular-nums; }
+  th, td { border: 1px solid var(--line); padding: 4px 10px; }
+  th { background: var(--code); }
+  /* Percentile ramp for the comparison chart: one hue, p50 lightest. */
+  :root { --s0: #86b6ef; --s1: #5598e7; --s2: #2a78d6; --s3: #1c5cab;
+          --s4: #0d366b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --s0: #cde2fb; --s1: #86b6ef; --s2: #3987e5; --s3: #256abf;
+            --s4: #184f95; }
+  }
+  .s0 { fill: var(--s0); background: var(--s0); }
+  .s1 { fill: var(--s1); background: var(--s1); }
+  .s2 { fill: var(--s2); background: var(--s2); }
+  .s3 { fill: var(--s3); background: var(--s3); }
+  .s4 { fill: var(--s4); background: var(--s4); }
+  svg.versus { width: 100%; height: auto; display: block; margin: 8px 0 16px; }
+  svg.versus text { fill: var(--fg); font: 12px system-ui, sans-serif; }
+  svg.versus text.tick { fill: var(--muted); font-size: 11px; }
+  svg.versus line.grid { stroke: var(--line); stroke-width: 1; }
+  svg.versus line.zero { stroke: var(--muted); stroke-width: 1.5; }
+  svg.versus rect:hover { opacity: 0.75; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted);
+            font-size: 14px; margin: 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 12px; height: 12px;
+              border-radius: 3px; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="index.html"><strong>compressed-ptr</strong></a>
+  <a href="guide.html">Guide</a>
+  <a href="benchmarks.html">Benchmarks</a>
+  <a href="reference/index.html">API reference</a>
+  <a href="coverage/index.html">Coverage</a>
+  <a href="history.html">History</a>
+  <a href="https://github.com/mvanslobbe/compressed-ptr">GitHub</a>
+</nav>
+<main>
+<h1 id="compressed-ptr-guide">compressed-ptr guide</h1>
+<p>Everything about using compressed-ptr: how it works, every header, the
+allocators, persistence, the rules, and building and testing. For the
+numbers, see <a href="benchmarks.html">Benchmarks</a>; for every type and function, the
+<a href="https://mvanslobbe.github.io/compressed-ptr/reference/">API reference</a>.</p>
+<h2 id="contents">Contents</h2>
+<ul>
+<li><a href="#background">Background</a></li>
+<li><a href="#how-it-works">How it works</a></li>
+<li><a href="#what-is-in-the-box">What is in the box</a></li>
+<li><a href="#examples">Examples</a></li>
+<li><a href="#with-plflist-fancy-pointers">With plf::list (fancy pointers)</a></li>
+<li><a href="#rules-and-limitations">Rules and limitations</a></li>
+<li><a href="#building">Building</a></li>
+<li><a href="#using-it-in-a-larger-code-base">Using it in a larger code base</a></li>
+</ul>
+<h2 id="background">Background</h2>
+<p>Most programs never need more than 4 GiB for one data structure. If every
+node lives in one 4 GiB region, a pointer to a node only needs its 32-bit
+offset into that region.</p>
+<p>The idea comes from V8, Chrome's JavaScript engine. It keeps its whole heap
+in one 4 GiB "cage" and stores 32-bit offsets instead of full pointers. See
+<a href="https://v8.dev/blog/pointer-compression">Pointer Compression in V8</a>
+(Igor Sheludko and Santiago Aboy Solanes, 2020). V8 builds this into its
+garbage collector and JIT. This library offers the same addressing trick
+for ordinary C++ code: plain pointers with a null value, a malloc-style
+allocator, several independent cages, and containers. No V8 code is used.</p>
+<h2 id="how-it-works">How it works</h2>
+<pre><code> address space
+ ┌──────────────────────────────── cage: 4 GiB, aligned to 4 GiB ───────────────────────────────┐
+ │ span 0 (never used,  │ slabs of 8, 16, 24 ... byte blocks │ large blocks │ ... reserved only ... │
+ │ so offset 0 = null)  │                                    │              │                      │
+ └──────────────────────────────────────────────────────────────────────────────────────────────┘
+ ^ base                    ^ base + 0x00012340
+                           cptr::ptr stores 0x00012340
+</code></pre>
+<ul>
+<li><strong>Cage.</strong> At first use, a cage reserves 4 GiB of address space aligned to
+  4 GiB (<code>mmap(PROT_NONE)</code> or <code>VirtualAlloc(MEM_RESERVE)</code>). Reserved space
+  costs no memory. Pages are committed in 1 MiB steps as the allocator needs
+  them.</li>
+<li><strong>Compression.</strong> A pointer is stored as <code>p - base</code>, truncated to 32 bits.</li>
+<li><strong>Decompression.</strong> <code>base + bits</code> is one add. <code>ptr</code> maps 0 to <code>nullptr</code>
+  with a conditional move. <code>nonnull_ptr</code> skips that check.</li>
+<li><strong>Allocator.</strong> Every object a compressed pointer refers to must come from
+  the cage. The cage has a built-in allocator: segregated free lists of
+  header-less blocks (8-byte classes up to 128 B), plus whole 64 KiB spans
+  for large blocks, which are decommitted on free. It also works as a
+  standard allocator and as a <code>std::pmr::memory_resource</code>.</li>
+<li><strong>Several cages.</strong> Each cage is its own type with its own base, so a
+  program can have several independent 4 GiB heaps:</li>
+</ul>
+<p><code>cpp
+  struct mesh_heap : cptr::cage&lt;mesh_heap&gt; {};
+  cptr::ptr&lt;vertex, mesh_heap&gt; v = cptr::make&lt;vertex, mesh_heap&gt;();</code>
+* <strong>More than 4 GiB.</strong> If every object is 8-byte aligned, a cage can be
+  32 GiB with the pointer still 4 bytes. Pointers are stored shifted right
+  by 3, which is the JVM's "compressed oops" trick:</p>
+<p><code>cpp
+  struct big_heap : cptr::cage&lt;big_heap, 35, 3&gt; {};  // 2^35 = 32 GiB</code></p>
+<h2 id="what-is-in-the-box">What is in the box</h2>
+<table>
+<thead>
+<tr>
+<th>Header</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cptr/cage.hpp</code></td>
+<td><code>cage&lt;Tag, SizeLog2 = 32, Shift = 0&gt;</code>, <code>default_cage</code>: reserve, allocate, compress, decompress, <code>pmr</code> resource, statistics</td>
+</tr>
+<tr>
+<td><code>cptr/ptr.hpp</code></td>
+<td><code>ptr&lt;T, Cage&gt;</code> (nullable, 4 B), <code>strict_ptr&lt;T, Cage&gt;</code> (compressing a <code>T*</code> is explicit), <code>nonnull_ptr&lt;T, Cage&gt;</code>, <code>make&lt;T&gt;()</code>, <code>destroy()</code>, <code>std::hash</code></td>
+</tr>
+<tr>
+<td><code>cptr/pack.hpp</code></td>
+<td><code>ptr_pair</code> (two pointers in 8 B), <code>ptr_with_payload</code> (pointer + 32-bit value in 8 B), <code>tagged_ptr</code> (pointer + tag bits in 4 B), <code>atomic_ptr</code> (lock-free CAS on 4 B)</td>
+</tr>
+<tr>
+<td><code>cptr/allocator.hpp</code></td>
+<td><code>cptr::allocator&lt;T&gt;</code>, so any std container's elements live in the cage</td>
+</tr>
+<tr>
+<td><code>cptr/fancy_allocator.hpp</code></td>
+<td><code>cptr::fancy_allocator&lt;T&gt;</code> with <code>pointer = cptr::ptr&lt;T&gt;</code>, for containers that support fancy pointers</td>
+</tr>
+<tr>
+<td><code>cptr/list.hpp</code></td>
+<td><code>cptr::list&lt;T&gt;</code>: doubly linked list with 4-byte links and the <code>std::list</code> interface</td>
+</tr>
+<tr>
+<td><code>cptr/forward_list.hpp</code></td>
+<td><code>cptr::forward_list&lt;T&gt;</code>: singly linked list with 4-byte links and the <code>std::forward_list</code> interface; 8-byte nodes for 4-byte values</td>
+</tr>
+<tr>
+<td><code>cptr/unordered_map.hpp</code></td>
+<td><code>cptr::unordered_map&lt;K, V&gt;</code>: hash map with separate chaining, 4-byte links and buckets, and the <code>std::unordered_map</code> interface without node handles and the bucket API</td>
+</tr>
+<tr>
+<td><code>cptr/ordered_map.hpp</code></td>
+<td><code>cptr::ordered_map&lt;K, V&gt;</code>: ordered map (red-black tree) with 4-byte links and the <code>std::map</code> interface, without node handles</td>
+</tr>
+<tr>
+<td><code>cptr/user_cage.hpp</code></td>
+<td><code>user_cage&lt;Tag, Allocator, SizeLog2 = 32, Shift = 0&gt;</code>: a cage whose blocks come from your own allocator; <code>bump_allocator</code>; <code>cptr::vm</code> commit helpers</td>
+</tr>
+<tr>
+<td><code>cptr/mapped_cage.hpp</code></td>
+<td><code>mapped_cage&lt;Tag, SizeLog2 = 32&gt;</code>: a cage whose memory is a file, with a root pointer; POSIX only</td>
+</tr>
+<tr>
+<td><code>cptr/all.hpp</code></td>
+<td>All of the above except <code>user_cage.hpp</code> and <code>mapped_cage.hpp</code></td>
+</tr>
+</tbody>
+</table>
+<p>Operations that only touch the stored offset are <code>constexpr</code>: null,
+pointer arithmetic, comparisons, <code>bits()</code> and <code>from_bits()</code>, and
+conversions that keep the address. Compressing and decompressing need the
+cage's base, which is only known at run time.</p>
+<p>Both containers keep a sentinel node in the cage, so an iterator is one
+8-byte pointer and <code>end()</code> stays valid as elements come and go. They are
+aliases of <code>cptr::detail::basic_list</code> and <code>cptr::detail::basic_ordered_map</code>,
+whose last template argument, <code>Compressed = false</code>, gives raw links with the
+same code and allocator. The benchmarks use those to separate the effect of
+compression from the effect of the allocator; they are not part of the
+public interface.</p>
+<p>The built-in allocator is fast, but you can supply your own. A
+<code>user_cage</code> reserves the region and compresses like <code>cage</code>; your allocator
+is constructed once with the usable part of the region (reserved, not yet
+committed) and serves <code>allocate(bytes, align)</code> and <code>deallocate(p)</code>. Commit
+memory with <code>cptr::vm::commit</code> as you use it. <code>cptr::bump_allocator</code> is a
+ready-made monotonic allocator, and a building block for others:</p>
+<pre><code class="language-cpp">struct my_allocator {
+  explicit my_allocator(std::span&lt;std::byte&gt; region);
+  void* allocate(std::size_t bytes, std::size_t align);  // nullptr if full
+  void deallocate(void* p);  // no size: the containers do not pass one
+};
+struct my_tag {};
+using my_cage = cptr::user_cage&lt;my_tag, my_allocator&gt;;
+cptr::ordered_map&lt;int, int, std::less&lt;&gt;, my_cage&gt; map;
+</code></pre>
+<p>The allocator must be safe to call from every thread that uses the cage.</p>
+<p>A compressed pointer is an offset from the cage's base, so a structure
+built in a <code>mapped_cage</code> is still valid when the file is mapped again, by
+another process, at another address. The containers store their sentinel
+as a compressed link too, so a <code>cptr::list</code> or <code>cptr::ordered_map</code> of plain
+values can live in the file. The allocator keeps its state in the file,
+behind a lock there, so several processes can allocate in one file at once;
+the containers themselves are not synchronised. The file is created sparse
+at the full cage size, and only pages written to use disk space.</p>
+<pre><code class="language-cpp">struct store_tag {};
+using store = cptr::mapped_cage&lt;store_tag&gt;;
+store::open(&quot;data.cage&quot;);
+auto* h = store::root&lt;history&gt;();  // nullptr in a new file
+</code></pre>
+<p>The packing helpers often matter more than <code>ptr</code> itself. A lone 4-byte field
+next to an 8-byte one is padded back to 8 bytes. Gains come from putting two
+4-byte halves together:</p>
+<pre><code class="language-cpp">struct tree_node {
+  cptr::ptr_pair&lt;tree_node&gt; children;  // left + right: 8 bytes
+  std::uint32_t key;
+  std::uint32_t subtree_size;
+};
+static_assert(sizeof(tree_node) == 16);  // 32 with raw pointers
+</code></pre>
+<h2 id="examples">Examples</h2>
+<p>Each example is a short, self-contained program in <a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples"><code>examples/</code></a>:</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/expect_gains.cpp"><code>expect_gains.cpp</code></a></td>
+<td>Measures memory and time of each std container against its cptr counterpart on your machine</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/lru_cache.cpp"><code>lru_cache.cpp</code></a></td>
+<td>An LRU cache from <code>unordered_map</code> plus <code>list</code>: only the type names change</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/pmr.cpp"><code>pmr.cpp</code></a></td>
+<td>A cage as a <code>std::pmr::memory_resource</code>, with compressed pointers into it</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/minimal.cpp"><code>minimal.cpp</code></a></td>
+<td>Two objects pointing at each other; what is stored</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/linked_list.cpp"><code>linked_list.cpp</code></a></td>
+<td><code>cptr::list</code> as a drop-in for <code>std::list</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/tree.cpp"><code>tree.cpp</code></a></td>
+<td>A hand-written order-statistics tree with <code>ptr_pair</code>; 16-byte nodes</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/graph.cpp"><code>graph.cpp</code></a></td>
+<td>BFS over a graph whose edges are 4 bytes and whose adjacency vectors live in the cage</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/std_containers.cpp"><code>std_containers.cpp</code></a></td>
+<td><code>std::deque</code> and <code>std::pmr</code> containers in the cage, indexed by <code>cptr::ptr</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/custom_allocator.cpp"><code>custom_allocator.cpp</code></a></td>
+<td>Your own allocator behind a cage: a pool of 16-byte slots for list nodes</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/persistent.cpp"><code>persistent.cpp</code></a></td>
+<td>A list kept in a file and reopened at a new address on every run</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/use_after_free.cpp"><code>use_after_free.cpp</code></a></td>
+<td>AddressSanitizer catching a dangling compressed pointer</td>
+</tr>
+</tbody>
+</table>
+<h2 id="with-plflist-fancy-pointers">With plf::list (fancy pointers)</h2>
+<p>Containers that take their internal pointer type from the allocator can
+switch to 4-byte links without changes to their code. <code>cptr::fancy_allocator</code>
+has <code>pointer = cptr::ptr&lt;T&gt;</code>, and <code>cptr::ptr</code> supports the arithmetic,
+<code>NULL</code> literals and casts such containers need. With
+<a href="https://github.com/mattreecebentley/plf_list">plf::list</a>:</p>
+<pre><code class="language-cpp">using compressed_list =
+    plf::list&lt;std::uint32_t, cptr::fancy_allocator&lt;std::uint32_t&gt;&gt;;
+
+// The list's end sentinel is a member of the list object and nodes link to
+// it, so the list object itself must be in the cage too.
+cptr::ptr&lt;compressed_list&gt; l = cptr::make&lt;compressed_list&gt;();
+l-&gt;push_back(1);
+</code></pre>
+<p>The list object must live in the cage (see above). No other change is
+needed: plf::list takes its node pointer type from the allocator.</p>
+<p>4,000,000 random <code>uint32_t</code>, GCC 15 <code>-O2</code>, i7-12700H, best of 3:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">bytes/element</th>
+<th style="text-align: right;">push_back</th>
+<th style="text-align: right;">10 walks</th>
+<th style="text-align: right;">sort</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plf::list</code></td>
+<td style="text-align: right;">24.1</td>
+<td style="text-align: right;">29 ms</td>
+<td style="text-align: right;">67 ms</td>
+<td style="text-align: right;">543 ms</td>
+</tr>
+<tr>
+<td><code>plf::list</code> with <code>cptr::fancy_allocator</code></td>
+<td style="text-align: right;"><strong>12.1</strong></td>
+<td style="text-align: right;">25 ms</td>
+<td style="text-align: right;">57 ms</td>
+<td style="text-align: right;">530 ms</td>
+</tr>
+</tbody>
+</table>
+<p>Build it with <code>-DCOMPRESSED_PTR_PLF_LIST_DIR=/path/to/plf_list</code>; see
+<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/plf_list_minimal.cpp"><code>examples/plf_list_minimal.cpp</code></a> for the
+smallest program and <a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/plf_list.cpp"><code>examples/plf_list.cpp</code></a> for
+the measurements.</p>
+<h2 id="rules-and-limitations">Rules and limitations</h2>
+<ul>
+<li><strong>Only cage memory can be compressed.</strong> Compressing a stack or <code>malloc</code>
+  pointer is a bug. Debug builds catch it with an assertion. Define
+  <code>CPTR_CHECKED</code> to keep that check (and the checks on <code>deallocate</code> and
+  <code>nonnull_ptr</code>) in release builds, where a failure prints a message and
+  aborts. The cost is one compare and branch per compression, which did
+  not show in the list benchmark (p50 to p95 unchanged).</li>
+<li><strong><code>ptr</code> converts implicitly both ways</strong> between <code>T*</code> and <code>ptr&lt;T&gt;</code>, so it
+  can replace a raw pointer member with few other changes. The cost is that
+  any <code>T*</code> compresses without notice, and <code>cond ? p : raw</code> with a <code>ptr</code>
+  and a <code>T*</code> is ambiguous. <code>strict_ptr&lt;T&gt;</code> is the same type with an
+  explicit <code>strict_ptr&lt;T&gt;(raw)</code> constructor and no assignment from <code>T*</code>;
+  it still converts to <code>T*</code> and to and from <code>ptr&lt;T&gt;</code> implicitly.</li>
+<li><strong>64-bit only.</strong> A 32-bit target already has 4-byte pointers.</li>
+<li><strong>Standard library containers mostly ignore fancy pointers</strong> for their
+  internal links, so <code>cptr::fancy_allocator</code> does not shrink <code>std::list</code> or
+  <code>std::map</code> nodes. Use the bundled containers or a container that honours
+  the allocator's pointer type (such as plf::list). Otherwise, put std
+  containers' storage in the cage with <code>cptr::allocator</code> and refer to their
+  elements with <code>cptr::ptr</code>.</li>
+<li><strong>Allocator.</strong> Small blocks (up to 32 KiB) come from size-class slabs.
+  Each thread keeps a small cache of free blocks per size class, so most
+  allocations and frees take no lock; the cage-wide lock is taken once per
+  batch of blocks and for large allocations. Slabs whose blocks are all
+  free are kept for reuse for a quarter of a second (at most 64 MiB of
+  them), then their pages are given back to the OS. <code>default_cage::trim()</code> does
+  that at once and also returns the calling thread's cached blocks;
+  other threads' cached blocks go back when they exit. Large blocks are
+  decommitted on free, and adjacent free runs are merged. <code>fork()</code> is
+  safe: the child can allocate even if another thread held the lock.</li>
+<li><strong>Shared libraries.</strong> A cage's base and bookkeeping are static members
+  of a header-only template, so every shared library gets its own copy
+  unless the dynamic linker merges them. The cage templates and
+  <code>default_cage</code> are marked <code>CPTR_VISIBLE</code> (default visibility), so on
+  Linux and macOS they are merged even when libraries are built with
+  <code>-fvisibility=hidden</code>; mark your own tags the same way:
+  <code>struct CPTR_VISIBLE my_cage : cptr::cage&lt;my_cage&gt; {};</code>. Libraries
+  loaded with <code>dlopen(RTLD_LOCAL)</code> may still get their own copy.
+  <strong>Windows DLLs never share one</strong>: each DLL that uses a cage has its own,
+  so keep everything that compresses or decompresses a given cage in one
+  module. Debug builds assert when a module decompresses in a cage it never
+  initialised, which is how this usually shows.</li>
+<li><strong>The cage's bookkeeping is never destroyed,</strong> so containers with static
+  storage duration can still free into it during program exit.</li>
+<li><strong>The cage size is fixed when the cage is reserved.</strong> The default is
+  4 GiB. Allocation fails with <code>std::bad_alloc</code> when the cage is full.</li>
+<li><strong>Misuse checks</strong> use <code>CPTR_ASSERT(cond, msg)</code>, which defaults to
+  <code>assert</code>. Define it before including a cage header to log or throw
+  instead.</li>
+<li><strong>AddressSanitizer</strong> understands the cage: freed blocks are poisoned.
+  LeakSanitizer does not see cage memory.</li>
+</ul>
+<h2 id="building">Building</h2>
+<pre><code class="language-sh">cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build              # unit tests + examples
+./build/bench_rss                   # memory, one child process per config
+./build/bench_runtime [elements] [epochs] [list|map|hash|arithmetic|conversion|allocator|threads|chase]
+</code></pre>
+<p>To use an installed copy, <code>cmake --install build</code>, then in your project:</p>
+<pre><code class="language-cmake">find_package(compressed_ptr 0.1 CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE compressed_ptr::compressed_ptr)
+</code></pre>
+<p>Without CMake, <code>cmake --install</code> also installs <code>compressed_ptr.pc</code>
+(<code>pkg-config --cflags --libs compressed_ptr</code>) and the single header
+<code>cptr.hpp</code>, which is also committed as <code>single_include/cptr.hpp</code>
+(generated by <code>scripts/amalgamate.py</code>; CI checks it is current).</p>
+<p>There are no vcpkg or Conan recipes yet: both pin a tagged release by its
+archive hash, and there is no tagged release.</p>
+<p>CI runs the benchmarks on every push, shows the tables in the run summary
+and keeps them as an artifact. <code>scripts/check_bench.py</code> fails the run if a
+median delta between variants measured side by side regresses past a
+limit (for example compressed against raw links, or the cage against
+<code>malloc</code> on two threads); absolute times on shared runners are too noisy
+to gate on.</p>
+<p><code>scripts/test_install.sh</code> checks find_package, FetchContent, pkg-config and
+the installed single header, and CI runs it on Linux, macOS and Windows. <code>cptr/version.hpp</code> defines <code>CPTR_VERSION</code>.
+Sources are formatted with clang-format 22 (<code>.clang-format</code>); CI checks it.
+CI also builds with warnings as errors (<code>-DCOMPRESSED_PTR_WERROR=ON</code>) and
+runs clang-tidy (<code>.clang-tidy</code>, <code>scripts/run_tidy.sh build</code>), failing on
+any diagnostic in <code>include/cptr</code>.</p>
+<p>The fuzzers (<code>fuzz_allocator</code>, and <code>fuzz_containers</code>, which checks every
+container against its std counterpart) need clang:</p>
+<pre><code class="language-sh">cmake -S . -B build-fuzz -DCMAKE_CXX_COMPILER=clang++ -DCOMPRESSED_PTR_BUILD_FUZZERS=ON
+cmake --build build-fuzz
+./build-fuzz/fuzz_containers -max_total_time=60
+</code></pre>
+<p>Coverage (clang and llvm-cov; HTML report in <code>build-coverage/</code>):</p>
+<pre><code class="language-sh">scripts/coverage.sh            # LLVM_SUFFIX=-18 for versioned tool names
+</code></pre>
+<p>The tests cover 95% of the header lines, 99% of the functions and 88% of
+the branches. A second test executable overrides <code>CPTR_ASSERT</code> to check
+misuse detection, injects commit failures with <code>CPTR_FAULT_INJECTION</code>, and
+runs out of address space under <code>RLIMIT_AS</code>. The remaining gaps are
+assertion branches that cannot be taken safely (such as freeing a pointer
+from outside the cage), the compile-time size-class table, and out-of-memory
+inside the allocator's own bookkeeping.</p>
+<p>To use the library from another CMake project:</p>
+<pre><code class="language-cmake">add_subdirectory(compressed-ptr)   # or FetchContent, or find_package(compressed_ptr)
+target_link_libraries(app PRIVATE compressed_ptr::compressed_ptr)
+</code></pre>
+<p>Supported platforms: Linux, macOS and Windows on x86-64 and arm64, with
+GCC 11+, Clang 16+ and MSVC 2022. CI runs the tests on all six, plus
+AddressSanitizer, UBSan, ThreadSanitizer and coverage on Linux.</p>
+<h2 id="using-it-in-a-larger-code-base">Using it in a larger code base</h2>
+<p>This library came out of an experiment adding V8-style pointer compression
+to SpiderMonkey, Firefox's JavaScript engine. That work cut the engine's
+memory by about 40% over a 12-site browsing session. The engine-specific
+parts of that work (GC tracing, write barriers, JIT code that loads
+compressed pointers) cannot be done by a library. The parts that can are the
+ones here: the aligned reservation, the compress and decompress arithmetic,
+and the packing helpers, which keep the bit layout in one place. For a code
+base with its own allocator, the reservation and the arithmetic can be used
+on their own, with <code>cptr::detail::reserve_aligned</code> and the compress and
+decompress functions.</p>
+</main>
+</body>
+</html>
