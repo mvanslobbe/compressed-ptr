@@ -9,6 +9,7 @@
 #endif
 
 #include <fcntl.h>
+#include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <atomic>
 #include <bit>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -42,10 +44,13 @@ namespace cptr {
 /// cptr::ordered_map of trivially copyable values qualifies, a std::string
 /// does not.
 ///
-/// The allocator's state is in the file too, behind a lock in the file, so
-/// several processes may allocate in the same file at once. The containers
-/// themselves are not synchronised. A process that dies while holding the
-/// lock leaves the file locked. Freed small blocks are kept per size class;
+/// The allocator's state is in the file too, behind a spin lock in the
+/// file, so several processes may open, create and allocate in the same file
+/// at once (see open()). The containers themselves are not synchronised. A
+/// process that dies while holding the spin lock leaves the file locked, and
+/// one that dies part way through an allocation can leave the allocator
+/// state inconsistent; open() rejects state that is out of range, not every
+/// inconsistency. Freed small blocks are kept per size class;
 /// freed large runs are kept in one list, first fit, without coalescing.
 template <class Tag, unsigned SizeLog2 = 32>
 class CPTR_VISIBLE mapped_cage {
@@ -66,7 +71,19 @@ class CPTR_VISIBLE mapped_cage {
 
   /// Map the file at `path` as the cage, creating it if it does not exist.
   /// Fails if a file is already open, if the file is not a cage of this
-  /// size, or if address space or the file cannot be had.
+  /// size, if its allocator state is out of range (a corrupt file), or if
+  /// address space or the file cannot be had.
+  ///
+  /// Several processes may open, and create, the same file at once: open()
+  /// holds an flock() on the file while it checks, creates and formats it,
+  /// so exactly one of them formats a new file and the others wait for it.
+  /// open() fails if the file system does not support flock(). A file whose
+  /// creator failed after making it full size is removed again (or truncated
+  /// to empty, if it existed before), so a later open() can create it.
+  ///
+  /// The checks look at the header, the span table and every free list, so
+  /// open() takes time in proportion to the number of free blocks. Tag is
+  /// not recorded in the file: any mapped_cage of the same SizeLog2 opens it.
   static bool open(const char* path) noexcept {
     if (base_ != 0) {
       return false;
@@ -75,28 +92,10 @@ class CPTR_VISIBLE mapped_cage {
     if (!p) {
       return false;
     }
-    int fd = ::open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
-    struct stat st;
-    bool ok = fd >= 0 && fstat(fd, &st) == 0;
-    bool fresh = ok && st.st_size == 0;
-    ok = ok && (fresh ? ftruncate(fd, off_t(size)) == 0
-                      : std::size_t(st.st_size) == size);
-    ok = ok && mmap(p, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd,
-                    0) == p;
-    if (fd >= 0) {
-      ::close(fd);
-    }
-    auto* h = static_cast<header*>(p);
-    if (ok && fresh) {
-      format(h);
-    }
-    if (!ok || h->magic != kMagic || h->version != kVersion ||
-        h->size_log2 != SizeLog2) {
+    if (!map_file(path, p)) {
       munmap(p, size);
       return false;
     }
-    previous_base_ = h->base;
-    h->base = reinterpret_cast<std::uintptr_t>(p);
     base_ = reinterpret_cast<std::uintptr_t>(p);
     return true;
   }
@@ -128,13 +127,18 @@ class CPTR_VISIBLE mapped_cage {
   /// new file.
   static std::uintptr_t previous_base() noexcept { return previous_base_; }
 
-  /// The object the file's user designated with set_root(), or nullptr.
+  /// The object the file's user designated with set_root(), or nullptr,
+  /// also while no file is open.
   template <class T>
   static T* root() noexcept {
-    return static_cast<T*>(decompress(hdr()->root.load()));
+    return base_ ? static_cast<T*>(decompress(hdr()->root.load())) : nullptr;
   }
+  /// Designate the object root() returns. Does nothing while no file is
+  /// open.
   static void set_root(const void* p) noexcept {
-    hdr()->root.store(compress(p));
+    if (base_) {
+      hdr()->root.store(compress(p));
+    }
   }
 
   static bool contains(const void* p) noexcept {
@@ -169,11 +173,12 @@ class CPTR_VISIBLE mapped_cage {
     throw std::bad_alloc();
   }
 
-  /// Returns nullptr when the cage is full or no file is open.
+  /// Returns nullptr when the cage is full, no file is open, or `align` is
+  /// above 64 KiB (the span size).
   static void* try_allocate(std::size_t bytes, std::size_t align = alignof(
                                                    std::max_align_t)) noexcept {
     CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
-    if (base_ == 0) {
+    if (base_ == 0 || align > span_size) {
       return nullptr;
     }
     header* h = hdr();
@@ -289,12 +294,160 @@ class CPTR_VISIBLE mapped_cage {
     guard& operator=(const guard&) = delete;
   };
 
+  /// Write a new header. The magic number goes last, so a creator that dies
+  /// half way leaves a file that open() rejects rather than a half-formatted
+  /// one.
   static void format(header* h) noexcept {
     ::new (h) header{};
-    h->magic = kMagic;
     h->version = kVersion;
     h->size_log2 = SizeLog2;
     h->next_span = kFirstSpan;
+    std::atomic_ref<std::uint64_t>(h->magic).store(kMagic,
+                                                   std::memory_order_release);
+  }
+
+  /// Open or create the file and map it at `p`, holding an flock() on it
+  /// throughout so that concurrent creators do not both format it.
+  static bool map_file(const char* path, void* p) noexcept {
+    // A creator that fails removes the file; whoever opened it meanwhile
+    // finds it unlinked once they have the lock, and starts again.
+    for (int attempt = 0; attempt < 64; attempt++) {
+      bool created = true;
+      int fd = ::open(path, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+      if (fd < 0 && errno == EEXIST) {
+        created = false;
+        fd = ::open(path, O_RDWR | O_CLOEXEC);
+      }
+      if (fd < 0) {
+        if (errno == ENOENT) {
+          continue;  // removed between the two opens
+        }
+        return false;
+      }
+      int r;
+      do {
+        r = flock(fd, LOCK_EX);
+      } while (r != 0 && errno == EINTR);
+      struct stat st;
+      if (r != 0 || fstat(fd, &st) != 0) {
+        ::close(fd);
+        return false;
+      }
+      if (st.st_nlink == 0) {
+        ::close(fd);
+        continue;
+      }
+      bool ok = map_locked(fd, st, p);
+      if (!ok && created) {
+        // Do not leave a full-size file without a header behind. The path
+        // is removed while the lock is held, so nobody can have formatted
+        // the file in the meantime.
+        ::unlink(path);
+      } else if (!ok && st.st_size == 0) {
+        (void)!ftruncate(fd, 0);
+      }
+      ::close(fd);  // releases the lock
+      return ok;
+    }
+    return false;
+  }
+
+  /// With the file locked: give a new (empty) file its full size and a
+  /// header, map it, and check what it holds.
+  static bool map_locked(int fd, const struct stat& st, void* p) noexcept {
+    bool fresh = st.st_size == 0;
+    if (!fresh && std::uint64_t(st.st_size) != size) {
+      return false;
+    }
+    if ((fresh && ftruncate(fd, off_t(size)) != 0) ||
+        mmap(p, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) !=
+            p) {
+      return false;
+    }
+    auto* h = static_cast<header*>(p);
+    if (fresh) {
+      format(h);
+    }
+    if (!valid(h)) {
+      return false;
+    }
+    previous_base_ = h->base;
+    h->base = reinterpret_cast<std::uintptr_t>(p);
+    return true;
+  }
+
+  /// Whether the allocator state in a mapped file is in range, so that
+  /// using it cannot write outside the mapping or over the header and span
+  /// table. Not a full consistency check: blocks can still be handed out
+  /// twice if the lists of a corrupt file overlap.
+  static bool valid(const header* h) noexcept {
+    if (h->magic != kMagic || h->version != kVersion ||
+        h->size_log2 != SizeLog2) {
+      return false;
+    }
+    std::uint32_t next = h->next_span;
+    if (next < kFirstSpan || next > span_count - 1) {
+      return false;
+    }
+    const std::uint64_t lo = std::uint64_t(kFirstSpan) * span_size;
+    const std::uint64_t hi = std::uint64_t(next) * span_size;
+    if (h->allocated > hi || h->root.load() >= usable_end) {
+      return false;
+    }
+    const auto* tab = reinterpret_cast<const std::uint32_t*>(
+        reinterpret_cast<std::uintptr_t>(h) + span_size);
+    std::uint32_t class_spans[kClasses] = {};
+    for (std::uint32_t i = 0; i < span_count; i++) {
+      std::uint32_t e = tab[i];
+      if (e != 0 && e <= kClasses) {
+        class_spans[e - 1]++;
+      }
+      bool ok = e == 0 ||
+                (i >= kFirstSpan && i < next &&
+                 ((e & kLarge) ? (e & ~kLarge) != 0 && (e & ~kLarge) <= next - i
+                               : e <= kClasses));
+      if (!ok) {
+        return false;
+      }
+    }
+    // The large free runs: inside the used spans, finite.
+    std::uint32_t run = h->free_runs;
+    for (std::uint32_t steps = 0; run != 0; steps++) {
+      if (steps >= span_count || run < kFirstSpan || run >= next) {
+        return false;
+      }
+      const auto* r = reinterpret_cast<const free_run_header*>(
+          reinterpret_cast<std::uintptr_t>(h) + std::uint64_t(run) * span_size);
+      if (r->spans == 0 || r->spans > next - run) {
+        return false;
+      }
+      run = r->next;
+    }
+    for (std::size_t c = 0; c < kClasses; c++) {
+      std::uint32_t block = detail::kClassSizes[c];
+      // The current slab's unused tail: empty, or inside a slab of this
+      // class.
+      std::uint64_t cur = h->slab_cursor[c], end = h->slab_end[c];
+      if (cur > end || end > hi ||
+          (cur < end && (cur < lo || tab[cur / span_size] != c + 1 ||
+                         tab[(end - 1) / span_size] != c + 1))) {
+        return false;
+      }
+      // The free list: blocks in slabs of this class, and no longer than
+      // those slabs could hold.
+      std::uint64_t limit = std::uint64_t(class_spans[c]) * span_size / block;
+      std::uint32_t off = h->free_head[c];
+      for (std::uint64_t steps = 0; off != 0; steps++) {
+        if (steps >= limit || off < lo || off + std::uint64_t(block) > hi ||
+            off % alignof(std::uint32_t) != 0 ||
+            tab[off / span_size] != c + 1) {
+          return false;
+        }
+        off = *reinterpret_cast<const std::uint32_t*>(
+            reinterpret_cast<std::uintptr_t>(h) + off);
+      }
+    }
+    return true;
   }
 
   static header* hdr() noexcept { return reinterpret_cast<header*>(base_); }
