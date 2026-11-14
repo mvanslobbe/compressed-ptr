@@ -454,14 +454,6 @@ window.MathJax = {
 <h2>Synopses</h2>
 <p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L49">cptr/allocator.hpp</a>&gt;</code></p>
 <p>Equality operator</p>
-<pre><code class="source-code cpp">template&lt;class U&gt;
-bool
-<a href="./operator_eq-00.html">operator&#x3D;&#x3D;</a>(
-    <a href="./allocator.html">allocator</a> const& lhs,
-    <a href="./allocator.html">allocator&lt;U, Cage&gt;</a> const& rhs) noexcept;</code></pre>
-<span class="small"><a href="./operator_eq-00.html"><em>» more...</em></a></span>
-
-<p>Equality operator</p>
 <pre><code class="source-code cpp">template&lt;class I&gt;
 requires std::is_integral_v&lt;I&gt;
 constexpr
@@ -508,6 +500,14 @@ bool
     <a href="./fancy_allocator.html">fancy_allocator</a> const& lhs,
     <a href="./fancy_allocator.html">fancy_allocator&lt;U, Cage&gt;</a> const& rhs) noexcept;</code></pre>
 <span class="small"><a href="./operator_eq-0d.html"><em>» more...</em></a></span>
+
+<p>Equality operator</p>
+<pre><code class="source-code cpp">template&lt;class U&gt;
+bool
+<a href="./operator_eq-00.html">operator&#x3D;&#x3D;</a>(
+    <a href="./allocator.html">allocator</a> const& lhs,
+    <a href="./allocator.html">allocator&lt;U, Cage&gt;</a> const& rhs) noexcept;</code></pre>
+<span class="small"><a href="./operator_eq-00.html"><em>» more...</em></a></span>
 
 </div><!-- /synopsis -->
 </div><!-- /symbol -->
