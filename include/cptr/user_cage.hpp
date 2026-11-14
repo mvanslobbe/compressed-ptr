@@ -271,8 +271,10 @@ class fork_safe_lock {
 #endif
 
   spin_lock lock_;
+#if !defined(_WIN32)
   fork_safe_lock* next_ = nullptr;
   fork_safe_lock* prev_ = nullptr;
+#endif
 };
 
 }  // namespace detail

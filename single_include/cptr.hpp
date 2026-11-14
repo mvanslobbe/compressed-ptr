@@ -54,6 +54,15 @@ namespace cptr::detail {
 #  define CPTR_NOINLINE __attribute__((noinline))
 #endif
 
+// [[no_unique_address]] for the functors the maps store. On Windows both
+// MSVC and clang-cl ignore the standard spelling (it would change the
+// MSVC ABI) and honour only the msvc:: one.
+#if defined(_MSC_VER)
+#  define CPTR_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#else
+#  define CPTR_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#endif
+
 // Gives a cage and its tag default visibility, so that every shared library
 // built with -fvisibility=hidden still shares one cage with the rest of the
 // process. Put it on your own cage tags too:
@@ -4470,11 +4479,7 @@ class basic_ordered_map {
   /// valid when the file is mapped elsewhere.
   link_type header_;
   std::size_t size_ = 0;
-#if defined(_MSC_VER) && !defined(__clang__)
-  [[msvc::no_unique_address]] Compare comp_{};
-#else
-  [[no_unique_address]] Compare comp_{};
-#endif
+  CPTR_NO_UNIQUE_ADDRESS Compare comp_{};
 };
 
 }  // namespace detail
@@ -5494,13 +5499,8 @@ class basic_unordered_map {
   link<link_type, Cage, Compressed> buckets_ = nullptr;
   unsigned log2_buckets_ = 0;
   std::size_t size_ = 0;
-#if defined(_MSC_VER) && !defined(__clang__)
-  [[msvc::no_unique_address]] Hash hash_{};
-  [[msvc::no_unique_address]] KeyEqual eq_{};
-#else
-  [[no_unique_address]] Hash hash_{};
-  [[no_unique_address]] KeyEqual eq_{};
-#endif
+  CPTR_NO_UNIQUE_ADDRESS Hash hash_{};
+  CPTR_NO_UNIQUE_ADDRESS KeyEqual eq_{};
   float max_load_ = 1.0f;
   /// No bucket below this one holds an element; see begin().
   std::uint32_t first_ = 0;
@@ -5818,8 +5818,10 @@ class fork_safe_lock {
 #endif
 
   spin_lock lock_;
+#if !defined(_WIN32)
   fork_safe_lock* next_ = nullptr;
   fork_safe_lock* prev_ = nullptr;
+#endif
 };
 
 }  // namespace detail

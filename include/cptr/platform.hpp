@@ -47,6 +47,15 @@ namespace cptr::detail {
 #  define CPTR_NOINLINE __attribute__((noinline))
 #endif
 
+// [[no_unique_address]] for the functors the maps store. On Windows both
+// MSVC and clang-cl ignore the standard spelling (it would change the
+// MSVC ABI) and honour only the msvc:: one.
+#if defined(_MSC_VER)
+#  define CPTR_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#else
+#  define CPTR_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#endif
+
 // Gives a cage and its tag default visibility, so that every shared library
 // built with -fvisibility=hidden still shares one cage with the rest of the
 // process. Put it on your own cage tags too:

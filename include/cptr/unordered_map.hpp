@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "cptr/link.hpp"
+#include "cptr/platform.hpp"
 
 namespace cptr {
 namespace detail {
@@ -722,13 +723,8 @@ class basic_unordered_map {
   link<link_type, Cage, Compressed> buckets_ = nullptr;
   unsigned log2_buckets_ = 0;
   std::size_t size_ = 0;
-#if defined(_MSC_VER) && !defined(__clang__)
-  [[msvc::no_unique_address]] Hash hash_{};
-  [[msvc::no_unique_address]] KeyEqual eq_{};
-#else
-  [[no_unique_address]] Hash hash_{};
-  [[no_unique_address]] KeyEqual eq_{};
-#endif
+  CPTR_NO_UNIQUE_ADDRESS Hash hash_{};
+  CPTR_NO_UNIQUE_ADDRESS KeyEqual eq_{};
   float max_load_ = 1.0f;
   /// No bucket below this one holds an element; see begin().
   std::uint32_t first_ = 0;

@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "cptr/link.hpp"
+#include "cptr/platform.hpp"
 
 namespace cptr {
 namespace detail {
@@ -994,11 +995,7 @@ class basic_ordered_map {
   /// valid when the file is mapped elsewhere.
   link_type header_;
   std::size_t size_ = 0;
-#if defined(_MSC_VER) && !defined(__clang__)
-  [[msvc::no_unique_address]] Compare comp_{};
-#else
-  [[no_unique_address]] Compare comp_{};
-#endif
+  CPTR_NO_UNIQUE_ADDRESS Compare comp_{};
 };
 
 }  // namespace detail
