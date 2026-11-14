@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_set>
@@ -294,6 +295,13 @@ static_assert(std::is_convertible_v<int*, cptr::ptr<int>>);
 static_assert(!std::is_convertible_v<int*, cptr::strict_ptr<int>>);
 static_assert(!std::is_assignable_v<cptr::strict_ptr<int>&, int*>);
 static_assert(std::is_convertible_v<cptr::strict_ptr<int>, int*>);
+// A ptr may hold a pointer that was compressed implicitly, so it does not
+// turn into a strict_ptr implicitly either; this used to compile.
+static_assert(!std::is_convertible_v<cptr::ptr<int>, cptr::strict_ptr<int>>);
+static_assert(std::is_constructible_v<cptr::strict_ptr<int>, cptr::ptr<int>>);
+static_assert(std::is_convertible_v<cptr::strict_ptr<int>, cptr::ptr<int>>);
+static_assert(
+    std::is_convertible_v<cptr::strict_ptr<int>, cptr::ptr<const int>>);
 static_assert(sizeof(cptr::strict_ptr<int>) == 4);
 
 TEST(strict_ptr_needs_explicit_compression) {
@@ -304,10 +312,11 @@ TEST(strict_ptr_needs_explicit_compression) {
   int* other = nullptr;
   int* picked = s ? s : other;  // ?: works: s converts to int*
   CHECK(picked == raw);
-  cptr::ptr<int> loose = s;  // converts to and from ptr
-  cptr::strict_ptr<int> back = loose;
+  cptr::ptr<int> loose = s;           // converts to ptr implicitly...
+  cptr::strict_ptr<int> back(loose);  // ...and back only explicitly
   CHECK(back == s);
-  cptr::strict_ptr<int> from_make = cptr::make<int>(4);
+  CHECK(back == loose && loose == back && !(back < loose));
+  cptr::strict_ptr<int> from_make(cptr::make<int>(4));
   CHECK(*from_make == 4);
   s = nullptr;
   CHECK(!s);
@@ -501,4 +510,228 @@ TEST(contiguous_copy_over_ptr_range) {
   std::ranges::copy(out.rbegin(), out.rend(), block);
   CHECK(block[0] == 99 && block[99] == 0);
   alloc.deallocate(block, 100);
+}
+
+// Comparing or subtracting a ptr and a raw pointer, or a ptr and a
+// strict_ptr, was ambiguous: each side converts to the other.
+namespace {
+template <class A, class B>
+concept equality = requires(A a, B b) {
+  { a == b } -> std::same_as<bool>;
+  { b == a } -> std::same_as<bool>;
+  { a != b } -> std::same_as<bool>;
+};
+template <class A, class B>
+concept ordering = requires(A a, B b) {
+  { a <=> b } -> std::same_as<std::strong_ordering>;
+  { b <=> a } -> std::same_as<std::strong_ordering>;
+  a < b;
+  b >= a;
+};
+template <class A, class B>
+concept difference = requires(A a, B b) {
+  { a - b } -> std::same_as<std::ptrdiff_t>;
+  { b - a } -> std::same_as<std::ptrdiff_t>;
+};
+using P = cptr::ptr<int>;
+using S = cptr::strict_ptr<int>;
+static_assert(equality<P, int*> && ordering<P, int*> && difference<P, int*>);
+static_assert(equality<S, int*> && ordering<S, int*> && difference<S, int*>);
+static_assert(difference<P, const int*> &&
+              difference<cptr::ptr<const int>, int*>);
+static_assert(equality<S, P> && ordering<S, P> && difference<S, P>);
+static_assert(equality<P, cptr::ptr<const int>> &&
+              ordering<P, cptr::ptr<const int>>);
+static_assert(equality<cptr::ptr<derived>, base*> &&
+              ordering<cptr::ptr<derived>, base*>);
+}  // namespace
+
+TEST(mixed_comparisons_agree_with_raw_pointers) {
+  cptr::fancy_allocator<int> alloc;
+  P block = alloc.allocate(4);
+  int* raw = block.get();
+  P null;
+  S strict(block + 2);
+  CHECK(block + 1 > raw && raw < block + 1 && block + 1 != raw);
+  CHECK((block + 2 <=> raw + 2) == 0 && block + 2 == raw + 2);
+  CHECK(block + 3 - raw == 3 && raw - (block + 3) == -3);
+  CHECK((block + 3) - static_cast<const int*>(raw) == 3);
+  CHECK(null < raw && raw > null && null == static_cast<int*>(nullptr));
+  CHECK((null <=> static_cast<int*>(nullptr)) == 0);
+  CHECK(strict == block + 2 && block + 2 == strict && strict != block);
+  CHECK(block < strict && strict > block && null < strict);
+  CHECK(strict - block == 2 && block - strict == -2);
+  alloc.deallocate(block, 4);
+}
+
+// destroy() of a pointer to const did not compile: the static path
+// initialised a void* from a const T*, the polymorphic path
+// dynamic_cast<void*> from a const T*. delete accepts both.
+namespace {
+template <class P>
+concept destroyable = requires(P p) { cptr::destroy(p); };
+static_assert(destroyable<cptr::ptr<const int>> &&
+              destroyable<cptr::ptr<const base>> &&
+              destroyable<cptr::nonnull_ptr<int>>);
+}  // namespace
+
+TEST(destroy_through_const_and_nonnull) {
+  auto before = cptr::default_cage::allocated_bytes();
+  cptr::ptr<const int> c = cptr::make<int>(1);
+  cptr::destroy(c);
+  cptr::ptr<const base> cb = cptr::make<derived>();
+  CHECK(cb->b == 1);
+  cptr::destroy(cb);
+  cptr::ptr<const volatile two_bases> cv = cptr::make<two_bases>();
+  cptr::destroy(cv);
+  cptr::nonnull_ptr<int> n(cptr::make<int>(2).get());
+  cptr::destroy(n);
+  CHECK(cptr::default_cage::allocated_bytes() == before);
+}
+
+// nonnull_ptr converts like ptr: derived to base, to ptr and strict_ptr, and
+// back from its bits.
+static_assert(
+    std::is_convertible_v<cptr::nonnull_ptr<derived>, cptr::nonnull_ptr<base>>);
+static_assert(std::is_convertible_v<cptr::nonnull_ptr<int>, cptr::ptr<int>>);
+static_assert(
+    std::is_convertible_v<cptr::nonnull_ptr<int>, cptr::strict_ptr<int>>);
+static_assert(
+    std::is_convertible_v<cptr::nonnull_ptr<derived>, cptr::ptr<const base>>);
+static_assert(
+    std::is_convertible_v<cptr::nonnull_ptr<int>, cptr::ptr<const void>>);
+static_assert(!std::is_convertible_v<cptr::nonnull_ptr<base>,
+                                     cptr::nonnull_ptr<derived>>);
+static_assert(!std::is_convertible_v<cptr::nonnull_ptr<int>, cptr::ptr<long>>);
+static_assert(cptr::nonnull_ptr<int>::from_bits(8).bits() == 8);
+static_assert(cptr::nonnull_ptr<const int>(cptr::nonnull_ptr<int>::from_bits(8))
+                  .bits() == 8);
+static_assert(
+    cptr::ptr<const void>(cptr::nonnull_ptr<int>::from_bits(8)).bits() == 8);
+static_assert(cptr::nonnull_ptr<int>::from_bits(4) <
+              cptr::nonnull_ptr<int>::from_bits(8));
+
+TEST(nonnull_ptr_conversions) {
+  cptr::ptr<two_bases> d = cptr::make<two_bases>();
+  cptr::nonnull_ptr<two_bases> nd(d.get());
+  cptr::nonnull_ptr<right_base> nr = nd;
+  CHECK(nr.get() == static_cast<right_base*>(d.get()));
+  CHECK(nr->r == 2);
+  cptr::ptr<right_base> r = nd;
+  CHECK(r == nr.get());
+  cptr::ptr<two_bases> p = nd;
+  CHECK(p == d && p.bits() == nd.bits());
+  cptr::strict_ptr<const two_bases> s = nd;
+  CHECK(s == d);
+  CHECK(cptr::nonnull_ptr<two_bases>::from_bits(nd.bits()) == nd);
+  cptr::destroy(nd);
+}
+
+// Ownership: std::unique_ptr with cptr::deleter stores a 4-byte ptr.
+static_assert(sizeof(std::unique_ptr<int, cptr::deleter<int>>) == 4);
+static_assert(std::is_same_v<std::unique_ptr<int, cptr::deleter<int>>::pointer,
+                             cptr::ptr<int>>);
+static_assert(
+    std::is_convertible_v<std::unique_ptr<derived, cptr::deleter<derived>>,
+                          std::unique_ptr<base, cptr::deleter<base>>>);
+
+namespace {
+struct counted {
+  static inline int live = 0;
+  static inline int throw_at = -1;
+  int value = 7;
+  counted() {
+    if (live == throw_at) {
+      throw std::runtime_error("counted");
+    }
+    live++;
+  }
+  counted(const counted&) = delete;
+  ~counted() { live--; }
+};
+}  // namespace
+
+TEST(unique_ptr_with_cage_deleter) {
+  auto before = cptr::default_cage::allocated_bytes();
+  {
+    std::unique_ptr<counted, cptr::deleter<counted>> one(cptr::make<counted>());
+    CHECK(counted::live == 1 && one->value == 7);
+    std::unique_ptr<derived, cptr::deleter<derived>> d(cptr::make<derived>());
+    std::unique_ptr<base, cptr::deleter<base>> b = std::move(d);
+    CHECK(b->b == 1 && !d);
+  }
+  CHECK(counted::live == 0);
+  CHECK(cptr::default_cage::allocated_bytes() == before);
+}
+
+TEST(make_array_and_destroy_array) {
+  auto before = cptr::default_cage::allocated_bytes();
+  cptr::ptr<int> ints = cptr::make_array<int>(5);
+  CHECK(ints[0] == 0 && ints[4] == 0);  // value-initialised
+  ints[4] = 9;
+  cptr::destroy_array(ints, 5);
+  cptr::ptr<counted> c = cptr::make_array<counted>(3);
+  CHECK(counted::live == 3 && c[2].value == 7);
+  cptr::destroy_array(c, 3);
+  CHECK(counted::live == 0);
+  // A throwing constructor: the elements built so far are destroyed and the
+  // memory is freed.
+  counted::throw_at = 2;
+  bool threw = false;
+  try {
+    (void)cptr::make_array<counted>(4);
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  counted::throw_at = -1;
+  CHECK(threw && counted::live == 0);
+  threw = false;
+  try {
+    (void)cptr::make_array<counted>(std::size_t(-1) / 2);
+  } catch (const std::bad_array_new_length&) {
+    threw = true;
+  }
+  CHECK(threw);
+  cptr::destroy_array(cptr::ptr<counted>(), 3);  // null is a no-op
+  CHECK(cptr::default_cage::allocated_bytes() == before);
+}
+
+// The packing types compare equal when all their bits do.
+static_assert(std::equality_comparable<cptr::ptr_pair<long>>);
+static_assert(std::equality_comparable<cptr::ptr_with_payload<long>>);
+static_assert(std::equality_comparable<cptr::tagged_ptr<long, 1>>);
+
+TEST(packed_types_compare) {
+  auto a = cptr::make<aligned>();
+  auto b = cptr::make<aligned>();
+  cptr::ptr_pair<aligned> p1(a, b), p2(a, b), p3(b, a);
+  CHECK(p1 == p2 && p1 != p3);
+  cptr::ptr_with_payload<aligned> w1(a, 1), w2(a, 1), w3(a, 2);
+  CHECK(w1 == w2 && w1 != w3);
+  cptr::tagged_ptr<aligned, 2> t1(a, 1), t2(a, 1), t3(b, 1);
+  CHECK(t1 == t2 && t1 != t3);
+  cptr::destroy(a);
+  cptr::destroy(b);
+}
+
+// The allocators are constexpr and equal like std::allocator, and their
+// max_size() is what the cage can hold.
+static_assert(cptr::allocator<int>() == cptr::allocator<long>());
+static_assert(cptr::fancy_allocator<int>() ==
+              cptr::fancy_allocator<long>(cptr::fancy_allocator<int>()));
+static_assert(cptr::allocator<int>().max_size() ==
+              cptr::default_cage::size / sizeof(int));
+static_assert(std::allocator_traits<cptr::fancy_allocator<long>>::max_size(
+                  cptr::fancy_allocator<long>()) ==
+              cptr::default_cage::size / sizeof(long));
+
+TEST(allocator_rejects_more_than_the_cage) {
+  cptr::allocator<int> a;
+  bool threw = false;
+  try {
+    (void)a.allocate(a.max_size() + 1);
+  } catch (const std::bad_array_new_length&) {
+    threw = true;
+  }
+  CHECK(threw);
 }
