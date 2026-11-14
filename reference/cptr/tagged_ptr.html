@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L73">cptr/pack.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L106">cptr/pack.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     unsigned int TagBits,
@@ -466,12 +466,23 @@ class tagged_ptr;</code></pre>
 </thead>
 <tbody>
 <tr><td><a href="./tagged_ptr/2constructor-04.html"><code>tagged_ptr</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
-<tr><td><a href="./tagged_ptr/get.html"><code>get</code></a> </td><td></td></tr>
-<tr><td><a href="./tagged_ptr/set.html"><code>set</code></a> </td><td></td></tr>
-<tr><td><a href="./tagged_ptr/tag.html"><code>tag</code></a> </td><td></td></tr>
+<tr><td><a href="./tagged_ptr/get.html"><code>get</code></a> </td><td>The pointer without the tag, or <code>nullptr</code>. Constant-evaluable when null.</td></tr>
+<tr><td><a href="./tagged_ptr/set.html"><code>set</code></a> </td><td>Replaces both. <code>p</code> must be null or point into the cage, aligned to 2^(TagBits + Cage::shift), and <code>tag</code> must fit in TagBits bits (both checked by assertions in debug builds).</td></tr>
+<tr><td><a href="./tagged_ptr/tag.html"><code>tag</code></a> </td><td>The tag, below 2^TagBits.</td></tr>
 </tbody>
 </table>
 
+<div class="friends">
+<h2>Friends</h2>
+<table style="table-layout: fixed; width: 100%;">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code><a href="./operator_eq-07.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Same pointer and same tag.</td></tr>
+</tbody>
+</table>
+</div><!-- /friends -->
 </div><!-- /symbol -->
 
 </div>

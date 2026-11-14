@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>A std::pmr::memory_resource that allocates from this cage.</p></div><!-- /brief -->
+<p>A std::pmr::memory_resource that allocates from this cage. It is never destroyed, so containers with static storage duration can still free into it during program exit, after the thread caches are gone: such frees go straight to the slabs.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L321">cptr/cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L427">cptr/cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">static
 std::pmr::memory_resource*
 resource() noexcept;</code></pre>

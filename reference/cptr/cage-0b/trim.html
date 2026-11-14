@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Return the memory the allocator keeps for reuse to the OS: this thread&#x27;s cached blocks go back to their slabs, and empty slabs are purged. Freed memory is otherwise returned on its own once it has been unused for a quarter of a second, checked whenever a slab becomes empty; other threads&#x27; cached blocks go back when they exit.</p></div><!-- /brief -->
+<p>Return the memory the allocator keeps for reuse to the OS: this thread&#x27;s cached blocks go back to their slabs, and every slab with no live block is released, including the slab each size class is currently carving blocks from, as is the committed but unused end of the bump region. Blocks cached by other threads count as live; they go back when those threads exit. Without trim(), a slab that becomes empty is kept for reuse until it has been empty for a quarter of a second (checked whenever a slab becomes empty) or more than 64 MiB of empty slabs are kept.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L307">cptr/cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L393">cptr/cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">static
 void
 trim() noexcept;</code></pre>

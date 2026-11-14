@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>The number of elements between two pointers into the same array.</p></div><!-- /brief -->
+<p>Subtraction operators</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L213">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L262">cptr/ptr.hpp</a>&gt;</code></p>
 <p>The number of elements between two pointers into the same array.</p>
 <pre><code class="source-code cpp">constexpr
 std::ptrdiff_t
@@ -470,6 +470,28 @@ requires (!std::is_void_v&lt;T&gt;);</code></pre>
     std::ptrdiff_t n) noexcept
 requires (!std::is_void_v&lt;T&gt;);</code></pre>
 <span class="small"><a href="./operator_minus-06.html"><em>» more...</em></a></span>
+
+<p>The number of elements between this pointer and a raw pointer into the same array, as <code>get() - b</code>.</p>
+<pre><code class="source-code cpp">template&lt;class U&gt;
+requires (!std::is_void_v&lt;T&gt; &amp;&amp;
+             std::is_same_v&lt;std::remove_cv_t&lt;U&gt;, std::remove_cv_t&lt;T&gt;&gt;)
+constexpr
+std::ptrdiff_t
+<a href="./operator_minus-0e.html">operator-</a>(
+    <a href="./basic_ptr.html">basic_ptr</a> a,
+    U* b) noexcept;</code></pre>
+<span class="small"><a href="./operator_minus-0e.html"><em>» more...</em></a></span>
+
+<p>The number of elements between a raw pointer and this pointer into the same array, as <code>a - get()</code>.</p>
+<pre><code class="source-code cpp">template&lt;class U&gt;
+requires (!std::is_void_v&lt;T&gt; &amp;&amp;
+             std::is_same_v&lt;std::remove_cv_t&lt;U&gt;, std::remove_cv_t&lt;T&gt;&gt;)
+constexpr
+std::ptrdiff_t
+<a href="./operator_minus-07.html">operator-</a>(
+    U* a,
+    <a href="./basic_ptr.html">basic_ptr</a> b) noexcept;</code></pre>
+<span class="small"><a href="./operator_minus-07.html"><em>» more...</em></a></span>
 
 </div><!-- /synopsis -->
 </div><!-- /symbol -->

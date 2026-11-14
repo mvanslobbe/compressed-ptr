@@ -448,12 +448,13 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Insertion. As std::map: emplace builds the element first, try_emplace only builds the mapped value if the key is new.</p></div><!-- /brief -->
+<p>Build the element from <code>args</code>, then insert it unless its key is present; returns the element with that key and whether it was inserted. As for std::map, the element is built first, even when the key turns out to be present (try_emplace avoids that). If the comparison or an allocation throws, the element is destroyed and the map is unchanged.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L297">cptr/ordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L330">cptr/ordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class... Args&gt;
+requires std::constructible_from&lt;value_type, Args...&gt;
 std::pair&lt;iterator, bool&gt;
 emplace(Args&&... args);</code></pre>
 </div><!-- /synopsis -->

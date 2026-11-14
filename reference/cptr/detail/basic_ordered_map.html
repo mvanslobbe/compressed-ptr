@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>The class behind cptr::ordered_map; use that alias. Its members behave like those of <code>std::map</code>.</p></div><!-- /brief -->
+<p>The class behind cptr::ordered_map; use that alias. Its members behave like those of <code>std::map</code>; the alias lists the differences.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L34">cptr/ordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L35">cptr/ordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class K,
     class V,
@@ -515,16 +515,16 @@ class basic_ordered_map;</code></pre>
 <tr><td><a href="./basic_ordered_map/count-0f.html"><code>count</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ordered_map/crbegin.html"><code>crbegin</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ordered_map/crend.html"><code>crend</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ordered_map/emplace.html"><code>emplace</code></a> </td><td>Insertion. As std::map: emplace builds the element first, try_emplace only builds the mapped value if the key is new.</td></tr>
-<tr><td><a href="./basic_ordered_map/emplace_hint.html"><code>emplace_hint</code></a> </td><td>The hint is not used; the result is the same as emplace&#x27;s.</td></tr>
+<tr><td><a href="./basic_ordered_map/emplace.html"><code>emplace</code></a> </td><td>Build the element from <code>args</code>, then insert it unless its key is present; returns the element with that key and whether it was inserted. As for std::map, the element is built first, even when the key turns out to be present (try_emplace avoids that). If the comparison or an allocation throws, the element is destroyed and the map is unchanged.</td></tr>
+<tr><td><a href="./basic_ordered_map/emplace_hint.html"><code>emplace_hint</code></a> </td><td>As emplace(). The hint is accepted for compatibility with std::map and generic code such as std::inserter, but not used: the search always starts at the root.</td></tr>
 <tr><td><a href="./basic_ordered_map/empty.html"><code>empty</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ordered_map/end-0a.html"><code>end</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ordered_map/equal_range-0f.html"><code>equal_range</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ordered_map/erase-02.html"><code>erase</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_ordered_map/erase-02.html"><code>erase</code></a> </td><td>Erases the element with the given key, if there is one; returns how many were erased (0 or 1).</td></tr>
 <tr><td><a href="./basic_ordered_map/find-0c.html"><code>find</code></a> </td><td>Lookup. The template overloads take any key type that a transparent comparator (one with is_transparent, such as std::less&lt;&gt;) accepts.</td></tr>
 <tr><td><a href="./basic_ordered_map/height.html"><code>height</code></a> </td><td>The number of nodes on the longest path from the root; for tests.</td></tr>
-<tr><td><a href="./basic_ordered_map/insert-04.html"><code>insert</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ordered_map/insert_or_assign-089.html"><code>insert_or_assign</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_ordered_map/insert-04.html"><code>insert</code></a> </td><td><code>insert</code> overloads</td></tr>
+<tr><td><a href="./basic_ordered_map/insert_or_assign-089.html"><code>insert_or_assign</code></a> </td><td><code>insert_or_assign</code> overloads</td></tr>
 <tr><td><a href="./basic_ordered_map/key_comp.html"><code>key_comp</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ordered_map/lower_bound-0eb.html"><code>lower_bound</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ordered_map/max_size.html"><code>max_size</code></a> </td><td></td></tr>
@@ -533,7 +533,7 @@ class basic_ordered_map;</code></pre>
 <tr><td><a href="./basic_ordered_map/rend-08.html"><code>rend</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ordered_map/size.html"><code>size</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ordered_map/swap.html"><code>swap</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ordered_map/try_emplace-0d.html"><code>try_emplace</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_ordered_map/try_emplace-0d.html"><code>try_emplace</code></a> </td><td><code>try_emplace</code> overloads</td></tr>
 <tr><td><a href="./basic_ordered_map/upper_bound-0d.html"><code>upper_bound</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_ordered_map/valid.html"><code>valid</code></a> </td><td>Checks the red-black and ordering invariants and the header; for tests.</td></tr>
 </tbody>
@@ -556,7 +556,7 @@ class basic_ordered_map;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code><a href="./operator_3way-0b8.html">cptr::detail::operator&lt;&#x3D;&gt;</a></code></td><td>Three-way comparison operator</td></tr>
+<tr><td><code><a href="./operator_3way-099.html">cptr::detail::operator&lt;&#x3D;&gt;</a></code></td><td>Lexicographical over the (key, value) pairs, with std&#x27;s synth-three-way: types that have only <code>operator&lt;</code> give a std::weak_ordering.</td></tr>
 <tr><td><code><a href="./operator_eq-02.html">cptr::detail::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
 <tr><td><code><a href="./swap-08.html">cptr::detail::swap</a></code></td><td></td></tr>
 </tbody>

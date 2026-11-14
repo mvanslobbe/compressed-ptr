@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L522">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L763">cptr/unordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class K,
     class V,
@@ -463,7 +463,7 @@ using unordered_map = <a href="./detail/basic_unordered_map.html">detail::basic_
 </div><!-- /synopsis -->
 <div class="description">
 <h2>Description</h2>
-<p>Separate chaining; nodes and buckets are allocated in <code>Cage</code>: about 20 bytes per element for 4-byte keys and values, against 44 for <code>std::unordered_map</code>. Every member behaves like its <code>std::unordered_map</code> counterpart; see <a href="./detail/basic_unordered_map.html"><code>detail::basic_unordered_map</code></a> for the full member list. Lookup is heterogeneous when both <code>Hash</code> and <code>KeyEqual</code> are transparent.</p>
+<p>Separate chaining; nodes and buckets are allocated in <code>Cage</code>: about 20 bytes per element for 4-byte keys and values, against 44 for <code>std::unordered_map</code>. The members behave like those of <code>std::unordered_map</code>, with these differences: there is no allocator parameter, no node handles (extract, merge, insert of a node), no bucket interface (bucket(), bucket_size(), local iterators) and no get_allocator(); bucket counts are powers of two, at most max_bucket_count(); hints are accepted but not used; and the iteration order is that of the buckets. See <a href="./detail/basic_unordered_map.html"><code>detail::basic_unordered_map</code></a> for the full member list. Lookup is heterogeneous when both <code>Hash</code> and <code>KeyEqual</code> are transparent; so is erase, C++23 style, when <code>CPTR_HETEROGENEOUS_ERASE</code> is defined.</p>
 <pre><code class="language-cpp">
 #include "cptr/unordered_map.hpp"
 

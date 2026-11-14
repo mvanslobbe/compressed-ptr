@@ -448,16 +448,23 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Compress <code>p</code>, which must be in the cage and must not be null.</p></div><!-- /brief -->
+<p>Constructors</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L296">cptr/ptr.hpp</a>&gt;</code></p>
-<p>Construct from <code>nullptr_t</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L436">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Derived to base, or to a cv-qualified or <code>void</code> pointee. Copies the offset (and is constexpr) unless the base sits at a non-zero offset.</p>
+<pre><code class="source-code cpp">template&lt;class U&gt;
+requires (std::is_convertible_v&lt;U*, T*&gt; &amp;&amp; !std::is_same_v&lt;U, T&gt;)
+constexpr
+<a href="./2constructor-0b.html">nonnull_ptr</a>(<a href="../nonnull_ptr.html">nonnull_ptr&lt;U, Cage&gt;</a> const& other) noexcept;</code></pre>
+<span class="small"><a href="./2constructor-0b.html"><em>» more...</em></a></span>
+
+<p>Null is not a valid value.</p>
 <pre><code class="source-code cpp"><a href="./2constructor-0d.html">nonnull_ptr</a>(std::nullptr_t value) = delete;</code></pre>
 <span class="small"><a href="./2constructor-0d.html"><em>» more...</em></a></span>
 
-<p>Compress <code>p</code>, which must be in the cage and must not be null.</p>
+<p>Compress <code>p</code>, which must be in the cage and must not be null (checked like the cage check: in debug builds, or always with CPTR_CHECKED).</p>
 <pre><code class="source-code cpp"><a href="./2constructor-02.html">nonnull_ptr</a>(T* p) noexcept;</code></pre>
 <span class="small"><a href="./2constructor-02.html"><em>» more...</em></a></span>
 

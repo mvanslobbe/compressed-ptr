@@ -448,12 +448,13 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>The hint is not used; the result is the same as emplace&#x27;s.</p></div><!-- /brief -->
+<p>As emplace(). The hint is accepted for compatibility with std::map and generic code such as std::inserter, but not used: the search always starts at the root.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L309">cptr/ordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L351">cptr/ordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class... Args&gt;
+requires std::constructible_from&lt;value_type, Args...&gt;
 <a href="./iterator.html">iterator</a>
 emplace_hint(
     <a href="./const_iterator.html">const_iterator</a>,

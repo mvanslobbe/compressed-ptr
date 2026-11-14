@@ -456,7 +456,7 @@ window.MathJax = {
 <ul>
 <li><p>Containers: <a href="./cptr/list.html"><code>list</code></a>, <a href="./cptr/forward_list.html"><code>forward_list</code></a>, <a href="./cptr/ordered_map.html"><code>ordered_map</code></a> and <a href="./cptr/unordered_map.html"><code>unordered_map</code></a>, the std interfaces with 4-byte links.</p>
 </li>
-<li><p>Your own nodes: allocate with <a href="./cptr/make.html"><code>make</code></a>, point with <a href="./cptr/ptr.html"><code>ptr</code></a> (or <a href="./cptr/nonnull_ptr.html"><code>nonnull_ptr</code></a>), pack two pointers with <a href="./cptr/ptr_pair.html"><code>ptr_pair</code></a>, free with <a href="./cptr/destroy.html"><code>destroy</code></a>.</p>
+<li><p>Your own nodes: allocate with <a href="./cptr/make.html"><code>make</code></a>, point with <a href="./cptr/ptr.html"><code>ptr</code></a> (or <a href="./cptr/nonnull_ptr.html"><code>nonnull_ptr</code></a>), pack two pointers with <a href="./cptr/ptr_pair.html"><code>ptr_pair</code></a>, free with <a href="./cptr/destroy-06.html"><code>destroy</code></a>.</p>
 </li>
 <li><p>Other containers: <a href="./cptr/allocator.html"><code>allocator</code></a> puts their elements in the cage; <a href="./cptr/fancy_allocator.html"><code>fancy_allocator</code></a> gives containers that support fancy pointers 4-byte links.</p>
 </li>
@@ -499,9 +499,10 @@ int main() {
 <tr><td><a href="./cptr/allocator.html"><code>allocator</code></a> </td><td>A standard allocator that places objects in the cage, so that any std container&#x27;s elements can be pointed to with a 4-byte cptr::ptr.</td></tr>
 <tr><td><a href="./cptr/atomic_ptr.html"><code>atomic_ptr</code></a> </td><td>A compressed pointer that can be updated atomically.</td></tr>
 <tr><td><a href="./cptr/basic_ptr.html"><code>basic_ptr</code></a> </td><td>A nullable pointer to a T inside <code>Cage</code>, stored in 4 bytes. Use it as ptr&lt;T&gt; or strict_ptr&lt;T&gt;, declared below.</td></tr>
-<tr><td><a href="./cptr/bump_allocator.html"><code>bump_allocator</code></a> </td><td>A thread-safe bump (monotonic) allocator for user_cage: allocation is a pointer increment, deallocate() does nothing, and memory is committed in 1 MiB steps as it is used. Suited to data that is built once and freed all at once, or never.</td></tr>
+<tr><td><a href="./cptr/bump_allocator.html"><code>bump_allocator</code></a> </td><td>A thread-safe bump (monotonic) allocator for user_cage: allocation is a pointer increment, deallocate() does nothing, and memory is committed in 1 MiB steps as it is used. Suited to data that is built once and freed all at once, or never. Its lock is held across fork(), so a child process can allocate even if another thread was allocating when it forked.</td></tr>
 <tr><td><a href="./cptr/cage-0b.html"><code>cage</code></a> </td><td>A cage of 2^SizeLog2 bytes. Compressed pointers are 32-bit offsets shifted right by Shift, so a cage can be up to 2^(32 + Shift) bytes as long as all compressed pointers are aligned to 2^Shift.</td></tr>
 <tr><td><a href="./cptr/default_cage.html"><code>default_cage</code></a> </td><td>The default cage: 4 GiB, byte granularity.</td></tr>
+<tr><td><a href="./cptr/deleter.html"><code>deleter</code></a> </td><td>A deleter that calls destroy(), so that std::unique_ptr can own an object created by make(). Its <code>pointer</code> is ptr, so the unique_ptr itself is 4 bytes.</td></tr>
 <tr><td><a href="./cptr/fancy_allocator.html"><code>fancy_allocator</code></a> </td><td>An allocator whose <code>pointer</code> type is cptr::ptr, so that containers that take their link type from the allocator get 4-byte links.</td></tr>
 <tr><td><a href="./cptr/mapped_cage.html"><code>mapped_cage</code></a> </td><td>A cage of 2^SizeLog2 bytes whose memory is the file opened with open(). It has the interface the containers and cptr::ptr need, plus a root pointer stored in the file to find the data again after reopening.</td></tr>
 <tr><td><a href="./cptr/nonnull_ptr.html"><code>nonnull_ptr</code></a> </td><td>Like ptr, but never null, which makes decompression a single add.</td></tr>
@@ -533,12 +534,14 @@ int main() {
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./cptr/destroy.html"><code>destroy</code></a> </td><td>Destroy and free an object created by make().</td></tr>
-<tr><td><a href="./cptr/make.html"><code>make</code></a> </td><td>Allocate and construct a T inside the cage.</td></tr>
+<tr><td><a href="./cptr/destroy-06.html"><code>destroy</code></a> </td><td><code>destroy</code> overloads</td></tr>
+<tr><td><a href="./cptr/destroy_array.html"><code>destroy_array</code></a> </td><td>Destroy and free <code>n</code> elements created by make_array(n). <code>n</code> must be the count passed to make_array(), and <code>p</code> the pointer it returned (not a pointer to a base class: as for <code>delete[]</code>, that is undefined). Null is a no-op.</td></tr>
+<tr><td><a href="./cptr/make.html"><code>make</code></a> </td><td>Allocate and construct a T inside the cage, as <code>new T(args...)</code> does on the heap; free it with destroy().</td></tr>
+<tr><td><a href="./cptr/make_array.html"><code>make_array</code></a> </td><td>Allocate <code>n</code> value-initialised T in one block inside the cage, as <code>new T<a href="#">n</a></code> does on the heap; free them with destroy_array() and the same <code>n</code>. The count is not stored, which keeps the block the size of the elements, so it is the caller&#x27;s to keep, as for std::allocator.</td></tr>
 <tr><td><a href="./cptr/operator_plus-07.html"><code>operator+</code></a> </td><td>The pointer <code>n</code> elements further on.</td></tr>
-<tr><td><a href="./cptr/operator_minus-08.html"><code>operator-</code></a> </td><td>The number of elements between two pointers into the same array.</td></tr>
-<tr><td><a href="./cptr/operator_eq-09.html"><code>operator&#x3D;&#x3D;</code></a> </td><td>Equality operators</td></tr>
-<tr><td><a href="./cptr/operator_3way-05.html"><code>operator&lt;&#x3D;&gt;</code></a> </td><td>All pointers share the cage base, so offsets order like addresses.</td></tr>
+<tr><td><a href="./cptr/operator_minus-08.html"><code>operator-</code></a> </td><td>Subtraction operators</td></tr>
+<tr><td><a href="./cptr/operator_eq-092.html"><code>operator&#x3D;&#x3D;</code></a> </td><td>Equality operators</td></tr>
+<tr><td><a href="./cptr/operator_3way-05.html"><code>operator&lt;&#x3D;&gt;</code></a> </td><td>Three-way comparison operators</td></tr>
 </tbody>
 </table>
 

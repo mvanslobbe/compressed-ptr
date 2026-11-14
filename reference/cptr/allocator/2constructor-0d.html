@@ -448,12 +448,13 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Default constructor</p></div><!-- /brief -->
+<p>Stateless: all allocators for one cage are interchangeable.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L35">cptr/allocator.hpp</a>&gt;</code></p>
-<pre><code class="source-code cpp">allocator() noexcept = default;</code></pre>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L39">cptr/allocator.hpp</a>&gt;</code></p>
+<pre><code class="source-code cpp">constexpr
+allocator() noexcept = default;</code></pre>
 </div><!-- /synopsis -->
 </div><!-- /symbol -->
 

@@ -447,11 +447,14 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../user_cage.html">user_cage</a>::decompress</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>Zero maps back to nullptr. Clang turns the null check into a conditional move; GCC into a branch, which is cheap while it predicts well, as it does when most pointers are not null. In a constant expression only 0 can be decompressed.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/user_cage.hpp#L138">cptr/user_cage.hpp</a>&gt;</code></p>
-<pre><code class="source-code cpp">static
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/user_cage.hpp#L149">cptr/user_cage.hpp</a>&gt;</code></p>
+<pre><code class="source-code cpp">constexpr
+static
 void*
 decompress(uint32_t bits) noexcept;</code></pre>
 </div><!-- /synopsis -->

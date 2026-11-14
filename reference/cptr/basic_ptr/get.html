@@ -448,12 +448,13 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>The raw pointer, or <code>nullptr</code>: one add and a conditional move.</p></div><!-- /brief -->
+<p>The raw pointer, or <code>nullptr</code>: an add plus the null check, which clang turns into a conditional move and GCC usually into a branch. Constant-evaluable when null, since that does not need the cage base.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L131">cptr/ptr.hpp</a>&gt;</code></p>
-<pre><code class="source-code cpp">T*
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L171">cptr/ptr.hpp</a>&gt;</code></p>
+<pre><code class="source-code cpp">constexpr
+T*
 get() const noexcept;</code></pre>
 </div><!-- /synopsis -->
 </div><!-- /symbol -->

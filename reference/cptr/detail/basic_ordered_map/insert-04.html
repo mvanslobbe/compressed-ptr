@@ -447,41 +447,52 @@ window.MathJax = {
 <h1><a href="../../../cptr.html">cptr</a>::<a href="../../detail.html">detail</a>::<a href="../basic_ordered_map.html">basic_ordered_map</a>::insert</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p><code>insert</code> overloads</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L337">cptr/ordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L409">cptr/ordered_map.hpp</a>&gt;</code></p>
 
 <pre><code class="source-code cpp">void
 <a href="./insert-0f9.html">insert</a>(std::initializer_list&lt;value_type&gt; values);</code></pre>
 <span class="small"><a href="./insert-0f9.html"><em>» more...</em></a></span>
 
-
+<p>Insert a copy of <code>kv</code> unless its key is present. Strong guarantee.</p>
 <pre><code class="source-code cpp">std::pair&lt;iterator, bool&gt;
 <a href="./insert-0f4.html">insert</a>(<a href="./value_type.html">value_type</a> const& kv);</code></pre>
 <span class="small"><a href="./insert-0f4.html"><em>» more...</em></a></span>
 
-
+<p>Insert an element built from <code>kv</code> (such as a moved pair) unless its key is present.</p>
 <pre><code class="source-code cpp">template&lt;class P&gt;
 requires std::is_constructible_v&lt;value_type, P&amp;&amp;&gt;
 std::pair&lt;iterator, bool&gt;
 <a href="./insert-034.html">insert</a>(P&& kv);</code></pre>
 <span class="small"><a href="./insert-034.html"><em>» more...</em></a></span>
 
-
+<p>insert() with a hint, which is not used; returns the element with the key.</p>
 <pre><code class="source-code cpp"><a href="./iterator.html">iterator</a>
 <a href="./insert-0f2.html">insert</a>(
     <a href="./const_iterator.html">const_iterator</a>,
     <a href="./value_type.html">value_type</a> const& kv);</code></pre>
 <span class="small"><a href="./insert-0f2.html"><em>» more...</em></a></span>
 
-
+<p>Insert each element of [first, last) whose key is not present yet.] If one throws, the elements inserted before it stay.</p>
 <pre><code class="source-code cpp">template&lt;std::input_iterator It&gt;
 void
 <a href="./insert-039.html">insert</a>(
     It first,
     It last);</code></pre>
 <span class="small"><a href="./insert-039.html"><em>» more...</em></a></span>
+
+<p>insert() with a hint, which is not used; returns the element with the key.</p>
+<pre><code class="source-code cpp">template&lt;class P&gt;
+requires std::is_constructible_v&lt;value_type, P&amp;&amp;&gt;
+<a href="./iterator.html">iterator</a>
+<a href="./insert-08.html">insert</a>(
+    <a href="./const_iterator.html">const_iterator</a>,
+    P&& kv);</code></pre>
+<span class="small"><a href="./insert-08.html"><em>» more...</em></a></span>
 
 </div><!-- /synopsis -->
 </div><!-- /symbol -->

@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/list.hpp#L652">cptr/list.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/list.hpp#L776">cptr/list.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
@@ -460,7 +460,7 @@ using list = <a href="./detail/basic_list.html">detail::basic_list&lt;T, Cage, t
 </div><!-- /synopsis -->
 <div class="description">
 <h2>Description</h2>
-<p>Nodes are allocated in <code>Cage</code>. Every member behaves like its <code>std::list</code> counterpart; see <a href="./detail/basic_list.html"><code>detail::basic_list</code></a> for the full member list.</p>
+<p>Nodes are allocated in <code>Cage</code>. The members are those of <code>std::list</code> and behave like them, including the exception guarantees; the differences are that there is no allocator parameter (and so no get_allocator()), and that a moved-from list allocates a new sentinel when it is next inserted into. See <a href="./detail/basic_list.html"><code>detail::basic_list</code></a> for the full member list.</p>
 <pre><code class="language-cpp">
 #include "cptr/list.hpp"
 

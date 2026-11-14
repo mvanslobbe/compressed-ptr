@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L112">cptr/cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L166">cptr/cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class Tag,
     unsigned int SizeLog2 = 32,
@@ -481,17 +481,17 @@ class [[visibility(&quot;default&quot;)]] cage;</code></pre>
 </thead>
 <tbody>
 <tr><td><a href="./cage-0b/allocate.html"><code>allocate</code></a> </td><td>Allocate memory inside the cage. Throws std::bad_alloc when the cage is full or cannot be reserved.</td></tr>
-<tr><td><a href="./cage-0b/allocated_bytes.html"><code>allocated_bytes</code></a> </td><td>Bytes handed out and not yet freed, rounded up to the size class.</td></tr>
+<tr><td><a href="./cage-0b/allocated_bytes.html"><code>allocated_bytes</code></a> </td><td>Bytes handed out and not yet freed, rounded up to the size class. While other threads allocate and free, this is a snapshot that can be off by the blocks they move meanwhile.</td></tr>
 <tr><td><a href="./cage-0b/base.html"><code>base</code></a> </td><td>Zero until init() succeeds. Any thread that obtained a pointer into the cage is ordered after init(), so reading the base needs no atomics.</td></tr>
 <tr><td><a href="./cage-0b/committed_bytes.html"><code>committed_bytes</code></a> </td><td>Bytes of the cage backed by committed memory.</td></tr>
-<tr><td><a href="./cage-0b/compress.html"><code>compress</code></a> </td><td></td></tr>
+<tr><td><a href="./cage-0b/compress.html"><code>compress</code></a> </td><td>The cage is aligned to its own size, so a pointer&#x27;s offset is its low SizeLog2 bits: compressing is a mask and a shift, and nullptr maps to 0 with no branch. A pointer from outside the cage is caught only by CPTR_CHECK. In a constant expression only nullptr can be compressed.</td></tr>
 <tr><td><a href="./cage-0b/contains.html"><code>contains</code></a> </td><td></td></tr>
 <tr><td><a href="./cage-0b/deallocate-07.html"><code>deallocate</code></a> </td><td>Free memory from allocate(). The size is not needed: the span table records how every span is used.</td></tr>
-<tr><td><a href="./cage-0b/decompress.html"><code>decompress</code></a> </td><td>Zero maps back to nullptr. Compilers turn this into a conditional move, which keeps the null check off the critical path of a pointer chase.</td></tr>
+<tr><td><a href="./cage-0b/decompress.html"><code>decompress</code></a> </td><td>Zero maps back to nullptr. Clang turns the null check into a conditional move; GCC into a branch, which is cheap while it predicts well, as it does when most pointers are not null. In a constant expression only 0 can be decompressed.</td></tr>
 <tr><td><a href="./cage-0b/decompress_nonnull.html"><code>decompress_nonnull</code></a> </td><td></td></tr>
 <tr><td><a href="./cage-0b/init.html"><code>init</code></a> </td><td>Reserve the cage. Called lazily by allocate(); call it early to fail fast. Returns false if the address space could not be reserved.</td></tr>
-<tr><td><a href="./cage-0b/resource.html"><code>resource</code></a> </td><td>A std::pmr::memory_resource that allocates from this cage.</td></tr>
-<tr><td><a href="./cage-0b/trim.html"><code>trim</code></a> </td><td>Return the memory the allocator keeps for reuse to the OS: this thread&#x27;s cached blocks go back to their slabs, and empty slabs are purged. Freed memory is otherwise returned on its own once it has been unused for a quarter of a second, checked whenever a slab becomes empty; other threads&#x27; cached blocks go back when they exit.</td></tr>
+<tr><td><a href="./cage-0b/resource.html"><code>resource</code></a> </td><td>A std::pmr::memory_resource that allocates from this cage. It is never destroyed, so containers with static storage duration can still free into it during program exit, after the thread caches are gone: such frees go straight to the slabs.</td></tr>
+<tr><td><a href="./cage-0b/trim.html"><code>trim</code></a> </td><td>Return the memory the allocator keeps for reuse to the OS: this thread&#x27;s cached blocks go back to their slabs, and every slab with no live block is released, including the slab each size class is currently carving blocks from, as is the committed but unused end of the bump region. Blocks cached by other threads count as live; they go back when those threads exit. Without trim(), a slab that becomes empty is kept for reuse until it has been empty for a quarter of a second (checked whenever a slab becomes empty) or more than 64 MiB of empty slabs are kept.</td></tr>
 <tr><td><a href="./cage-0b/try_allocate.html"><code>try_allocate</code></a> </td><td>As allocate(), but returns nullptr on failure.</td></tr>
 </tbody>
 </table>

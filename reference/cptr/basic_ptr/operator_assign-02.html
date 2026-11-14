@@ -452,26 +452,21 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L112">cptr/ptr.hpp</a>&gt;</code></p>
-<p>Assignment operator</p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L152">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Compresses <code>p</code>, which must be null or point into the cage. Not for strict_ptr, which needs an explicit <code>s &#x3D; strict_ptr&lt;T&gt;(p)</code>. A literal <code>0</code> or <code>NULL</code> lands here too, and stays constant-evaluable.</p>
 <pre><code class="source-code cpp">constexpr
 <a href="../basic_ptr.html">basic_ptr</a>&
-<a href="./operator_assign-0a.html">operator&#x3D;</a>(std::nullptr_t value) noexcept;</code></pre>
-<span class="small"><a href="./operator_assign-0a.html"><em>» more...</em></a></span>
-
-<p>Assignment operator</p>
-<pre><code class="source-code cpp"><a href="../basic_ptr.html">basic_ptr</a>&
-<a href="./operator_assign-098.html">operator&#x3D;</a>(T* p) noexcept
+<a href="./operator_assign-09.html">operator&#x3D;</a>(T* p) noexcept
 requires (!Strict);</code></pre>
-<span class="small"><a href="./operator_assign-098.html"><em>» more...</em></a></span>
+<span class="small"><a href="./operator_assign-09.html"><em>» more...</em></a></span>
 
-<p>Assignment operator</p>
-<pre><code class="source-code cpp">template&lt;class I&gt;
-requires std::is_integral_v&lt;I&gt;
+<p>Null. A template, so that a literal <code>0</code> picks the <code>T*</code> overload above (or, for strict_ptr, the null-literal constructor) instead of being ambiguous.</p>
+<pre><code class="source-code cpp">template&lt;class N&gt;
+requires std::is_null_pointer_v&lt;N&gt;
 constexpr
 <a href="../basic_ptr.html">basic_ptr</a>&
-<a href="./operator_assign-091.html">operator&#x3D;</a>(I zero) noexcept;</code></pre>
-<span class="small"><a href="./operator_assign-091.html"><em>» more...</em></a></span>
+<a href="./operator_assign-08.html">operator&#x3D;</a>(N value) noexcept;</code></pre>
+<span class="small"><a href="./operator_assign-08.html"><em>» more...</em></a></span>
 
 </div><!-- /synopsis -->
 </div><!-- /symbol -->

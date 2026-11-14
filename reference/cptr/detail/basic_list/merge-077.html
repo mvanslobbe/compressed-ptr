@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Merge sorted <code>other</code> into this sorted list. Stable: of equal elements, this list&#x27;s come first.</p></div><!-- /brief -->
+<p>Merge sorted <code>other</code> into this sorted list. Stable: of equal elements, this list&#x27;s come first. If <code>comp</code> throws, the elements moved so far stay here, the rest stay in <code>other</code>, both sizes are right, and the exception propagates.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/list.hpp#L331">cptr/list.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/list.hpp#L367">cptr/list.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class Compare = std::less&lt;&gt;&gt;
 void
 merge(
@@ -466,7 +466,7 @@ merge(
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><strong>other</strong></td><td>The class behind cptr::list; use that alias. Its members behave like those of <code>std::list</code>.</td></tr>
+<tr><td><strong>other</strong></td><td>The class behind cptr::list; use that alias. Its members behave like those of <code>std::list</code>; the alias lists the differences.</td></tr>
 </tbody>
 </table>
 </div><!-- /parameters -->

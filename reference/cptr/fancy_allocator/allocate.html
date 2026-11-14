@@ -447,13 +447,19 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../fancy_allocator.html">fancy_allocator</a>::allocate</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>Memory for <code>n</code> T in the cage, uninitialised. Throws std::bad_array_new_length if <code>n</code> exceeds max_size(), and std::bad_alloc when the cage is full.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L45">cptr/fancy_allocator.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L59">cptr/fancy_allocator.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp"><a href="./pointer.html">pointer</a>
 allocate(std::size_t n);</code></pre>
 </div><!-- /synopsis -->
+<div class="return-value">
+<h2>Return Value</h2>
+<p>A compressed pointer to an element.</p>
+</div><!-- /return-value -->
 </div><!-- /symbol -->
 
 </div>

@@ -448,12 +448,32 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>All pointers share the cage base, so offsets order like addresses.</p></div><!-- /brief -->
+<p>Three-way comparison operators</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L255">cptr/ptr.hpp</a>&gt;</code></p>
-<p>All pointers share the cage base, so offsets order like addresses.</p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L323">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Orders a ptr and a strict_ptr to the same type by address.</p>
+<pre><code class="source-code cpp">template&lt;bool S&gt;
+requires (S !&#x3D; Strict)
+constexpr
+std::strong_ordering
+<a href="./operator_3way-0d6.html">operator&lt;&#x3D;&gt;</a>(
+    <a href="./basic_ptr.html">basic_ptr</a> a,
+    <a href="./basic_ptr.html">basic_ptr&lt;T, Cage, S&gt;</a> const& b) noexcept;</code></pre>
+<span class="small"><a href="./operator_3way-0d6.html"><em>» more...</em></a></span>
+
+<p>Orders like <code>get() &lt;&#x3D;&gt; b</code> through std::compare_three_way, so null orders first and unrelated pointers get a total order.</p>
+<pre><code class="source-code cpp">template&lt;class U&gt;
+requires std::is_convertible_v&lt;U*, T*&gt;
+constexpr
+std::strong_ordering
+<a href="./operator_3way-0f.html">operator&lt;&#x3D;&gt;</a>(
+    <a href="./basic_ptr.html">basic_ptr</a> a,
+    U* b) noexcept;</code></pre>
+<span class="small"><a href="./operator_3way-0f.html"><em>» more...</em></a></span>
+
+<p>All pointers share the cage base, so offsets order like addresses. Null orders first.</p>
 <pre><code class="source-code cpp">constexpr
 std::strong_ordering
 <a href="./operator_3way-04.html">operator&lt;&#x3D;&gt;</a>(
@@ -461,12 +481,13 @@ std::strong_ordering
     <a href="./basic_ptr.html">basic_ptr</a> b) noexcept;</code></pre>
 <span class="small"><a href="./operator_3way-04.html"><em>» more...</em></a></span>
 
-<p>Three-way comparison operator</p>
-<pre><code class="source-code cpp">std::strong_ordering
-<a href="./operator_3way-0d.html">operator&lt;&#x3D;&gt;</a>(
+<p>Orders like the addresses.</p>
+<pre><code class="source-code cpp">constexpr
+std::strong_ordering
+<a href="./operator_3way-0d1.html">operator&lt;&#x3D;&gt;</a>(
     <a href="./nonnull_ptr.html">nonnull_ptr</a> a,
     <a href="./nonnull_ptr.html">nonnull_ptr</a> b) noexcept;</code></pre>
-<span class="small"><a href="./operator_3way-0d.html"><em>» more...</em></a></span>
+<span class="small"><a href="./operator_3way-0d1.html"><em>» more...</em></a></span>
 
 </div><!-- /synopsis -->
 </div><!-- /symbol -->

@@ -448,16 +448,17 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Construct from <code>basic_ptr</code></p></div><!-- /brief -->
+<p>The same explicit casts from another compressed pointer. From <code>void</code> the offset is copied (and this is constexpr); base to derived goes through a raw pointer, except for null.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L106">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L143">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class U,
     bool S&gt;
 requires (!std::is_convertible_v&lt;U*, T*&gt; &amp;&amp;
              requires(U* u) { static_cast&lt;T*&gt;(u); })
+constexpr
 explicit
 basic_ptr(<a href="../basic_ptr.html">basic_ptr&lt;U, Cage, S&gt;</a> const& other) noexcept;</code></pre>
 </div><!-- /synopsis -->

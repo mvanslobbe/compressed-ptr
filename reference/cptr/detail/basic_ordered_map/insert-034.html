@@ -447,10 +447,12 @@ window.MathJax = {
 <h1><a href="../../../cptr.html">cptr</a>::<a href="../../detail.html">detail</a>::<a href="../basic_ordered_map.html">basic_ordered_map</a>::insert</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>Insert an element built from <code>kv</code> (such as a moved pair) unless its key is present.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L340">cptr/ordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L414">cptr/ordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class P&gt;
 requires std::is_constructible_v&lt;value_type, P&amp;&amp;&gt;
 std::pair&lt;iterator, bool&gt;

@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Reserve the cage and construct the allocator. Called lazily by allocate(); returns false if the address space could not be reserved.</p></div><!-- /brief -->
+<p>Reserve the cage and construct the allocator. Called lazily by allocate(); returns false if the address space could not be reserved or the allocator&#x27;s constructor threw. A failed call gives the address space back, and a later call tries again.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/user_cage.hpp#L91">cptr/user_cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/user_cage.hpp#L93">cptr/user_cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">static
 bool
 init() noexcept;</code></pre>

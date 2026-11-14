@@ -447,10 +447,12 @@ window.MathJax = {
 <h1><a href="../../../cptr.html">cptr</a>::<a href="../../detail.html">detail</a>::<a href="../basic_forward_list.html">basic_forward_list</a>::unique</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>Erase all but the first of each run of consecutive elements for which <code>pred</code> is true, and return how many were erased. If <code>pred</code> throws, the elements already found are erased and the exception propagates.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L350">cptr/forward_list.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L396">cptr/forward_list.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class Pred = std::equal_to&lt;&gt;&gt;
 <a href="./size_type.html">size_type</a>
 unique(Pred pred = Pred());</code></pre>

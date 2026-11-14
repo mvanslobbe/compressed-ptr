@@ -470,26 +470,26 @@ cptr::destroy(l);
 <h2>Types</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>
-<tr><th>Name</th></tr>
+<tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./fancy_allocator/rebind.html"><code>rebind</code></a> </td></tr>
+<tr><td><a href="./fancy_allocator/rebind.html"><code>rebind</code></a> </td><td>The same allocator for another element type.</td></tr>
 </tbody>
 </table>
 
 <h2>Type Aliases</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>
-<tr><th>Name</th></tr>
+<tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./fancy_allocator/const_pointer.html"><code>const_pointer</code></a> </td></tr>
-<tr><td><a href="./fancy_allocator/const_void_pointer.html"><code>const_void_pointer</code></a> </td></tr>
-<tr><td><a href="./fancy_allocator/difference_type.html"><code>difference_type</code></a> </td></tr>
-<tr><td><a href="./fancy_allocator/pointer.html"><code>pointer</code></a> </td></tr>
-<tr><td><a href="./fancy_allocator/size_type.html"><code>size_type</code></a> </td></tr>
-<tr><td><a href="./fancy_allocator/value_type.html"><code>value_type</code></a> </td></tr>
-<tr><td><a href="./fancy_allocator/void_pointer.html"><code>void_pointer</code></a> </td></tr>
+<tr><td><a href="./fancy_allocator/const_pointer.html"><code>const_pointer</code></a> </td><td>A compressed pointer to a const element.</td></tr>
+<tr><td><a href="./fancy_allocator/const_void_pointer.html"><code>const_void_pointer</code></a> </td><td>A compressed <code>const void*</code>.</td></tr>
+<tr><td><a href="./fancy_allocator/difference_type.html"><code>difference_type</code></a> </td><td>The type of pointer differences.</td></tr>
+<tr><td><a href="./fancy_allocator/pointer.html"><code>pointer</code></a> </td><td>A compressed pointer to an element.</td></tr>
+<tr><td><a href="./fancy_allocator/size_type.html"><code>size_type</code></a> </td><td>The type of element counts.</td></tr>
+<tr><td><a href="./fancy_allocator/value_type.html"><code>value_type</code></a> </td><td>The element type.</td></tr>
+<tr><td><a href="./fancy_allocator/void_pointer.html"><code>void_pointer</code></a> </td><td>A compressed <code>void*</code>.</td></tr>
 </tbody>
 </table>
 
@@ -500,10 +500,11 @@ cptr::destroy(l);
 </thead>
 <tbody>
 <tr><td><a href="./fancy_allocator/2constructor-0e.html"><code>fancy_allocator</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
-<tr><td><a href="./fancy_allocator/allocate.html"><code>allocate</code></a> </td><td></td></tr>
-<tr><td><a href="./fancy_allocator/construct-03.html"><code>construct</code></a> </td><td>std::allocator_traits::construct takes a raw pointer; containers written for fancy pointers pass the allocator&#x27;s pointer type instead.</td></tr>
-<tr><td><a href="./fancy_allocator/deallocate.html"><code>deallocate</code></a> </td><td></td></tr>
-<tr><td><a href="./fancy_allocator/destroy-0c8.html"><code>destroy</code></a> </td><td></td></tr>
+<tr><td><a href="./fancy_allocator/allocate.html"><code>allocate</code></a> </td><td>Memory for <code>n</code> T in the cage, uninitialised. Throws std::bad_array_new_length if <code>n</code> exceeds max_size(), and std::bad_alloc when the cage is full.</td></tr>
+<tr><td><a href="./fancy_allocator/construct-03.html"><code>construct</code></a> </td><td><code>construct</code> overloads</td></tr>
+<tr><td><a href="./fancy_allocator/deallocate.html"><code>deallocate</code></a> </td><td>Frees memory from allocate(); the elements must already be destroyed.</td></tr>
+<tr><td><a href="./fancy_allocator/destroy-0c8.html"><code>destroy</code></a> </td><td><code>destroy</code> overloads</td></tr>
+<tr><td><a href="./fancy_allocator/max_size.html"><code>max_size</code></a> </td><td>The most T that one allocation could hold: no more than fit in the cage.</td></tr>
 </tbody>
 </table>
 
@@ -514,7 +515,7 @@ cptr::destroy(l);
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code><a href="./operator_eq-0d.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
+<tr><td><code><a href="./operator_eq-0d.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Always true: memory from one fancy_allocator for a cage can be freed by any other for the same cage.</td></tr>
 </tbody>
 </table>
 </div><!-- /friends -->

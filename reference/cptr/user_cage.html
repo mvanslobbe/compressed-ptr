@@ -485,13 +485,13 @@ class [[visibility(&quot;default&quot;)]] user_cage;</code></pre>
 <tr><td><a href="./user_cage/allocate.html"><code>allocate</code></a> </td><td>Throws std::bad_alloc when the allocator returns nullptr.</td></tr>
 <tr><td><a href="./user_cage/allocator.html"><code>allocator</code></a> </td><td>The allocator, constructed by init(). It is never destroyed, so objects with static storage duration can free into it during exit.</td></tr>
 <tr><td><a href="./user_cage/base.html"><code>base</code></a> </td><td></td></tr>
-<tr><td><a href="./user_cage/compress.html"><code>compress</code></a> </td><td></td></tr>
+<tr><td><a href="./user_cage/compress.html"><code>compress</code></a> </td><td>The cage is aligned to its own size, so a pointer&#x27;s offset is its low SizeLog2 bits: compressing is a mask and a shift, and nullptr maps to 0 with no branch. A pointer from outside the cage is caught only by CPTR_CHECK. In a constant expression only nullptr can be compressed.</td></tr>
 <tr><td><a href="./user_cage/contains.html"><code>contains</code></a> </td><td></td></tr>
 <tr><td><a href="./user_cage/deallocate-09.html"><code>deallocate</code></a> </td><td></td></tr>
-<tr><td><a href="./user_cage/decompress.html"><code>decompress</code></a> </td><td></td></tr>
+<tr><td><a href="./user_cage/decompress.html"><code>decompress</code></a> </td><td>Zero maps back to nullptr. Clang turns the null check into a conditional move; GCC into a branch, which is cheap while it predicts well, as it does when most pointers are not null. In a constant expression only 0 can be decompressed.</td></tr>
 <tr><td><a href="./user_cage/decompress_nonnull.html"><code>decompress_nonnull</code></a> </td><td></td></tr>
-<tr><td><a href="./user_cage/init.html"><code>init</code></a> </td><td>Reserve the cage and construct the allocator. Called lazily by allocate(); returns false if the address space could not be reserved.</td></tr>
-<tr><td><a href="./user_cage/try_allocate.html"><code>try_allocate</code></a> </td><td></td></tr>
+<tr><td><a href="./user_cage/init.html"><code>init</code></a> </td><td>Reserve the cage and construct the allocator. Called lazily by allocate(); returns false if the address space could not be reserved or the allocator&#x27;s constructor threw. A failed call gives the address space back, and a later call tries again.</td></tr>
+<tr><td><a href="./user_cage/try_allocate.html"><code>try_allocate</code></a> </td><td>As allocate(), but returns nullptr on failure. A request for zero bytes asks the allocator for one, so every allocation is distinct.</td></tr>
 </tbody>
 </table>
 

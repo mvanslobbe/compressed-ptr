@@ -452,20 +452,24 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L289">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L426">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
 class nonnull_ptr;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>It converts implicitly to ptr and strict_ptr (to the same type, a base or <code>void</code>), and to a nonnull_ptr to a base. destroy() accepts it.</p>
+</div><!-- /description -->
 <h2>Type Aliases</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>
-<tr><th>Name</th></tr>
+<tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./nonnull_ptr/cage_type.html"><code>cage_type</code></a> </td></tr>
-<tr><td><a href="./nonnull_ptr/element_type.html"><code>element_type</code></a> </td></tr>
+<tr><td><a href="./nonnull_ptr/cage_type.html"><code>cage_type</code></a> </td><td>The cage the pointer is compressed against.</td></tr>
+<tr><td><a href="./nonnull_ptr/element_type.html"><code>element_type</code></a> </td><td>The type pointed to.</td></tr>
 </tbody>
 </table>
 
@@ -475,12 +479,23 @@ class nonnull_ptr;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./nonnull_ptr/2constructor-09.html"><code>nonnull_ptr</code></a>         <span class="small">[constructor]</span></td><td>Compress <code>p</code>, which must be in the cage and must not be null.</td></tr>
-<tr><td><a href="./nonnull_ptr/bits.html"><code>bits</code></a> </td><td></td></tr>
+<tr><td><a href="./nonnull_ptr/2constructor-09.html"><code>nonnull_ptr</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
+<tr><td><a href="./nonnull_ptr/bits.html"><code>bits</code></a> </td><td>The compressed representation, as for basic_ptr::bits(); never 0.</td></tr>
 <tr><td><a href="./nonnull_ptr/get.html"><code>get</code></a> </td><td>The raw pointer: a single add, with no null check.</td></tr>
 <tr><td><a href="./nonnull_ptr/operator_star.html"><code>operator*</code></a> </td><td>The object pointed to.</td></tr>
 <tr><td><a href="./nonnull_ptr/operator_ptr.html"><code>operator-&gt;</code></a> </td><td>Member access.</td></tr>
-<tr><td><a href="./nonnull_ptr/2conversion.html"><code>operator T*</code></a> </td><td>Converts implicitly to the raw pointer.</td></tr>
+<tr><td><a href="./nonnull_ptr/2conversion-06.html"><code>operator T*</code></a> </td><td>Converts implicitly to the raw pointer.</td></tr>
+<tr><td><a href="./nonnull_ptr/2conversion-04.html"><code>operator basic_ptr&lt;U, Cage, S&gt;</code></a> </td><td>Converts implicitly to a nullable ptr or strict_ptr to <code>U</code>, where <code>T*</code> converts implicitly to <code>U*</code>. The pointer is already in the cage, so strict_ptr accepts it implicitly too.</td></tr>
+</tbody>
+</table>
+
+<h2>Static Member Functions</h2>
+<table style="table-layout: fixed; width: 100%;">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="./nonnull_ptr/from_bits.html"><code>from_bits</code></a> </td><td>The pointer whose bits() are <code>bits</code>, which must not be 0 (that is null in a ptr) and must come from a pointer into the same cage; see basic_ptr::from_bits.</td></tr>
 </tbody>
 </table>
 
@@ -491,11 +506,22 @@ class nonnull_ptr;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code><a href="./operator_3way-0d.html">cptr::operator&lt;&#x3D;&gt;</a></code></td><td>Three-way comparison operator</td></tr>
-<tr><td><code><a href="./operator_eq-05.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
+<tr><td><code><a href="./operator_3way-0d1.html">cptr::operator&lt;&#x3D;&gt;</a></code></td><td>Orders like the addresses.</td></tr>
+<tr><td><code><a href="./operator_eq-05.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Same address.</td></tr>
 </tbody>
 </table>
 </div><!-- /friends -->
+<div class="non-member-functions">
+<h2>Non-Member Functions</h2>
+<table style="table-layout: fixed; width: 100%;">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="./destroy-09.html"><code>destroy</code></a></td><td>destroy() for a nonnull_ptr.</td></tr>
+</tbody>
+</table>
+</div><!-- /non-member-functions -->
 </div><!-- /symbol -->
 
 </div>

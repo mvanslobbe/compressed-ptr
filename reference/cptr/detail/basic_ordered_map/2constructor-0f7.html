@@ -452,12 +452,12 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L121">cptr/ordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L149">cptr/ordered_map.hpp</a>&gt;</code></p>
 <p>Allocates the header, so it can throw std::bad_alloc.</p>
 <pre><code class="source-code cpp"><a href="./2constructor-0d.html">basic_ordered_map</a>();</code></pre>
 <span class="small"><a href="./2constructor-0d.html"><em>» more...</em></a></span>
 
-<p>Copies the tree&#x27;s shape, in linear time.</p>
+<p>Copies the tree&#x27;s shape, in linear time. <code>other</code> may be a moved-from map, which has no header.</p>
 <pre><code class="source-code cpp"><a href="./2constructor-05.html">basic_ordered_map</a>(<a href="../basic_ordered_map.html">basic_ordered_map</a> const& other);</code></pre>
 <span class="small"><a href="./2constructor-05.html"><em>» more...</em></a></span>
 

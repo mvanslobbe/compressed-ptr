@@ -448,18 +448,23 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Construct from <code>basic_ptr</code></p></div><!-- /brief -->
+<p>Converts from a pointer to <code>U</code> where <code>U*</code> converts implicitly to <code>T*</code>: adding cv-qualifiers, to <code>void</code>, or derived to base. Only the derived-to-base case at a non-zero offset decompresses; the others copy the offset.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L93">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L128">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class U,
     bool S&gt;
 requires std::is_convertible_v&lt;U*, T*&gt;
 constexpr
+explicit(Strict &amp;&amp; !S)
 basic_ptr(<a href="../basic_ptr.html">basic_ptr&lt;U, Cage, S&gt;</a> const& other) noexcept;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>Implicit, except from ptr to strict_ptr: a ptr may hold a pointer that was compressed implicitly, so turning it into a strict_ptr takes an explicit <code>strict_ptr&lt;T&gt;(p)</code>. strict_ptr to ptr stays implicit.</p>
+</div><!-- /description -->
 <div class="parameters">
 <h2>Parameters</h2>
 <table style="table-layout: fixed; width: 100%;">

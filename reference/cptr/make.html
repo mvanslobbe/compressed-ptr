@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Allocate and construct a T inside the cage.</p></div><!-- /brief -->
+<p>Allocate and construct a T inside the cage, as <code>new T(args...)</code> does on the heap; free it with destroy().</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L331">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L526">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>,
@@ -460,6 +460,10 @@ window.MathJax = {
 <a href="./ptr.html">ptr&lt;T, Cage&gt;</a>
 make(Args&&... args);</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>Throws std::bad_alloc when the cage is full. If T&#x27;s constructor throws, the memory is freed and the exception propagates.</p>
+</div><!-- /description -->
 <div class="return-value">
 <h2>Return Value</h2>
 <p>The usual compressed pointer: converts implicitly from and to T*.</p>

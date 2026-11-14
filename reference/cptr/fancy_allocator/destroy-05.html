@@ -447,14 +447,27 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../fancy_allocator.html">fancy_allocator</a>::destroy</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>As above, at a compressed pointer.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L69">cptr/fancy_allocator.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L92">cptr/fancy_allocator.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class U&gt;
 void
 destroy(<a href="../ptr.html">ptr&lt;U, Cage&gt;</a> p) noexcept;</code></pre>
 </div><!-- /synopsis -->
+<div class="parameters">
+<h2>Parameters</h2>
+<table style="table-layout: fixed; width: 100%;">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>p</strong></td><td>The usual compressed pointer: converts implicitly from and to T*.</td></tr>
+</tbody>
+</table>
+</div><!-- /parameters -->
 </div><!-- /symbol -->
 
 </div>

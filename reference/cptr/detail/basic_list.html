@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>The class behind cptr::list; use that alias. Its members behave like those of <code>std::list</code>.</p></div><!-- /brief -->
+<p>The class behind cptr::list; use that alias. Its members behave like those of <code>std::list</code>; the alias lists the differences.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/list.hpp#L32">cptr/list.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/list.hpp#L33">cptr/list.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage,
@@ -509,7 +509,7 @@ class basic_list;</code></pre>
 <tr><td><a href="./basic_list/clear.html"><code>clear</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/crbegin.html"><code>crbegin</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/crend.html"><code>crend</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_list/emplace.html"><code>emplace</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_list/emplace.html"><code>emplace</code></a> </td><td>Construct an element from <code>args</code> before <code>pos</code>. Like std, it direct-initialises the element, so only the conversions std accepts compile.</td></tr>
 <tr><td><a href="./basic_list/emplace_back.html"><code>emplace_back</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/emplace_front.html"><code>emplace_front</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/empty.html"><code>empty</code></a> </td><td></td></tr>
@@ -518,22 +518,22 @@ class basic_list;</code></pre>
 <tr><td><a href="./basic_list/front-05.html"><code>front</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/insert-0c.html"><code>insert</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/max_size.html"><code>max_size</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_list/merge-00.html"><code>merge</code></a> </td><td>Merge sorted <code>other</code> into this sorted list. Stable: of equal elements, this list&#x27;s come first.</td></tr>
+<tr><td><a href="./basic_list/merge-00.html"><code>merge</code></a> </td><td>Merge sorted <code>other</code> into this sorted list. Stable: of equal elements, this list&#x27;s come first. If <code>comp</code> throws, the elements moved so far stay here, the rest stay in <code>other</code>, both sizes are right, and the exception propagates.</td></tr>
 <tr><td><a href="./basic_list/pop_back.html"><code>pop_back</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/pop_front.html"><code>pop_front</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/push_back-056c.html"><code>push_back</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/push_front-02.html"><code>push_front</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/rbegin-0f.html"><code>rbegin</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_list/remove.html"><code>remove</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_list/remove_if.html"><code>remove_if</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_list/remove.html"><code>remove</code></a> </td><td>Erase the elements equal to <code>value</code> and return how many. Unlinked nodes are destroyed only at the end, so <code>value</code> may refer to an element of this list. If a comparison throws, the elements already found are erased, the rest are kept, and the exception propagates.</td></tr>
+<tr><td><a href="./basic_list/remove_if.html"><code>remove_if</code></a> </td><td>Erase the elements for which <code>pred</code> is true and return how many. If <code>pred</code> throws, the elements already found are erased, the rest are kept, and the exception propagates.</td></tr>
 <tr><td><a href="./basic_list/rend-01.html"><code>rend</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/resize-03.html"><code>resize</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/reverse.html"><code>reverse</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_list/size.html"><code>size</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_list/sort.html"><code>sort</code></a> </td><td>Stable merge sort on the links; no element is copied or moved.</td></tr>
+<tr><td><a href="./basic_list/sort.html"><code>sort</code></a> </td><td>Stable merge sort on the links; no element is copied or moved. If <code>comp</code> throws, the list keeps all its elements in an unspecified order and the exception propagates.</td></tr>
 <tr><td><a href="./basic_list/splice-03.html"><code>splice</code></a> </td><td><code>splice</code> overloads</td></tr>
 <tr><td><a href="./basic_list/swap.html"><code>swap</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_list/unique.html"><code>unique</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_list/unique.html"><code>unique</code></a> </td><td>Erase all but the first of each run of consecutive elements for which <code>pred</code> is true, and return how many were erased. If <code>pred</code> throws, the elements already found are erased and the exception propagates.</td></tr>
 </tbody>
 </table>
 
@@ -554,7 +554,7 @@ class basic_list;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code><a href="./operator_3way-0ee.html">cptr::detail::operator&lt;&#x3D;&gt;</a></code></td><td>Three-way comparison operator</td></tr>
+<tr><td><code><a href="./operator_3way-02.html">cptr::detail::operator&lt;&#x3D;&gt;</a></code></td><td>Lexicographical, with std&#x27;s synth-three-way: elements that have only <code>operator&lt;</code> give a std::weak_ordering.</td></tr>
 <tr><td><code><a href="./operator_eq-06.html">cptr::detail::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
 <tr><td><code><a href="./swap-0c.html">cptr::detail::swap</a></code></td><td></td></tr>
 </tbody>

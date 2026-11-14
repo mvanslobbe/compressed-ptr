@@ -447,10 +447,12 @@ window.MathJax = {
 <h1><a href="../../../cptr.html">cptr</a>::<a href="../../detail.html">detail</a>::<a href="../basic_list.html">basic_list</a>::remove</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>Erase the elements equal to <code>value</code> and return how many. Unlinked nodes are destroyed only at the end, so <code>value</code> may refer to an element of this list. If a comparison throws, the elements already found are erased, the rest are kept, and the exception propagates.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/list.hpp#L413">cptr/list.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/list.hpp#L441">cptr/list.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp"><a href="./size_type.html">size_type</a>
 remove(T const& value);</code></pre>
 </div><!-- /synopsis -->

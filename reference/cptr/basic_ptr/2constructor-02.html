@@ -452,49 +452,53 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L87">cptr/ptr.hpp</a>&gt;</code></p>
-<p>Default constructor</p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L102">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Null.</p>
 <pre><code class="source-code cpp">constexpr
 <a href="./2constructor-06e.html">basic_ptr</a>() noexcept = default;</code></pre>
 <span class="small"><a href="./2constructor-06e.html"><em>» more...</em></a></span>
 
-<p>Construct from <code>basic_ptr</code></p>
+<p>Converts from a pointer to <code>U</code> where <code>U*</code> converts implicitly to <code>T*</code>: adding cv-qualifiers, to <code>void</code>, or derived to base. Only the derived-to-base case at a non-zero offset decompresses; the others copy the offset.</p>
 <pre><code class="source-code cpp">template&lt;
     class U,
     bool S&gt;
 requires std::is_convertible_v&lt;U*, T*&gt;
 constexpr
+explicit(Strict &amp;&amp; !S)
 <a href="./2constructor-0c.html">basic_ptr</a>(<a href="../basic_ptr.html">basic_ptr&lt;U, Cage, S&gt;</a> const& other) noexcept;</code></pre>
 <span class="small"><a href="./2constructor-0c.html"><em>» more...</em></a></span>
 
-<p>Construct from <code>basic_ptr</code></p>
+<p>The same explicit casts from another compressed pointer. From <code>void</code> the offset is copied (and this is constexpr); base to derived goes through a raw pointer, except for null.</p>
 <pre><code class="source-code cpp">template&lt;
     class U,
     bool S&gt;
 requires (!std::is_convertible_v&lt;U*, T*&gt; &amp;&amp;
              requires(U* u) { static_cast&lt;T*&gt;(u); })
+constexpr
 explicit
 <a href="./2constructor-069.html">basic_ptr</a>(<a href="../basic_ptr.html">basic_ptr&lt;U, Cage, S&gt;</a> const& other) noexcept;</code></pre>
 <span class="small"><a href="./2constructor-069.html"><em>» more...</em></a></span>
 
-<p>Construct from <code>nullptr_t</code></p>
+<p>Null, from a literal <code>0</code> or <code>NULL</code>, which older code and some fancy pointer users (plf::list) write for null pointers. Like a raw pointer, it accepts only a null pointer constant: an integer variable, a non-zero literal or a <code>bool</code> does not convert.</p>
 <pre><code class="source-code cpp">constexpr
-<a href="./2constructor-00.html">basic_ptr</a>(std::nullptr_t value) noexcept;</code></pre>
-<span class="small"><a href="./2constructor-00.html"><em>» more...</em></a></span>
+<a href="./2constructor-0f.html">basic_ptr</a>(<a href="../detail/null_literal.html">detail::null_literal</a> value) noexcept;</code></pre>
+<span class="small"><a href="./2constructor-0f.html"><em>» more...</em></a></span>
 
-<p>Construct from <code>T</code></p>
-<pre><code class="source-code cpp">explicit(Strict)
-<a href="./2constructor-04.html">basic_ptr</a>(T* p) noexcept;</code></pre>
-<span class="small"><a href="./2constructor-04.html"><em>» more...</em></a></span>
-
-<p>Accepts a literal 0 or NULL, which older code uses for null pointers.</p>
-<pre><code class="source-code cpp">template&lt;class I&gt;
-requires std::is_integral_v&lt;I&gt;
+<p>Null.</p>
+<pre><code class="source-code cpp">template&lt;class N&gt;
+requires std::is_null_pointer_v&lt;N&gt;
 constexpr
-<a href="./2constructor-07.html">basic_ptr</a>(I zero) noexcept;</code></pre>
-<span class="small"><a href="./2constructor-07.html"><em>» more...</em></a></span>
+<a href="./2constructor-0d.html">basic_ptr</a>(N value) noexcept;</code></pre>
+<span class="small"><a href="./2constructor-0d.html"><em>» more...</em></a></span>
 
-<p>Explicit casts that static_cast allows, such as base to derived or void* to T*.</p>
+<p>Compresses <code>p</code>, which must be null or point into the cage. Implicit for ptr, explicit for strict_ptr. A template on <code>U</code> only so that a literal <code>0</code> picks the constructor above instead of being ambiguous; it takes any <code>U*</code> that converts implicitly to <code>T*</code>.</p>
+<pre><code class="source-code cpp">template&lt;class U&gt;
+requires std::is_convertible_v&lt;U*, T*&gt;
+explicit(Strict)
+<a href="./2constructor-08.html">basic_ptr</a>(U* p) noexcept;</code></pre>
+<span class="small"><a href="./2constructor-08.html"><em>» more...</em></a></span>
+
+<p>Explicit casts that static_cast allows, such as base to derived or <code>void*</code> to <code>T*</code>.</p>
 <pre><code class="source-code cpp">template&lt;class U&gt;
 requires (!std::is_convertible_v&lt;U*, T*&gt; &amp;&amp;
              requires(U* u) { static_cast&lt;T*&gt;(u); })

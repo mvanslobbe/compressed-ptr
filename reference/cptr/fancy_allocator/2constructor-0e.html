@@ -452,13 +452,15 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L41">cptr/fancy_allocator.hpp</a>&gt;</code></p>
-<p>Default constructor</p>
-<pre><code class="source-code cpp"><a href="./2constructor-04.html">fancy_allocator</a>() noexcept = default;</code></pre>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L51">cptr/fancy_allocator.hpp</a>&gt;</code></p>
+<p>Stateless: all fancy_allocators for one cage are interchangeable.</p>
+<pre><code class="source-code cpp">constexpr
+<a href="./2constructor-04.html">fancy_allocator</a>() noexcept = default;</code></pre>
 <span class="small"><a href="./2constructor-04.html"><em>» more...</em></a></span>
 
-<p>Construct from <code>fancy_allocator</code></p>
+<p>From a fancy_allocator for another element type in the same cage.</p>
 <pre><code class="source-code cpp">template&lt;class U&gt;
+constexpr
 <a href="./2constructor-08.html">fancy_allocator</a>(<a href="../fancy_allocator.html">fancy_allocator&lt;U, Cage&gt;</a> const& other) noexcept;</code></pre>
 <span class="small"><a href="./2constructor-08.html"><em>» more...</em></a></span>
 

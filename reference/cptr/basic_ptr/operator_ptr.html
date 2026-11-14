@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Member access. Dereferencing null is undefined, so this skips the null check and costs a single add.</p></div><!-- /brief -->
+<p>Member access: a single add. Dereferencing null is undefined, so this skips the null check: on a null ptr it returns the cage base, not <code>nullptr</code>, and an access through it faults because the cage&#x27;s first span is never committed. Use get() when the pointer may be null.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L137">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L185">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">T*
 operator-&gt;() const noexcept;</code></pre>
 </div><!-- /synopsis -->

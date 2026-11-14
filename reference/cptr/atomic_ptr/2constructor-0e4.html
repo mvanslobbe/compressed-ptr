@@ -452,8 +452,8 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L106">cptr/pack.hpp</a>&gt;</code></p>
-<p>Default constructor</p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L155">cptr/pack.hpp</a>&gt;</code></p>
+<p>Null. Constant-initialised, so a global atomic_ptr can be constinit.</p>
 <pre><code class="source-code cpp">constexpr
 <a href="./2constructor-0a.html">atomic_ptr</a>() noexcept = default;</code></pre>
 <span class="small"><a href="./2constructor-0a.html"><em>» more...</em></a></span>
@@ -462,7 +462,7 @@ window.MathJax = {
 <pre><code class="source-code cpp"><a href="./2constructor-0d.html">atomic_ptr</a>(<a href="../atomic_ptr.html">atomic_ptr</a> const& other) = delete;</code></pre>
 <span class="small"><a href="./2constructor-0d.html"><em>» more...</em></a></span>
 
-<p>Construct from <code>T</code></p>
+<p>Holds <code>p</code>.</p>
 <pre><code class="source-code cpp">explicit
 <a href="./2constructor-0e0.html">atomic_ptr</a>(T* p) noexcept;</code></pre>
 <span class="small"><a href="./2constructor-0e0.html"><em>» more...</em></a></span>

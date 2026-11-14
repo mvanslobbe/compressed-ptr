@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Make room for <code>n</code> elements without exceeding max_load_factor().</p></div><!-- /brief -->
+<p>Make room for <code>n</code> elements without exceeding max_load_factor(). Throws std::length_error if that needs more than max_bucket_count() buckets.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L193">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L262">cptr/unordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">void
 reserve(<a href="./size_type.html">size_type</a> n);</code></pre>
 </div><!-- /synopsis -->

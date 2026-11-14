@@ -447,10 +447,12 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../atomic_ptr.html">atomic_ptr</a>::compare_exchange_weak</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>If the pointer equals <code>expected</code>, replaces it with <code>desired</code> and returns true; otherwise loads it into <code>expected</code> and returns false. As std::atomic, the weak form may fail spuriously, so call it in a loop. The comparison is on the compressed offsets, which is the same as on the addresses.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L133">cptr/pack.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L196">cptr/pack.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">bool
 compare_exchange_weak(
     T*& expected,

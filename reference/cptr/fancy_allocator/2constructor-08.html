@@ -448,12 +448,13 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Construct from <code>fancy_allocator</code></p></div><!-- /brief -->
+<p>From a fancy_allocator for another element type in the same cage.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L42">cptr/fancy_allocator.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L53">cptr/fancy_allocator.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class U&gt;
+constexpr
 fancy_allocator(<a href="../fancy_allocator.html">fancy_allocator&lt;U, Cage&gt;</a> const& other) noexcept;</code></pre>
 </div><!-- /synopsis -->
 <div class="parameters">

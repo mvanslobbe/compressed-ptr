@@ -448,12 +448,13 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Equality operator</p></div><!-- /brief -->
+<p>Always true: memory from one allocator for a cage can be freed by any other for the same cage.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L49">cptr/allocator.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L65">cptr/allocator.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class U&gt;
+constexpr
 bool
 operator&#x3D;&#x3D;(
     <a href="./allocator.html">allocator</a> const& lhs,

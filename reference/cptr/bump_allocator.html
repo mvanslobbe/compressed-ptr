@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>A thread-safe bump (monotonic) allocator for user_cage: allocation is a pointer increment, deallocate() does nothing, and memory is committed in 1 MiB steps as it is used. Suited to data that is built once and freed all at once, or never.</p></div><!-- /brief -->
+<p>A thread-safe bump (monotonic) allocator for user_cage: allocation is a pointer increment, deallocate() does nothing, and memory is committed in 1 MiB steps as it is used. Suited to data that is built once and freed all at once, or never. Its lock is held across fork(), so a child process can allocate even if another thread was allocating when it forked.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/user_cage.hpp#L194">cptr/user_cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/user_cage.hpp#L285">cptr/user_cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">class bump_allocator;</code></pre>
 </div><!-- /synopsis -->
 <h2>Member Functions</h2>

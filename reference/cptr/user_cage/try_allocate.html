@@ -447,10 +447,12 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../user_cage.html">user_cage</a>::try_allocate</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>As allocate(), but returns nullptr on failure. A request for zero bytes asks the allocator for one, so every allocation is distinct.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/user_cage.hpp#L158">cptr/user_cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/user_cage.hpp#L174">cptr/user_cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">static
 void*
 try_allocate(

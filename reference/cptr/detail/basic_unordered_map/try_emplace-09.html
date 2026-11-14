@@ -447,11 +447,13 @@ window.MathJax = {
 <h1><a href="../../../cptr.html">cptr</a>::<a href="../../detail.html">detail</a>::<a href="../basic_unordered_map.html">basic_unordered_map</a>::try_emplace</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p><code>try_emplace</code> overloads</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L295">cptr/unordered_map.hpp</a>&gt;</code></p>
-
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L408">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>If <code>key</code> is absent, insert it with a value built from <code>args</code>; otherwise do nothing, and leave <code>args</code> untouched. Returns the element with that key and whether it was inserted. Strong guarantee.</p>
 <pre><code class="source-code cpp">template&lt;class... Args&gt;
 std::pair&lt;iterator, bool&gt;
 <a href="./try_emplace-03.html">try_emplace</a>(
@@ -459,13 +461,31 @@ std::pair&lt;iterator, bool&gt;
     Args&&... args);</code></pre>
 <span class="small"><a href="./try_emplace-03.html"><em>» more...</em></a></span>
 
-
+<p>As above, moving <code>key</code> into the map only if it is inserted, so move-only keys work.</p>
 <pre><code class="source-code cpp">template&lt;class... Args&gt;
 std::pair&lt;iterator, bool&gt;
 <a href="./try_emplace-07.html">try_emplace</a>(
     K&& key,
     Args&&... args);</code></pre>
 <span class="small"><a href="./try_emplace-07.html"><em>» more...</em></a></span>
+
+<p>try_emplace() with a hint, which is not used.</p>
+<pre><code class="source-code cpp">template&lt;class... Args&gt;
+<a href="./iterator.html">iterator</a>
+<a href="./try_emplace-01.html">try_emplace</a>(
+    <a href="./const_iterator.html">const_iterator</a>,
+    K const& key,
+    Args&&... args);</code></pre>
+<span class="small"><a href="./try_emplace-01.html"><em>» more...</em></a></span>
+
+<p>try_emplace() with a hint, which is not used, moving <code>key</code>.</p>
+<pre><code class="source-code cpp">template&lt;class... Args&gt;
+<a href="./iterator.html">iterator</a>
+<a href="./try_emplace-0e.html">try_emplace</a>(
+    <a href="./const_iterator.html">const_iterator</a>,
+    K&& key,
+    Args&&... args);</code></pre>
+<span class="small"><a href="./try_emplace-0e.html"><em>» more...</em></a></span>
 
 </div><!-- /synopsis -->
 </div><!-- /symbol -->

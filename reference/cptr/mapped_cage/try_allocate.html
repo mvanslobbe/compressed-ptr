@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Returns nullptr when the cage is full or no file is open.</p></div><!-- /brief -->
+<p>Returns nullptr when the cage is full, no file is open, or <code>align</code> is above 64 KiB (the span size).</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/mapped_cage.hpp#L173">cptr/mapped_cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/mapped_cage.hpp#L184">cptr/mapped_cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">static
 void*
 try_allocate(
@@ -460,10 +460,6 @@ try_allocate(
     std::size_t align = alignof(
                                                    std::max_align_t)) noexcept;</code></pre>
 </div><!-- /synopsis -->
-<div class="return-value">
-<h2>Return Value</h2>
-<p>nullptr when the cage is full or no file is open.</p>
-</div><!-- /return-value -->
 </div><!-- /symbol -->
 
 </div>

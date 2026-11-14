@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Bytes handed out and not yet freed, rounded up to the size class.</p></div><!-- /brief -->
+<p>Bytes handed out and not yet freed, rounded up to the size class. While other threads allocate and free, this is a snapshot that can be off by the blocks they move meanwhile.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L280">cptr/cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L360">cptr/cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">static
 std::size_t
 allocated_bytes() noexcept;</code></pre>

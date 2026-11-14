@@ -447,10 +447,12 @@ window.MathJax = {
 <h1><a href="../../../cptr.html">cptr</a>::<a href="../../detail.html">detail</a>::<a href="../basic_unordered_map.html">basic_unordered_map</a>::begin</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>The first element. Constant time on average: the map keeps a lower bound on its first non-empty bucket, which insertion lowers and erase(iterator) raises, so <code>while (!m.empty()) m.erase(m.begin());</code> is linear. begin() itself writes nothing, so concurrent calls are safe.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L165">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L214">cptr/unordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp"><a href="./iterator.html">iterator</a>
 begin() noexcept;</code></pre>
 </div><!-- /synopsis -->

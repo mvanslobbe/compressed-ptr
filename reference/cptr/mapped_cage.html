@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/mapped_cage.hpp#L50">cptr/mapped_cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/mapped_cage.hpp#L55">cptr/mapped_cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class Tag,
     unsigned int SizeLog2 = 32&gt;
@@ -462,7 +462,7 @@ class [[visibility(&quot;default&quot;)]] mapped_cage;</code></pre>
 <h2>Description</h2>
 <p>struct store_tag {}; using store &#x3D; cptr::mapped_cage&lt;store_tag&gt;; store::open(&quot;data.cage&quot;); auto* r &#x3D; store::root&lt;my_root&gt;(); // nullptr in a new file</p>
 <p>The file is created sparse at the full cage size; only pages written to take disk space. Everything that must survive reopening has to live in the cage and point into it with cptr::ptr: a cptr::list or cptr::ordered_map of trivially copyable values qualifies, a std::string does not.</p>
-<p>The allocator&#x27;s state is in the file too, behind a lock in the file, so several processes may allocate in the same file at once. The containers themselves are not synchronised. A process that dies while holding the lock leaves the file locked. Freed small blocks are kept per size class; freed large runs are kept in one list, first fit, without coalescing.</p>
+<p>The allocator&#x27;s state is in the file too, behind a spin lock in the file, so several processes may open, create and allocate in the same file at once (see open()). The containers themselves are not synchronised. A process that dies while holding the spin lock leaves the file locked, and one that dies part way through an allocation can leave the allocator state inconsistent; open() rejects state that is out of range, not every inconsistency. Freed small blocks are kept per size class; freed large runs are kept in one list, first fit, without coalescing.</p>
 </div><!-- /description -->
 <h2>Type Aliases</h2>
 <table style="table-layout: fixed; width: 100%;">
@@ -484,18 +484,18 @@ class [[visibility(&quot;default&quot;)]] mapped_cage;</code></pre>
 <tr><td><a href="./mapped_cage/allocated_bytes.html"><code>allocated_bytes</code></a> </td><td>Bytes handed out and not yet freed, rounded up to the size class.</td></tr>
 <tr><td><a href="./mapped_cage/base.html"><code>base</code></a> </td><td>Zero while no file is open.</td></tr>
 <tr><td><a href="./mapped_cage/close.html"><code>close</code></a> </td><td>Write the file&#x27;s changed pages back and unmap it. Pointers into the cage are invalid afterwards.</td></tr>
-<tr><td><a href="./mapped_cage/compress.html"><code>compress</code></a> </td><td></td></tr>
+<tr><td><a href="./mapped_cage/compress.html"><code>compress</code></a> </td><td>A mask, as the mapping is aligned to the cage size; see cage::compress().</td></tr>
 <tr><td><a href="./mapped_cage/contains.html"><code>contains</code></a> </td><td></td></tr>
 <tr><td><a href="./mapped_cage/deallocate-0d.html"><code>deallocate</code></a> </td><td></td></tr>
-<tr><td><a href="./mapped_cage/decompress.html"><code>decompress</code></a> </td><td></td></tr>
+<tr><td><a href="./mapped_cage/decompress.html"><code>decompress</code></a> </td><td>See cage::decompress().</td></tr>
 <tr><td><a href="./mapped_cage/decompress_nonnull.html"><code>decompress_nonnull</code></a> </td><td></td></tr>
 <tr><td><a href="./mapped_cage/flush.html"><code>flush</code></a> </td><td>Write changed pages back to the file without unmapping it.</td></tr>
 <tr><td><a href="./mapped_cage/is_open.html"><code>is_open</code></a> </td><td></td></tr>
-<tr><td><a href="./mapped_cage/open.html"><code>open</code></a> </td><td>Map the file at <code>path</code> as the cage, creating it if it does not exist. Fails if a file is already open, if the file is not a cage of this size, or if address space or the file cannot be had.</td></tr>
+<tr><td><a href="./mapped_cage/open.html"><code>open</code></a> </td><td>Map the file at <code>path</code> as the cage, creating it if it does not exist. Fails if a file is already open, if the file is not a cage of this size, if its allocator state is out of range (a corrupt file), or if address space or the file cannot be had.</td></tr>
 <tr><td><a href="./mapped_cage/previous_base.html"><code>previous_base</code></a> </td><td>Where the file was mapped the last time before this open(), or 0 for a new file.</td></tr>
-<tr><td><a href="./mapped_cage/root.html"><code>root</code></a> </td><td>The object the file&#x27;s user designated with set_root(), or nullptr.</td></tr>
-<tr><td><a href="./mapped_cage/set_root.html"><code>set_root</code></a> </td><td></td></tr>
-<tr><td><a href="./mapped_cage/try_allocate.html"><code>try_allocate</code></a> </td><td>Returns nullptr when the cage is full or no file is open.</td></tr>
+<tr><td><a href="./mapped_cage/root.html"><code>root</code></a> </td><td>The object the file&#x27;s user designated with set_root(), or nullptr, also while no file is open.</td></tr>
+<tr><td><a href="./mapped_cage/set_root.html"><code>set_root</code></a> </td><td>Designate the object root() returns. Does nothing while no file is open.</td></tr>
+<tr><td><a href="./mapped_cage/try_allocate.html"><code>try_allocate</code></a> </td><td>Returns nullptr when the cage is full, no file is open, or <code>align</code> is above 64 KiB (the span size).</td></tr>
 </tbody>
 </table>
 

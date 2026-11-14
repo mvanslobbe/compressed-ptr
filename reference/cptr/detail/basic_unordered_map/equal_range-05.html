@@ -447,19 +447,35 @@ window.MathJax = {
 <h1><a href="../../../cptr.html">cptr</a>::<a href="../../detail.html">detail</a>::<a href="../basic_unordered_map.html">basic_unordered_map</a>::equal_range</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>Heterogeneous equal_range(), as in C++20.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L261">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L347">cptr/unordered_map.hpp</a>&gt;</code></p>
 
 <pre><code class="source-code cpp">std::pair&lt;iterator, iterator&gt;
-<a href="./equal_range-03.html">equal_range</a>(K const& key);</code></pre>
-<span class="small"><a href="./equal_range-03.html"><em>» more...</em></a></span>
+<a href="./equal_range-030.html">equal_range</a>(K const& key);</code></pre>
+<span class="small"><a href="./equal_range-030.html"><em>» more...</em></a></span>
 
 
 <pre><code class="source-code cpp">std::pair&lt;const_iterator, const_iterator&gt;
 <a href="./equal_range-0a.html">equal_range</a>(K const& key) const;</code></pre>
 <span class="small"><a href="./equal_range-0a.html"><em>» more...</em></a></span>
+
+<p>Heterogeneous equal_range(), as in C++20.</p>
+<pre><code class="source-code cpp">template&lt;class Key&gt;
+requires kTransparent&lt;Key&gt;
+std::pair&lt;iterator, iterator&gt;
+<a href="./equal_range-032.html">equal_range</a>(Key const& key);</code></pre>
+<span class="small"><a href="./equal_range-032.html"><em>» more...</em></a></span>
+
+<p>Heterogeneous equal_range(), as in C++20.</p>
+<pre><code class="source-code cpp">template&lt;class Key&gt;
+requires kTransparent&lt;Key&gt;
+std::pair&lt;const_iterator, const_iterator&gt;
+<a href="./equal_range-06.html">equal_range</a>(Key const& key) const;</code></pre>
+<span class="small"><a href="./equal_range-06.html"><em>» more...</em></a></span>
 
 </div><!-- /synopsis -->
 </div><!-- /symbol -->

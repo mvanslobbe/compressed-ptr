@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>The object pointed to. Like <code>operator-&gt;</code>, it skips the null check.</p></div><!-- /brief -->
+<p>The object pointed to. Like <code>operator-&gt;</code>, it skips the null check, so the pointer must not be null.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L141">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L190">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;class U = T&gt;
 requires (!std::is_void_v&lt;U&gt;)
 U&

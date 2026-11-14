@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L25">cptr/allocator.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L24">cptr/allocator.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
@@ -462,28 +462,27 @@ class allocator;</code></pre>
 <h2>Description</h2>
 <p>The container&#x27;s own links stay 8 bytes; for 4-byte links use the cptr containers, or <a href="./fancy_allocator.html"><code>fancy_allocator</code></a> with a container that supports fancy pointers.</p>
 <pre><code class="language-cpp">
-std::vector&lt;node, cptr::allocator&lt;node&gt;&gt; nodes;
-nodes.reserve(1000);
+std::vector&lt;node, cptr::allocator&lt;node&gt;&gt; nodes(1000);
 cptr::ptr&lt;node&gt; first = &amp;nodes[0];  // the elements are in the cage
 </code></pre></div><!-- /description -->
 <h2>Types</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>
-<tr><th>Name</th></tr>
+<tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./allocator/rebind.html"><code>rebind</code></a> </td></tr>
+<tr><td><a href="./allocator/rebind.html"><code>rebind</code></a> </td><td>The same allocator for another element type.</td></tr>
 </tbody>
 </table>
 
 <h2>Type Aliases</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>
-<tr><th>Name</th></tr>
+<tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./allocator/cage_type.html"><code>cage_type</code></a> </td></tr>
-<tr><td><a href="./allocator/value_type.html"><code>value_type</code></a> </td></tr>
+<tr><td><a href="./allocator/cage_type.html"><code>cage_type</code></a> </td><td>The cage the elements are allocated in.</td></tr>
+<tr><td><a href="./allocator/value_type.html"><code>value_type</code></a> </td><td>The element type.</td></tr>
 </tbody>
 </table>
 
@@ -494,8 +493,9 @@ cptr::ptr&lt;node&gt; first = &amp;nodes[0];  // the elements are in the cage
 </thead>
 <tbody>
 <tr><td><a href="./allocator/2constructor-04.html"><code>allocator</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
-<tr><td><a href="./allocator/allocate.html"><code>allocate</code></a> </td><td></td></tr>
-<tr><td><a href="./allocator/deallocate.html"><code>deallocate</code></a> </td><td></td></tr>
+<tr><td><a href="./allocator/allocate.html"><code>allocate</code></a> </td><td>Memory for <code>n</code> T in the cage, uninitialised. Throws std::bad_array_new_length if <code>n</code> exceeds max_size(), and std::bad_alloc when the cage is full.</td></tr>
+<tr><td><a href="./allocator/deallocate.html"><code>deallocate</code></a> </td><td>Frees memory from allocate(); the elements must already be destroyed.</td></tr>
+<tr><td><a href="./allocator/max_size.html"><code>max_size</code></a> </td><td>The most T that one allocation could hold: no more than fit in the cage.</td></tr>
 </tbody>
 </table>
 
@@ -506,7 +506,7 @@ cptr::ptr&lt;node&gt; first = &amp;nodes[0];  // the elements are in the cage
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code><a href="./operator_eq-00.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
+<tr><td><code><a href="./operator_eq-00.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Always true: memory from one allocator for a cage can be freed by any other for the same cage.</td></tr>
 </tbody>
 </table>
 </div><!-- /friends -->

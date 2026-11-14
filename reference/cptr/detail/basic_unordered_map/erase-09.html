@@ -448,12 +448,12 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Returns the element after the erased one, in iteration order.</p></div><!-- /brief -->
+<p><code>erase</code> overloads</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L330">cptr/unordered_map.hpp</a>&gt;</code></p>
-<p>Returns the element after the erased one, in iteration order.</p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L494">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>Erase the element at <code>pos</code>; returns the element after it, in iteration order. Finding that element may step over empty buckets.</p>
 <pre><code class="source-code cpp"><a href="./iterator.html">iterator</a>
 <a href="./erase-04.html">erase</a>(<a href="./const_iterator.html">const_iterator</a> pos) noexcept;</code></pre>
 <span class="small"><a href="./erase-04.html"><em>» more...</em></a></span>
@@ -463,7 +463,7 @@ window.MathJax = {
 <a href="./erase-0f.html">erase</a>(<a href="./iterator.html">iterator</a> pos) noexcept;</code></pre>
 <span class="small"><a href="./erase-0f.html"><em>» more...</em></a></span>
 
-
+<p>Erase the element with <code>key</code>, if any; returns how many were erased. One walk of the bucket finds the element and the link to it, and nothing looks for the next element. Erases the element with the given key, if there is one; returns how many were erased (0 or 1).</p>
 <pre><code class="source-code cpp"><a href="./size_type.html">size_type</a>
 <a href="./erase-0a.html">erase</a>(K const& key);</code></pre>
 <span class="small"><a href="./erase-0a.html"><em>» more...</em></a></span>

@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>The class behind cptr::forward_list; use that alias. Its members behave like those of <code>std::forward_list</code>.</p></div><!-- /brief -->
+<p>The class behind cptr::forward_list; use that alias. Its members behave like those of <code>std::forward_list</code>; the alias lists the differences.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L30">cptr/forward_list.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L31">cptr/forward_list.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage,
@@ -506,7 +506,7 @@ class basic_forward_list;</code></pre>
 <tr><td><a href="./basic_forward_list/cbegin.html"><code>cbegin</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_forward_list/cend.html"><code>cend</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_forward_list/clear.html"><code>clear</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_forward_list/emplace_after.html"><code>emplace_after</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_forward_list/emplace_after.html"><code>emplace_after</code></a> </td><td>Construct an element from <code>args</code> after <code>pos</code>. Like std, it direct-initialises the element, so only the conversions std accepts compile.</td></tr>
 <tr><td><a href="./basic_forward_list/emplace_front.html"><code>emplace_front</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_forward_list/empty.html"><code>empty</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_forward_list/end-0c.html"><code>end</code></a> </td><td></td></tr>
@@ -514,17 +514,17 @@ class basic_forward_list;</code></pre>
 <tr><td><a href="./basic_forward_list/front-02.html"><code>front</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_forward_list/insert_after-030.html"><code>insert_after</code></a> </td><td>Returns the last element inserted, or <code>pos</code> if none.</td></tr>
 <tr><td><a href="./basic_forward_list/max_size.html"><code>max_size</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_forward_list/merge-08.html"><code>merge</code></a> </td><td>Merge sorted <code>other</code> into this sorted list; stable, this list&#x27;s elements come first among equals.</td></tr>
+<tr><td><a href="./basic_forward_list/merge-08.html"><code>merge</code></a> </td><td>Merge sorted <code>other</code> into this sorted list; stable, this list&#x27;s elements come first among equals. If <code>comp</code> throws, the elements merged so far and the rest of this list stay here, the rest of <code>other</code> stays in <code>other</code>, and the exception propagates.</td></tr>
 <tr><td><a href="./basic_forward_list/pop_front.html"><code>pop_front</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_forward_list/push_front-06.html"><code>push_front</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_forward_list/remove.html"><code>remove</code></a> </td><td>Unlinked nodes are destroyed only at the end, so <code>value</code> may refer to an element of this list.</td></tr>
-<tr><td><a href="./basic_forward_list/remove_if.html"><code>remove_if</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_forward_list/remove.html"><code>remove</code></a> </td><td>Erase the elements equal to <code>value</code> and return how many. Unlinked nodes are destroyed only at the end, so <code>value</code> may refer to an element of this list. If a comparison throws, the elements already found are erased, the rest are kept, and the exception propagates.</td></tr>
+<tr><td><a href="./basic_forward_list/remove_if.html"><code>remove_if</code></a> </td><td>Erase the elements for which <code>pred</code> is true and return how many. If <code>pred</code> throws, the elements already found are erased, the rest are kept, and the exception propagates.</td></tr>
 <tr><td><a href="./basic_forward_list/resize-0a.html"><code>resize</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_forward_list/reverse.html"><code>reverse</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_forward_list/sort.html"><code>sort</code></a> </td><td>Stable merge sort on the links; no element is copied or moved.</td></tr>
+<tr><td><a href="./basic_forward_list/sort.html"><code>sort</code></a> </td><td>Stable merge sort on the links; no element is copied or moved. If <code>comp</code> throws, the list keeps all its elements in an unspecified order and the exception propagates.</td></tr>
 <tr><td><a href="./basic_forward_list/splice_after-05.html"><code>splice_after</code></a> </td><td><code>splice_after</code> overloads</td></tr>
 <tr><td><a href="./basic_forward_list/swap.html"><code>swap</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_forward_list/unique.html"><code>unique</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_forward_list/unique.html"><code>unique</code></a> </td><td>Erase all but the first of each run of consecutive elements for which <code>pred</code> is true, and return how many were erased. If <code>pred</code> throws, the elements already found are erased and the exception propagates.</td></tr>
 </tbody>
 </table>
 
@@ -545,7 +545,7 @@ class basic_forward_list;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code><a href="./operator_3way-0e4.html">cptr::detail::operator&lt;&#x3D;&gt;</a></code></td><td>Three-way comparison operator</td></tr>
+<tr><td><code><a href="./operator_3way-09f.html">cptr::detail::operator&lt;&#x3D;&gt;</a></code></td><td>Lexicographical, with std&#x27;s synth-three-way: elements that have only <code>operator&lt;</code> give a std::weak_ordering.</td></tr>
 <tr><td><code><a href="./operator_eq-0b.html">cptr::detail::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
 <tr><td><code><a href="./swap-09.html">cptr::detail::swap</a></code></td><td></td></tr>
 </tbody>

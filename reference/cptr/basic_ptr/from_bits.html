@@ -447,15 +447,21 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../basic_ptr.html">basic_ptr</a>::from_bits</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>The pointer whose bits() are <code>bits</code>. Only pass bits() of a pointer into the same cage: bits from another cage (or another cage type with the same T) decode to an unrelated address in this one, and nothing checks it.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L234">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L289">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">constexpr
 static
 <a href="../basic_ptr.html">basic_ptr</a>
 from_bits(uint32_t bits) noexcept;</code></pre>
 </div><!-- /synopsis -->
+<div class="return-value">
+<h2>Return Value</h2>
+<p>A nullable pointer to a T inside <code>Cage</code>, stored in 4 bytes. Use it as ptr&lt;T&gt; or strict_ptr&lt;T&gt;, declared below.</p>
+</div><!-- /return-value -->
 </div><!-- /symbol -->
 
 </div>

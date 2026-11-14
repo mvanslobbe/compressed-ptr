@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>A forward iterator: the node and the map, so that it can move on to the next bucket.</p></div><!-- /brief -->
+<p>A forward iterator: the node, and the bucket array and its size, so that it can move on to the next bucket. It does not refer to the map object, so like std&#x27;s iterators it stays valid when the map is moved or swapped; a rehash invalidates it. With compressed links it is 16 bytes.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L68">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L77">cptr/unordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;bool Const&gt;
 class basic_iterator;</code></pre>
 </div><!-- /synopsis -->
@@ -490,8 +490,8 @@ class basic_iterator;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code>cptr::detail::basic_unordered_map::basic_iterator</code></td><td>A forward iterator: the node and the map, so that it can move on to the next bucket.</td></tr>
-<tr><td><code><a href="../basic_unordered_map.html">cptr::detail::basic_unordered_map</a></code></td><td>The class behind cptr::unordered_map; use that alias. Its members behave like those of <code>std::unordered_map</code>.</td></tr>
+<tr><td><code>cptr::detail::basic_unordered_map::basic_iterator</code></td><td>A forward iterator: the node, and the bucket array and its size, so that it can move on to the next bucket. It does not refer to the map object, so like std&#x27;s iterators it stays valid when the map is moved or swapped; a rehash invalidates it. With compressed links it is 16 bytes.</td></tr>
+<tr><td><code><a href="../basic_unordered_map.html">cptr::detail::basic_unordered_map</a></code></td><td>The class behind cptr::unordered_map; use that alias. Its members behave like those of <code>std::unordered_map</code>; the alias lists the differences.</td></tr>
 <tr><td><code><a href="../operator_eq-0fc.html">cptr::detail::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
 </tbody>
 </table>

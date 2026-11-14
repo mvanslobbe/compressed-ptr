@@ -452,13 +452,13 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L49">cptr/pack.hpp</a>&gt;</code></p>
-<p>Default constructor</p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L73">cptr/pack.hpp</a>&gt;</code></p>
+<p>Null, with payload 0.</p>
 <pre><code class="source-code cpp">constexpr
 <a href="./2constructor-0e.html">ptr_with_payload</a>() noexcept = default;</code></pre>
 <span class="small"><a href="./2constructor-0e.html"><em>» more...</em></a></span>
 
-
+<p>Compresses <code>p</code>, which must be null or point into the cage.</p>
 <pre><code class="source-code cpp"><a href="./2constructor-08.html">ptr_with_payload</a>(
     T* p,
     uint32_t payload) noexcept;</code></pre>

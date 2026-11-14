@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L915">cptr/ordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ordered_map.hpp#L1027">cptr/ordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class K,
     class V,
@@ -462,7 +462,7 @@ using ordered_map = <a href="./detail/basic_ordered_map.html">detail::basic_orde
 </div><!-- /synopsis -->
 <div class="description">
 <h2>Description</h2>
-<p>A red-black tree whose nodes are allocated in <code>Cage</code>: 24 bytes per element for 4-byte keys and values, against 48 for <code>std::map</code>. Every member behaves like its <code>std::map</code> counterpart; see <a href="./detail/basic_ordered_map.html"><code>detail::basic_ordered_map</code></a> for the full member list. Lookup is heterogeneous when <code>Compare::is_transparent</code> exists.</p>
+<p>A red-black tree whose nodes are allocated in <code>Cage</code>: 24 bytes per element for 4-byte keys and values, against 48 for <code>std::map</code>. The members behave like those of <code>std::map</code>, with these differences: there is no allocator parameter, no node handles (extract, merge, insert of a node) and no get_allocator(); hints are accepted but not used, so a hinted insertion costs a full search; and copy assignment gives the strong guarantee. See <a href="./detail/basic_ordered_map.html"><code>detail::basic_ordered_map</code></a> for the full member list. Lookup is heterogeneous when <code>Compare::is_transparent</code> exists; so is erase, C++23 style, when <code>CPTR_HETEROGENEOUS_ERASE</code> is defined.</p>
 <pre><code class="language-cpp">
 #include "cptr/ordered_map.hpp"
 

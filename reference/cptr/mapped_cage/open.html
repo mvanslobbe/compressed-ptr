@@ -448,15 +448,20 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Map the file at <code>path</code> as the cage, creating it if it does not exist. Fails if a file is already open, if the file is not a cage of this size, or if address space or the file cannot be had.</p></div><!-- /brief -->
+<p>Map the file at <code>path</code> as the cage, creating it if it does not exist. Fails if a file is already open, if the file is not a cage of this size, if its allocator state is out of range (a corrupt file), or if address space or the file cannot be had.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/mapped_cage.hpp#L70">cptr/mapped_cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/mapped_cage.hpp#L87">cptr/mapped_cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">static
 bool
 open(char const* path) noexcept;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>Several processes may open, and create, the same file at once: open() holds an flock() on the file while it checks, creates and formats it, so exactly one of them formats a new file and the others wait for it. open() fails if the file system does not support flock(). A file whose creator failed after making it full size is removed again (or truncated to empty, if it existed before), so a later open() can create it.</p>
+<p>The checks look at the header, the span table and every free list, so open() takes time in proportion to the number of free blocks. Tag is not recorded in the file: any mapped_cage of the same SizeLog2 opens it.</p>
+</div><!-- /description -->
 </div><!-- /symbol -->
 
 </div>

@@ -447,11 +447,14 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../default_cage.html">default_cage</a>::compress</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>The cage is aligned to its own size, so a pointer&#x27;s offset is its low SizeLog2 bits: compressing is a mask and a shift, and nullptr maps to 0 with no branch. A pointer from outside the cage is caught only by CPTR_CHECK. In a constant expression only nullptr can be compressed.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L176">cptr/cage.hpp</a>&gt;</code></p>
-<pre><code class="source-code cpp">static
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L239">cptr/cage.hpp</a>&gt;</code></p>
+<pre><code class="source-code cpp">constexpr
+static
 uint32_t
 compress(void const* p) noexcept;</code></pre>
 </div><!-- /synopsis -->

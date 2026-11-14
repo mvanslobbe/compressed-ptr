@@ -448,12 +448,12 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>Merge sorted <code>other</code> into this sorted list; stable, this list&#x27;s elements come first among equals.</p></div><!-- /brief -->
+<p>Merge sorted <code>other</code> into this sorted list; stable, this list&#x27;s elements come first among equals. If <code>comp</code> throws, the elements merged so far and the rest of this list stay here, the rest of <code>other</code> stays in <code>other</code>, and the exception propagates.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L277">cptr/forward_list.hpp</a>&gt;</code></p>
-<p>Merge sorted <code>other</code> into this sorted list; stable, this list&#x27;s elements come first among equals.</p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L313">cptr/forward_list.hpp</a>&gt;</code></p>
+<p>Merge sorted <code>other</code> into this sorted list; stable, this list&#x27;s elements come first among equals. If <code>comp</code> throws, the elements merged so far and the rest of this list stay here, the rest of <code>other</code> stays in <code>other</code>, and the exception propagates.</p>
 <pre><code class="source-code cpp">template&lt;class Compare = std::less&lt;&gt;&gt;
 void
 <a href="./merge-0b.html">merge</a>(

@@ -448,11 +448,11 @@ window.MathJax = {
 <div class="symbol">
 <div class="header">
 <div class="brief">
-<p>The class behind cptr::unordered_map; use that alias. Its members behave like those of <code>std::unordered_map</code>.</p></div><!-- /brief -->
+<p>The class behind cptr::unordered_map; use that alias. Its members behave like those of <code>std::unordered_map</code>; the alias lists the differences.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L38">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L39">cptr/unordered_map.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class K,
     class V,
@@ -473,7 +473,7 @@ class basic_unordered_map;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./basic_unordered_map/basic_iterator.html"><code>basic_iterator</code></a> </td><td>A forward iterator: the node and the map, so that it can move on to the next bucket.</td></tr>
+<tr><td><a href="./basic_unordered_map/basic_iterator.html"><code>basic_iterator</code></a> </td><td>A forward iterator: the node, and the bucket array and its size, so that it can move on to the next bucket. It does not refer to the map object, so like std&#x27;s iterators it stays valid when the map is moved or swapped; a rehash invalidates it. With compressed links it is 16 bytes.</td></tr>
 </tbody>
 </table>
 
@@ -507,32 +507,43 @@ class basic_unordered_map;</code></pre>
 <tr><td><a href="./basic_unordered_map/2destructor.html"><code>~basic_unordered_map</code></a> <span class="small">[destructor]</span></td><td>Destructor</td></tr>
 <tr><td><a href="./basic_unordered_map/operator_assign-0e.html"><code>operator&#x3D;</code></a> </td><td>Assignment operators</td></tr>
 <tr><td><a href="./basic_unordered_map/at-05.html"><code>at</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_unordered_map/begin-08.html"><code>begin</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_unordered_map/begin-08.html"><code>begin</code></a> </td><td>The first element. Constant time on average: the map keeps a lower bound on its first non-empty bucket, which insertion lowers and erase(iterator) raises, so <code>while (!m.empty()) m.erase(m.begin());</code> is linear. begin() itself writes nothing, so concurrent calls are safe.</td></tr>
 <tr><td><a href="./basic_unordered_map/bucket_count.html"><code>bucket_count</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/cbegin.html"><code>cbegin</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/cend.html"><code>cend</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/clear.html"><code>clear</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/contains-00.html"><code>contains</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/count-0d.html"><code>count</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_unordered_map/emplace.html"><code>emplace</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_unordered_map/emplace.html"><code>emplace</code></a> </td><td>Build the element from <code>args</code>, then insert it unless its key is present; returns the element with that key and whether it was inserted. As for std::unordered_map, the element is built first, even when the key turns out to be present (try_emplace avoids that). If the hash, the key comparison or a rehash throws, the element is destroyed and the map is unchanged.</td></tr>
+<tr><td><a href="./basic_unordered_map/emplace_hint.html"><code>emplace_hint</code></a> </td><td>As emplace(). The hint is accepted for compatibility with std::unordered_map and generic code, but not used.</td></tr>
 <tr><td><a href="./basic_unordered_map/empty.html"><code>empty</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/end-02.html"><code>end</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_unordered_map/equal_range-05.html"><code>equal_range</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_unordered_map/erase-09.html"><code>erase</code></a> </td><td>Returns the element after the erased one, in iteration order.</td></tr>
+<tr><td><a href="./basic_unordered_map/equal_range-05.html"><code>equal_range</code></a> </td><td>Heterogeneous equal_range(), as in C++20.</td></tr>
+<tr><td><a href="./basic_unordered_map/erase-09.html"><code>erase</code></a> </td><td><code>erase</code> overloads</td></tr>
 <tr><td><a href="./basic_unordered_map/find-04.html"><code>find</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/hash_function.html"><code>hash_function</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_unordered_map/insert-08.html"><code>insert</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_unordered_map/insert_or_assign.html"><code>insert_or_assign</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_unordered_map/insert-08.html"><code>insert</code></a> </td><td><code>insert</code> overloads</td></tr>
+<tr><td><a href="./basic_unordered_map/insert_or_assign-0a.html"><code>insert_or_assign</code></a> </td><td><code>insert_or_assign</code> overloads</td></tr>
 <tr><td><a href="./basic_unordered_map/key_eq.html"><code>key_eq</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/load_factor.html"><code>load_factor</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_unordered_map/max_load_factor-063.html"><code>max_load_factor</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_unordered_map/max_load_factor-063.html"><code>max_load_factor</code></a> </td><td>Set the maximum load factor, ignoring values that are not positive, and rehash if the map is now over it. If that rehash throws, the old maximum is kept.</td></tr>
 <tr><td><a href="./basic_unordered_map/max_size.html"><code>max_size</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/operator_subs-09.html"><code>operator[]</code></a> </td><td>Subscript operators</td></tr>
-<tr><td><a href="./basic_unordered_map/rehash.html"><code>rehash</code></a> </td><td>Use at least <code>n</code> buckets, and enough for max_load_factor(). The count is rounded up to a power of two.</td></tr>
-<tr><td><a href="./basic_unordered_map/reserve.html"><code>reserve</code></a> </td><td>Make room for <code>n</code> elements without exceeding max_load_factor().</td></tr>
+<tr><td><a href="./basic_unordered_map/rehash.html"><code>rehash</code></a> </td><td>Use at least <code>n</code> buckets, and enough for max_load_factor(). The count is rounded up to a power of two. Throws std::length_error if that is more than max_bucket_count(); iterators are invalidated unless the count stays the same.</td></tr>
+<tr><td><a href="./basic_unordered_map/reserve.html"><code>reserve</code></a> </td><td>Make room for <code>n</code> elements without exceeding max_load_factor(). Throws std::length_error if that needs more than max_bucket_count() buckets.</td></tr>
 <tr><td><a href="./basic_unordered_map/size.html"><code>size</code></a> </td><td></td></tr>
 <tr><td><a href="./basic_unordered_map/swap.html"><code>swap</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_unordered_map/try_emplace-09.html"><code>try_emplace</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_unordered_map/try_emplace-09.html"><code>try_emplace</code></a> </td><td><code>try_emplace</code> overloads</td></tr>
+</tbody>
+</table>
+
+<h2>Static Member Functions</h2>
+<table style="table-layout: fixed; width: 100%;">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="./basic_unordered_map/max_bucket_count.html"><code>max_bucket_count</code></a> </td><td>The most buckets the map can have: a power of two, limited by the cage&#x27;s size and by the 32-bit hashes the nodes keep.</td></tr>
 </tbody>
 </table>
 

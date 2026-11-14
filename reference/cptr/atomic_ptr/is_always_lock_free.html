@@ -447,10 +447,12 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../atomic_ptr.html">atomic_ptr</a>::is_always_lock_free</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>True when the 32-bit offset is always updated without a lock.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L103">cptr/pack.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L151">cptr/pack.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">inline constexpr static
 bool is_always_lock_free = std::atomic&lt;std::uint32_t&gt;::is_always_lock_free;</code></pre>
 </div><!-- /synopsis -->

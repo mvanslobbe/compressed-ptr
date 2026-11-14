@@ -447,10 +447,12 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../atomic_ptr.html">atomic_ptr</a>::compare_exchange_strong</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p>As compare_exchange_weak(), but fails only if the pointer differs from <code>expected</code>.</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L148">cptr/pack.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L215">cptr/pack.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">bool
 compare_exchange_strong(
     T*& expected,

@@ -452,12 +452,12 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L110">cptr/unordered_map.hpp</a>&gt;</code></p>
-<p>Default constructor</p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/unordered_map.hpp#L123">cptr/unordered_map.hpp</a>&gt;</code></p>
+<p>An empty map; allocates nothing.</p>
 <pre><code class="source-code cpp"><a href="./2constructor-06a.html">basic_unordered_map</a>() noexcept = default;</code></pre>
 <span class="small"><a href="./2constructor-06a.html"><em>» more...</em></a></span>
 
-<p>Copy constructor</p>
+<p>Copies the elements, the hash function, the key comparison, the maximum load factor and the bucket count, so the copy iterates in the same order. The keys are not hashed again: each node keeps its hash, and the copy goes bucket by bucket.</p>
 <pre><code class="source-code cpp"><a href="./2constructor-05.html">basic_unordered_map</a>(<a href="../basic_unordered_map.html">basic_unordered_map</a> const& other);</code></pre>
 <span class="small"><a href="./2constructor-05.html"><em>» more...</em></a></span>
 
@@ -465,24 +465,31 @@ window.MathJax = {
 <pre><code class="source-code cpp"><a href="./2constructor-03.html">basic_unordered_map</a>(<a href="../basic_unordered_map.html">basic_unordered_map</a>&& other) noexcept;</code></pre>
 <span class="small"><a href="./2constructor-03.html"><em>» more...</em></a></span>
 
-<p>Construct from <code>initializer_list</code></p>
-<pre><code class="source-code cpp"><a href="./2constructor-00.html">basic_unordered_map</a>(std::initializer_list&lt;value_type&gt; values);</code></pre>
-<span class="small"><a href="./2constructor-00.html"><em>» more...</em></a></span>
-
-
-<pre><code class="source-code cpp">template&lt;std::input_iterator It&gt;
-<a href="./2constructor-02.html">basic_unordered_map</a>(
-    It first,
-    It last);</code></pre>
-<span class="small"><a href="./2constructor-02.html"><em>» more...</em></a></span>
-
-
+<p>An empty map with at least <code>buckets</code> buckets.</p>
 <pre><code class="source-code cpp">explicit
 <a href="./2constructor-061.html">basic_unordered_map</a>(
     <a href="./size_type.html">size_type</a> buckets,
     Hash const& hash = Hash(),
     KeyEqual const& eq = KeyEqual());</code></pre>
 <span class="small"><a href="./2constructor-061.html"><em>» more...</em></a></span>
+
+<p>The elements of <code>values</code>; of equal keys, the first is kept.</p>
+<pre><code class="source-code cpp"><a href="./2constructor-0d.html">basic_unordered_map</a>(
+    std::initializer_list&lt;value_type&gt; values,
+    <a href="./size_type.html">size_type</a> buckets = 0,
+    Hash const& hash = Hash(),
+    KeyEqual const& eq = KeyEqual());</code></pre>
+<span class="small"><a href="./2constructor-0d.html"><em>» more...</em></a></span>
+
+<p>The elements of [first, last); of equal keys, the first is kept.]</p>
+<pre><code class="source-code cpp">template&lt;std::input_iterator It&gt;
+<a href="./2constructor-09.html">basic_unordered_map</a>(
+    It first,
+    It last,
+    <a href="./size_type.html">size_type</a> buckets = 0,
+    Hash const& hash = Hash(),
+    KeyEqual const& eq = KeyEqual());</code></pre>
+<span class="small"><a href="./2constructor-09.html"><em>» more...</em></a></span>
 
 </div><!-- /synopsis -->
 </div><!-- /symbol -->

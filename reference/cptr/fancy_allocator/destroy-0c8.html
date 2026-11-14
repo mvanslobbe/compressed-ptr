@@ -447,17 +447,19 @@ window.MathJax = {
 <h1><a href="../../cptr.html">cptr</a>::<a href="../fancy_allocator.html">fancy_allocator</a>::destroy</h1>
 <div class="symbol">
 <div class="header">
+<div class="brief">
+<p><code>destroy</code> overloads</p></div><!-- /brief -->
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopses</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L65">cptr/fancy_allocator.hpp</a>&gt;</code></p>
-
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/fancy_allocator.hpp#L87">cptr/fancy_allocator.hpp</a>&gt;</code></p>
+<p>As above, at a compressed pointer.</p>
 <pre><code class="source-code cpp">template&lt;class U&gt;
 void
 <a href="./destroy-05.html">destroy</a>(<a href="../ptr.html">ptr&lt;U, Cage&gt;</a> p) noexcept;</code></pre>
 <span class="small"><a href="./destroy-05.html"><em>» more...</em></a></span>
 
-
+<p>Destroys the object at <code>p</code> without freeing its memory.</p>
 <pre><code class="source-code cpp">template&lt;class U&gt;
 void
 <a href="./destroy-0c9.html">destroy</a>(U* p) noexcept;</code></pre>

@@ -452,12 +452,16 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L100">cptr/pack.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L147">cptr/pack.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
 class atomic_ptr;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>It offers the parts of the std::atomic&lt;T*&gt; interface that apply to it (no arithmetic). Every pointer passed in must be null or point into the cage.</p>
+</div><!-- /description -->
 <h2>Member Functions</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>
@@ -465,27 +469,27 @@ class atomic_ptr;</code></pre>
 </thead>
 <tbody>
 <tr><td><a href="./atomic_ptr/2constructor-0e4.html"><code>atomic_ptr</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
-<tr><td><a href="./atomic_ptr/operator_assign-0b.html"><code>operator&#x3D;</code></a> </td><td>Assignment operators</td></tr>
-<tr><td><a href="./atomic_ptr/compare_exchange_strong-00.html"><code>compare_exchange_strong</code></a> </td><td></td></tr>
-<tr><td><a href="./atomic_ptr/compare_exchange_weak-04.html"><code>compare_exchange_weak</code></a> </td><td></td></tr>
-<tr><td><a href="./atomic_ptr/exchange.html"><code>exchange</code></a> </td><td></td></tr>
-<tr><td><a href="./atomic_ptr/is_lock_free.html"><code>is_lock_free</code></a> </td><td>Not bits_.is_lock_free(): clang emits a call to libatomic for it.</td></tr>
-<tr><td><a href="./atomic_ptr/load.html"><code>load</code></a> </td><td></td></tr>
-<tr><td><a href="./atomic_ptr/notify_all.html"><code>notify_all</code></a> </td><td></td></tr>
-<tr><td><a href="./atomic_ptr/notify_one.html"><code>notify_one</code></a> </td><td></td></tr>
-<tr><td><a href="./atomic_ptr/store.html"><code>store</code></a> </td><td></td></tr>
+<tr><td><a href="./atomic_ptr/operator_assign-0b.html"><code>operator&#x3D;</code></a> </td><td>store(p), returning <code>p</code> like std::atomic&lt;T*&gt;::operator&#x3D;.</td></tr>
+<tr><td><a href="./atomic_ptr/compare_exchange_strong-00.html"><code>compare_exchange_strong</code></a> </td><td><code>compare_exchange_strong</code> overloads</td></tr>
+<tr><td><a href="./atomic_ptr/compare_exchange_weak-04.html"><code>compare_exchange_weak</code></a> </td><td><code>compare_exchange_weak</code> overloads</td></tr>
+<tr><td><a href="./atomic_ptr/exchange.html"><code>exchange</code></a> </td><td>Replaces the pointer with <code>p</code> and returns the previous one, in one atomic step.</td></tr>
+<tr><td><a href="./atomic_ptr/is_lock_free.html"><code>is_lock_free</code></a> </td><td>Whether this object&#x27;s operations are lock-free.</td></tr>
+<tr><td><a href="./atomic_ptr/load.html"><code>load</code></a> </td><td>The current pointer.</td></tr>
+<tr><td><a href="./atomic_ptr/notify_all.html"><code>notify_all</code></a> </td><td>Wakes all threads blocked in wait() on this object.</td></tr>
+<tr><td><a href="./atomic_ptr/notify_one.html"><code>notify_one</code></a> </td><td>Wakes one thread blocked in wait() on this object, if any.</td></tr>
+<tr><td><a href="./atomic_ptr/store.html"><code>store</code></a> </td><td>Replaces the pointer with <code>p</code>.</td></tr>
 <tr><td><a href="./atomic_ptr/wait.html"><code>wait</code></a> </td><td>Blocks until the value is no longer <code>old</code> (and a notify call wakes it).</td></tr>
-<tr><td><a href="./atomic_ptr/2conversion.html"><code>operator T*</code></a> </td><td>Conversion to <code>T</code></td></tr>
+<tr><td><a href="./atomic_ptr/2conversion.html"><code>operator T*</code></a> </td><td>load().</td></tr>
 </tbody>
 </table>
 
 <h2>Static Data Members</h2>
 <table style="table-layout: fixed; width: 100%;">
 <thead>
-<tr><th>Name</th></tr>
+<tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./atomic_ptr/is_always_lock_free.html"><code>is_always_lock_free</code></a> </td></tr>
+<tr><td><a href="./atomic_ptr/is_always_lock_free.html"><code>is_always_lock_free</code></a> </td><td>True when the 32-bit offset is always updated without a lock.</td></tr>
 </tbody>
 </table>
 

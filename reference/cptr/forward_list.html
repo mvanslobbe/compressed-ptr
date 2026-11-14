@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L489">cptr/forward_list.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/forward_list.hpp#L609">cptr/forward_list.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
@@ -460,7 +460,7 @@ using forward_list = <a href="./detail/basic_forward_list.html">detail::basic_fo
 </div><!-- /synopsis -->
 <div class="description">
 <h2>Description</h2>
-<p>Nodes are allocated in <code>Cage</code>; an empty list allocates nothing. Every member behaves like its <code>std::forward_list</code> counterpart; see <a href="./detail/basic_forward_list.html"><code>detail::basic_forward_list</code></a> for the full member list.</p>
+<p>Nodes are allocated in <code>Cage</code>; an empty list allocates nothing. The members are those of <code>std::forward_list</code> and behave like them, including the exception guarantees; the only difference is that there is no allocator parameter (and so no get_allocator()). See <a href="./detail/basic_forward_list.html"><code>detail::basic_forward_list</code></a> for the full member list.</p>
 <pre><code class="language-cpp">
 #include "cptr/forward_list.hpp"
 

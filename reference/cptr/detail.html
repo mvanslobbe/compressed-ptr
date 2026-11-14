@@ -456,10 +456,32 @@ window.MathJax = {
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./detail/basic_forward_list.html"><code>basic_forward_list</code></a> </td><td>The class behind cptr::forward_list; use that alias. Its members behave like those of <code>std::forward_list</code>.</td></tr>
-<tr><td><a href="./detail/basic_list.html"><code>basic_list</code></a> </td><td>The class behind cptr::list; use that alias. Its members behave like those of <code>std::list</code>.</td></tr>
-<tr><td><a href="./detail/basic_ordered_map.html"><code>basic_ordered_map</code></a> </td><td>The class behind cptr::ordered_map; use that alias. Its members behave like those of <code>std::map</code>.</td></tr>
-<tr><td><a href="./detail/basic_unordered_map.html"><code>basic_unordered_map</code></a> </td><td>The class behind cptr::unordered_map; use that alias. Its members behave like those of <code>std::unordered_map</code>.</td></tr>
+<tr><td><a href="./detail/basic_forward_list.html"><code>basic_forward_list</code></a> </td><td>The class behind cptr::forward_list; use that alias. Its members behave like those of <code>std::forward_list</code>; the alias lists the differences.</td></tr>
+<tr><td><a href="./detail/basic_list.html"><code>basic_list</code></a> </td><td>The class behind cptr::list; use that alias. Its members behave like those of <code>std::list</code>; the alias lists the differences.</td></tr>
+<tr><td><a href="./detail/basic_ordered_map.html"><code>basic_ordered_map</code></a> </td><td>The class behind cptr::ordered_map; use that alias. Its members behave like those of <code>std::map</code>; the alias lists the differences.</td></tr>
+<tr><td><a href="./detail/basic_unordered_map.html"><code>basic_unordered_map</code></a> </td><td>The class behind cptr::unordered_map; use that alias. Its members behave like those of <code>std::unordered_map</code>; the alias lists the differences.</td></tr>
+<tr><td><a href="./detail/fork_safe_lock.html"><code>fork_safe_lock</code></a> </td><td>A spin lock that is held across fork(), like cage&#x27;s own lock, so that a child never starts with it taken by a thread that does not exist there. Every live fork_safe_lock is in one list, which a single pthread_atfork handler locks in order before fork() and unlocks after it.</td></tr>
+<tr><td><a href="./detail/null_literal_tag.html"><code>null_literal_tag</code></a> </td><td></td></tr>
+</tbody>
+</table>
+
+<h2>Type Aliases</h2>
+<table style="table-layout: fixed; width: 100%;">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="./detail/null_literal.html"><code>null_literal</code></a> </td><td>The parameter type that accepts a literal <code>0</code> or <code>NULL</code> and nothing else of integer type: only a null pointer constant converts to a pointer to member, and no one can name a member of an incomplete struct.</td></tr>
+</tbody>
+</table>
+
+<h2>Enums</h2>
+<table style="table-layout: fixed; width: 100%;">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="./detail/base_address.html"><code>base_address</code></a> </td><td>A cage&#x27;s base address. An enum rather than a std::uintptr_t, so that type-based alias analysis knows stores through a std::uintptr_t* or std::size_t* cannot change it, and compilers keep it in a register across such stores, as in a loop that follows pointers and counts.</td></tr>
 </tbody>
 </table>
 
@@ -469,9 +491,15 @@ window.MathJax = {
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
+<tr><td><a href="./detail/compress_constant.html"><code>compress_constant</code></a> </td><td></td></tr>
+<tr><td><a href="./detail/decompress_as.html"><code>decompress_as</code></a> </td><td>Cage::decompress, but constant-evaluable for null: the check runs only in constant evaluation, so the run-time code is the cage&#x27;s.</td></tr>
+<tr><td><a href="./detail/decompress_constant.html"><code>decompress_constant</code></a> </td><td></td></tr>
+<tr><td><a href="./detail/nonnull_pointer_in_constant_expression.html"><code>nonnull_pointer_in_constant_expression</code></a> </td><td></td></tr>
+<tr><td><a href="./detail/release.html"><code>release</code></a> </td><td>Give back address space from reserve_aligned(), whole.</td></tr>
+<tr><td><a href="./detail/size_class.html"><code>size_class</code></a> </td><td>The smallest class of at least <code>bytes</code> (1 to kMaxSmall) whose size is a multiple of <code>align</code> (a power of two up to kMaxSmall). Above 256 bytes there are four classes per power of two p, p + p/4 ... 2p, so the class follows from the top three bits of bytes - 1, and as they are multiples of p/4 &gt;&#x3D; 64, only alignments above 64 need a short search from there.</td></tr>
 <tr><td><a href="./detail/swap-05.html"><code>swap</code></a> </td><td></td></tr>
 <tr><td><a href="./detail/operator_eq-0fb.html"><code>operator&#x3D;&#x3D;</code></a> </td><td>Equal if both hold the same keys with equal values.</td></tr>
-<tr><td><a href="./detail/operator_3way-0bb.html"><code>operator&lt;&#x3D;&gt;</code></a> </td><td>Three-way comparison operators</td></tr>
+<tr><td><a href="./detail/operator_3way-0b.html"><code>operator&lt;&#x3D;&gt;</code></a> </td><td>Three-way comparison operators</td></tr>
 </tbody>
 </table>
 

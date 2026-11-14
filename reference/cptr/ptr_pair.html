@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L19">cptr/pack.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L32">cptr/pack.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class A,
     class B = A,
@@ -466,13 +466,24 @@ class ptr_pair;</code></pre>
 </thead>
 <tbody>
 <tr><td><a href="./ptr_pair/2constructor-01.html"><code>ptr_pair</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
-<tr><td><a href="./ptr_pair/first.html"><code>first</code></a> </td><td></td></tr>
-<tr><td><a href="./ptr_pair/second.html"><code>second</code></a> </td><td></td></tr>
-<tr><td><a href="./ptr_pair/set_first.html"><code>set_first</code></a> </td><td></td></tr>
-<tr><td><a href="./ptr_pair/set_second.html"><code>set_second</code></a> </td><td></td></tr>
+<tr><td><a href="./ptr_pair/first.html"><code>first</code></a> </td><td>The first pointer, or <code>nullptr</code>. Constant-evaluable when null.</td></tr>
+<tr><td><a href="./ptr_pair/second.html"><code>second</code></a> </td><td>The second pointer, or <code>nullptr</code>. Constant-evaluable when null.</td></tr>
+<tr><td><a href="./ptr_pair/set_first.html"><code>set_first</code></a> </td><td>Replaces the first pointer (null or in the cage), keeping the second.</td></tr>
+<tr><td><a href="./ptr_pair/set_second.html"><code>set_second</code></a> </td><td>Replaces the second pointer (null or in the cage), keeping the first.</td></tr>
 </tbody>
 </table>
 
+<div class="friends">
+<h2>Friends</h2>
+<table style="table-layout: fixed; width: 100%;">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code><a href="./operator_eq-03.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Both pointers equal.</td></tr>
+</tbody>
+</table>
+</div><!-- /friends -->
 </div><!-- /symbol -->
 
 </div>

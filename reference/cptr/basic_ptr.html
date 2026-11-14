@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L65">cptr/ptr.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/ptr.hpp#L74">cptr/ptr.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage,
@@ -470,12 +470,13 @@ class basic_ptr;</code></pre>
 </thead>
 <tbody>
 <tr><td><a href="./basic_ptr/cage_type.html"><code>cage_type</code></a> </td><td>The cage the pointer is compressed against.</td></tr>
-<tr><td><a href="./basic_ptr/difference_type.html"><code>difference_type</code></a> </td><td>The iterator and std::pointer_traits types below let ptr serve as an allocator&#x27;s pointer type, which must be a random access iterator.</td></tr>
+<tr><td><a href="./basic_ptr/difference_type.html"><code>difference_type</code></a> </td><td>The signed distance between two pointers, in elements. Together with the iterator types below, it lets ptr serve as an allocator&#x27;s pointer type, which must be a random access iterator.</td></tr>
 <tr><td><a href="./basic_ptr/element_type.html"><code>element_type</code></a> </td><td>The type pointed to.</td></tr>
-<tr><td><a href="./basic_ptr/iterator_category.html"><code>iterator_category</code></a> </td><td></td></tr>
-<tr><td><a href="./basic_ptr/pointer.html"><code>pointer</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_ptr/iterator_category.html"><code>iterator_category</code></a> </td><td>ptr is a random access iterator for code that reads std::iterator_traits...</td></tr>
+<tr><td><a href="./basic_ptr/iterator_concept.html"><code>iterator_concept</code></a> </td><td>...and a contiguous iterator for the C++20 iterator concepts, so that algorithms such as std::copy over a range of ptr lower to memmove.</td></tr>
+<tr><td><a href="./basic_ptr/pointer.html"><code>pointer</code></a> </td><td>The raw pointer type, as for an iterator.</td></tr>
 <tr><td><a href="./basic_ptr/rebind.html"><code>rebind</code></a> </td><td>The same kind of pointer to a <code>U</code>, for std::pointer_traits.</td></tr>
-<tr><td><a href="./basic_ptr/reference.html"><code>reference</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_ptr/reference.html"><code>reference</code></a> </td><td>The type <code>operator*</code> returns, as for an iterator.</td></tr>
 <tr><td><a href="./basic_ptr/value_type.html"><code>value_type</code></a> </td><td>The pointee type without cv-qualifiers, as for an iterator.</td></tr>
 </tbody>
 </table>
@@ -488,14 +489,14 @@ class basic_ptr;</code></pre>
 <tbody>
 <tr><td><a href="./basic_ptr/2constructor-02.html"><code>basic_ptr</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
 <tr><td><a href="./basic_ptr/operator_assign-02.html"><code>operator&#x3D;</code></a> </td><td>Assignment operators</td></tr>
-<tr><td><a href="./basic_ptr/bits.html"><code>bits</code></a> </td><td>The compressed representation, e.g. for packing it with other data.</td></tr>
-<tr><td><a href="./basic_ptr/get.html"><code>get</code></a> </td><td>The raw pointer, or <code>nullptr</code>: one add and a conditional move.</td></tr>
-<tr><td><a href="./basic_ptr/operator_star.html"><code>operator*</code></a> </td><td>The object pointed to. Like <code>operator-&gt;</code>, it skips the null check.</td></tr>
+<tr><td><a href="./basic_ptr/bits.html"><code>bits</code></a> </td><td>The compressed representation, e.g. for packing it with other data. Zero is null; otherwise it is the offset from the cage base, shifted right by <code>Cage::shift</code>.</td></tr>
+<tr><td><a href="./basic_ptr/get.html"><code>get</code></a> </td><td>The raw pointer, or <code>nullptr</code>: an add plus the null check, which clang turns into a conditional move and GCC usually into a branch. Constant-evaluable when null, since that does not need the cage base.</td></tr>
+<tr><td><a href="./basic_ptr/operator_star.html"><code>operator*</code></a> </td><td>The object pointed to. Like <code>operator-&gt;</code>, it skips the null check, so the pointer must not be null.</td></tr>
 <tr><td><a href="./basic_ptr/operator_inc-0e.html"><code>operator++</code></a> </td><td>Advance by one element.</td></tr>
 <tr><td><a href="./basic_ptr/operator_plus_eq.html"><code>operator+&#x3D;</code></a> </td><td>Advance by <code>n</code> elements.</td></tr>
 <tr><td><a href="./basic_ptr/operator_dec-05.html"><code>operator--</code></a> </td><td>Go back by one element.</td></tr>
 <tr><td><a href="./basic_ptr/operator_minus_eq.html"><code>operator-&#x3D;</code></a> </td><td>Go back by <code>n</code> elements.</td></tr>
-<tr><td><a href="./basic_ptr/operator_ptr.html"><code>operator-&gt;</code></a> </td><td>Member access. Dereferencing null is undefined, so this skips the null check and costs a single add.</td></tr>
+<tr><td><a href="./basic_ptr/operator_ptr.html"><code>operator-&gt;</code></a> </td><td>Member access: a single add. Dereferencing null is undefined, so this skips the null check: on a null ptr it returns the cage base, not <code>nullptr</code>, and an access through it faults because the cage&#x27;s first span is never committed. Use get() when the pointer may be null.</td></tr>
 <tr><td><a href="./basic_ptr/operator_subs.html"><code>operator[]</code></a> </td><td>Element <code>i</code> counting from this one, as for a raw pointer.</td></tr>
 <tr><td><a href="./basic_ptr/2conversion-03.html"><code>operator T*</code></a> </td><td>Converts implicitly to the raw pointer, so a <code>ptr</code> can be passed wherever a <code>T*</code> is expected.</td></tr>
 <tr><td><a href="./basic_ptr/2conversion-06.html"><code>operator bool</code></a> </td><td>True unless null.</td></tr>
@@ -508,7 +509,7 @@ class basic_ptr;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./basic_ptr/from_bits.html"><code>from_bits</code></a> </td><td></td></tr>
+<tr><td><a href="./basic_ptr/from_bits.html"><code>from_bits</code></a> </td><td>The pointer whose bits() are <code>bits</code>. Only pass bits() of a pointer into the same cage: bits from another cage (or another cage type with the same T) decode to an unrelated address in this one, and nothing checks it.</td></tr>
 <tr><td><a href="./basic_ptr/pointer_to.html"><code>pointer_to</code></a> </td><td>For std::pointer_traits, so ptr can serve as an allocator&#x27;s pointer type.</td></tr>
 </tbody>
 </table>
@@ -520,11 +521,16 @@ class basic_ptr;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code><a href="./operator_3way-04.html">cptr::operator&lt;&#x3D;&gt;</a></code></td><td>All pointers share the cage base, so offsets order like addresses.</td></tr>
-<tr><td><code><a href="./operator_eq-075.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
-<tr><td><code><a href="./operator_eq-07a.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
-<tr><td><code><a href="./operator_eq-0e.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
-<tr><td><code><a href="./operator_eq-0c.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Equality operator</td></tr>
+<tr><td><code><a href="./operator_minus-07.html">cptr::operator-</a></code></td><td>The number of elements between a raw pointer and this pointer into the same array, as <code>a - get()</code>.</td></tr>
+<tr><td><code><a href="./operator_minus-0e.html">cptr::operator-</a></code></td><td>The number of elements between this pointer and a raw pointer into the same array, as <code>get() - b</code>.</td></tr>
+<tr><td><code><a href="./operator_3way-0d6.html">cptr::operator&lt;&#x3D;&gt;</a></code></td><td>Orders a ptr and a strict_ptr to the same type by address.</td></tr>
+<tr><td><code><a href="./operator_eq-0a.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Same address, between a ptr and a strict_ptr to the same type, which would otherwise be ambiguous: each converts to the other.</td></tr>
+<tr><td><code><a href="./operator_3way-0f.html">cptr::operator&lt;&#x3D;&gt;</a></code></td><td>Orders like <code>get() &lt;&#x3D;&gt; b</code> through std::compare_three_way, so null orders first and unrelated pointers get a total order.</td></tr>
+<tr><td><code><a href="./operator_3way-04.html">cptr::operator&lt;&#x3D;&gt;</a></code></td><td>All pointers share the cage base, so offsets order like addresses. Null orders first.</td></tr>
+<tr><td><code><a href="./operator_eq-08d.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Same address as the raw pointer <code>b</code>, as <code>get() &#x3D;&#x3D; b</code>. Takes any <code>U*</code> that converts implicitly to <code>T*</code>.</td></tr>
+<tr><td><code><a href="./operator_eq-0b.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>True if null, for a literal <code>0</code> or <code>NULL</code>. Any other integer does not compile.</td></tr>
+<tr><td><code><a href="./operator_eq-095.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>True if null. A template, as are the overloads below, so that only one of them takes a literal <code>0</code>.</td></tr>
+<tr><td><code><a href="./operator_eq-0c.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Same address. Compares the offsets, without touching the cage base.</td></tr>
 <tr><td><code><a href="./operator_minus-0b.html">cptr::operator-</a></code></td><td>The number of elements between two pointers into the same array.</td></tr>
 <tr><td><code><a href="./operator_minus-06.html">cptr::operator-</a></code></td><td>Subtraction operator</td></tr>
 <tr><td><code><a href="./operator_plus-02.html">cptr::operator+</a></code></td><td>Addition operator</td></tr>
@@ -539,7 +545,8 @@ class basic_ptr;</code></pre>
 <tr><th>Name</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><a href="./destroy.html"><code>destroy</code></a></td><td>Destroy and free an object created by make().</td></tr>
+<tr><td><a href="./destroy-02.html"><code>destroy</code></a></td><td>Destroy and free an object created by make(), as <code>delete</code> does; null is a no-op. A pointer to const works, as for <code>delete</code>.</td></tr>
+<tr><td><a href="./destroy_array.html"><code>destroy_array</code></a></td><td>Destroy and free <code>n</code> elements created by make_array(n). <code>n</code> must be the count passed to make_array(), and <code>p</code> the pointer it returned (not a pointer to a base class: as for <code>delete[]</code>, that is undefined). Null is a no-op.</td></tr>
 </tbody>
 </table>
 </div><!-- /non-member-functions -->

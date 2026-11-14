@@ -452,7 +452,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L46">cptr/pack.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/pack.hpp#L69">cptr/pack.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">template&lt;
     class T,
     class Cage = <a href="./default_cage.html">default_cage</a>&gt;
@@ -465,13 +465,24 @@ class ptr_with_payload;</code></pre>
 </thead>
 <tbody>
 <tr><td><a href="./ptr_with_payload/2constructor-0b.html"><code>ptr_with_payload</code></a>         <span class="small">[constructor]</span></td><td>Constructors</td></tr>
-<tr><td><a href="./ptr_with_payload/get.html"><code>get</code></a> </td><td></td></tr>
-<tr><td><a href="./ptr_with_payload/payload.html"><code>payload</code></a> </td><td></td></tr>
-<tr><td><a href="./ptr_with_payload/set.html"><code>set</code></a> </td><td></td></tr>
-<tr><td><a href="./ptr_with_payload/set_payload.html"><code>set_payload</code></a> </td><td></td></tr>
+<tr><td><a href="./ptr_with_payload/get.html"><code>get</code></a> </td><td>The pointer, or <code>nullptr</code>. Constant-evaluable when null.</td></tr>
+<tr><td><a href="./ptr_with_payload/payload.html"><code>payload</code></a> </td><td>The payload.</td></tr>
+<tr><td><a href="./ptr_with_payload/set.html"><code>set</code></a> </td><td>Replaces the pointer (null or in the cage), keeping the payload.</td></tr>
+<tr><td><a href="./ptr_with_payload/set_payload.html"><code>set_payload</code></a> </td><td>Replaces the payload, keeping the pointer.</td></tr>
 </tbody>
 </table>
 
+<div class="friends">
+<h2>Friends</h2>
+<table style="table-layout: fixed; width: 100%;">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code><a href="./operator_eq-080.html">cptr::operator&#x3D;&#x3D;</a></code></td><td>Same pointer and same payload.</td></tr>
+</tbody>
+</table>
+</div><!-- /friends -->
 </div><!-- /symbol -->
 
 </div>
