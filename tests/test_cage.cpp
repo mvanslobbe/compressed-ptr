@@ -14,6 +14,7 @@
 #include "cptr/all.hpp"
 
 #if !defined(_WIN32)
+#  include <fcntl.h>
 #  include <sys/wait.h>
 #  include <unistd.h>
 #endif
@@ -369,9 +370,9 @@ std::size_t fill_and_free(std::vector<void*>& blocks) {
 TEST(freed_small_blocks_are_decommitted) {
   using C = churn_cage;
   std::vector<void*> blocks;
-  // At most one slab for each of the 15 size classes used may stay
-  // committed; each is a single span. The bump region also commits up to
-  // 1 MiB ahead.
+  // Without trim(), at most one slab for each of the 15 size classes used
+  // may stay committed; each is a single span. The bump region also commits
+  // up to 1 MiB ahead. trim() releases all of it.
   constexpr std::size_t kKept = 15 * C::span_size + (1 << 20);
   for (int round = 0; round < 2; round++) {
     std::size_t peak = fill_and_free<C>(blocks);
@@ -381,7 +382,7 @@ TEST(freed_small_blocks_are_decommitted) {
         "  round %d: committed %zu KiB at peak, %zu KiB after free, "
         "%zu KiB after trim\n",
         round, peak / 1024, kept / 1024, C::committed_bytes() / 1024);
-    CHECK(C::committed_bytes() <= kKept);
+    CHECK(C::committed_bytes() == 0);
   }
   // Without trim(): after the retention time, the next slab that becomes
   // empty purges the others.
@@ -574,3 +575,72 @@ TEST(compress_is_the_offset) {
   CHECK(wide_cage::decompress(wide_cage::compress(p)) == p);
   wide_cage::deallocate(p);
 }
+
+// Under AddressSanitizer only the bytes asked for are unpoisoned, so an
+// overflow into the rest of the size class, or of a large block into the
+// rest of its last span, is reported. Before, the whole class or span was
+// unpoisoned and these writes went unnoticed.
+#if defined(CPTR_ASAN) && !defined(_WIN32)
+namespace {
+struct asan_cage : cptr::cage<asan_cage, 28> {};
+
+bool write_past_end_is_caught(std::size_t bytes) {
+  std::fflush(stdout);
+  pid_t pid = fork();
+  if (pid == 0) {
+    int null = ::open("/dev/null", O_WRONLY);
+    dup2(null, 2);  // keep the expected report out of the test log
+    auto* p = static_cast<volatile char*>(asan_cage::allocate(bytes));
+    p[bytes - 1] = 1;  // fine
+    p[bytes] = 1;      // one past the end
+    _exit(0);
+  }
+  int status = 0;
+  waitpid(pid, &status, 0);
+  return !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+}
+}  // namespace
+
+TEST(asan_catches_overflow_into_slack) {
+  CHECK(write_past_end_is_caught(20));      // 24-byte class
+  CHECK(write_past_end_is_caught(300));     // 320-byte class
+  CHECK(write_past_end_is_caught(100000));  // two spans
+  // And the bytes asked for are all usable.
+  auto* p = static_cast<char*>(asan_cage::allocate(300));
+  std::memset(p, 1, 300);
+  asan_cage::deallocate(p);
+}
+#endif
+
+// The span tables are committed on demand: a 64 GiB cage used to fill 5 MiB
+// of them on its first allocation.
+#if defined(__linux__) && !defined(CPTR_ASAN)
+namespace {
+struct lazy_cage : cptr::cage<lazy_cage, 36, 4> {};
+long rss_kib() {
+  std::FILE* f = std::fopen("/proc/self/status", "r");
+  char line[256];
+  long kib = -1;
+  while (f && std::fgets(line, sizeof line, f)) {
+    if (std::sscanf(line, "VmRSS: %ld", &kib) == 1) {
+      break;
+    }
+  }
+  if (f) {
+    std::fclose(f);
+  }
+  return kib;
+}
+}  // namespace
+
+TEST(span_tables_are_committed_on_demand) {
+  long before = rss_kib();
+  void* p = lazy_cage::allocate(16);
+  long grown = rss_kib() - before;
+  if (grown > 2048) {
+    std::printf("  first allocation added %ld KiB of resident memory\n", grown);
+  }
+  CHECK(grown <= 2048);
+  lazy_cage::deallocate(p);
+}
+#endif
