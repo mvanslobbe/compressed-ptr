@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794663810980,
+  "lastUpdate": 1794663958506,
   "repoUrl": "https://github.com/mvanslobbe/compressed-ptr",
   "entries": {
     "compressed as % of raw pointers": [
@@ -1494,6 +1494,305 @@ window.BENCHMARK_DATA = {
           {
             "name": "pointer chase, DRAM, p99.5",
             "value": 96.97,
+            "unit": "% of raw pointers"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "49699333+dependabot[bot]@users.noreply.github.com",
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2d40ab26d96e4a8b91e5b0a2462cfda2d210eb1d",
+          "message": "Bump actions/checkout from 4 to 7 (#1)\n\nBumps [actions/checkout](https://github.com/actions/checkout) from 4 to 7.\n- [Release notes](https://github.com/actions/checkout/releases)\n- [Changelog](https://github.com/actions/checkout/blob/main/CHANGELOG.md)\n- [Commits](https://github.com/actions/checkout/compare/v4...v7)\n\n---\nupdated-dependencies:\n- dependency-name: actions/checkout\n  dependency-version: '7'\n  dependency-type: direct:production\n  update-type: version-update:semver-major\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+          "timestamp": "2026-11-14T14:41:21+01:00",
+          "tree_id": "76acf4123d417a05a0ffb7e833530d2d8ac81201",
+          "url": "https://github.com/mvanslobbe/compressed-ptr/commit/2d40ab26d96e4a8b91e5b0a2462cfda2d210eb1d"
+        },
+        "date": 1794663958046,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "list push_back, p50",
+            "value": 81.13,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "list push_back, p90",
+            "value": 55.6,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "list push_back, p95",
+            "value": 87.46,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "list push_back, p99",
+            "value": 88.23,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "list push_back, p99.5",
+            "value": 95.8,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "list walk, p50",
+            "value": 123.16,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "list walk, p90",
+            "value": 120.03,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "list walk, p95",
+            "value": 118.91,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "list walk, p99",
+            "value": 191.22,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "list walk, p99.5",
+            "value": 186.81,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map insert, p50",
+            "value": 99.09,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map insert, p90",
+            "value": 89.18,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map insert, p95",
+            "value": 87.9,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map insert, p99",
+            "value": 89.65,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map insert, p99.5",
+            "value": 88.81,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map find, p50",
+            "value": 88.01,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map find, p90",
+            "value": 86.41,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map find, p95",
+            "value": 84.88,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map find, p99",
+            "value": 77.24,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "ordered_map find, p99.5",
+            "value": 74.5,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map insert, p50",
+            "value": 93.46,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map insert, p90",
+            "value": 62.5,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map insert, p95",
+            "value": 57.48,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map insert, p99",
+            "value": 60.28,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map insert, p99.5",
+            "value": 74.25,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map find, p50",
+            "value": 97.72,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map find, p90",
+            "value": 96.46,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map find, p95",
+            "value": 93.72,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map find, p99",
+            "value": 90.13,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "unordered_map find, p99.5",
+            "value": 87.68,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, p50",
+            "value": 150.41,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, p90",
+            "value": 139.87,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, p95",
+            "value": 139.38,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, p99",
+            "value": 136.3,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, p99.5",
+            "value": 123.66,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, nonnull_ptr, p50",
+            "value": 125.21,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, nonnull_ptr, p90",
+            "value": 116.74,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, nonnull_ptr, p95",
+            "value": 117.4,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, nonnull_ptr, p99",
+            "value": 115.89,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L1, nonnull_ptr, p99.5",
+            "value": 104.72,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L2, p50",
+            "value": 101.34,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L2, p90",
+            "value": 105.62,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L2, p95",
+            "value": 104.94,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L2, p99",
+            "value": 94.21,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L2, p99.5",
+            "value": 73.19,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L3, p50",
+            "value": 96.04,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L3, p90",
+            "value": 101.04,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L3, p95",
+            "value": 101.17,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L3, p99",
+            "value": 97.35,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, L3, p99.5",
+            "value": 99.85,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, DRAM, p50",
+            "value": 82.86,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, DRAM, p90",
+            "value": 85.72,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, DRAM, p95",
+            "value": 88.26,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, DRAM, p99",
+            "value": 76.48,
+            "unit": "% of raw pointers"
+          },
+          {
+            "name": "pointer chase, DRAM, p99.5",
+            "value": 82.55,
             "unit": "% of raw pointers"
           }
         ]
