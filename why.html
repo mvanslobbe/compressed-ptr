@@ -86,8 +86,10 @@ JVM's compressed oops are on by default for heaps under 32 GiB. The idea
 is the same in both:</p>
 <ol>
 <li>Reserve one region of address space, 4 GiB long and aligned to 4 GiB.
-   This costs address space, not memory: pages are committed as they are
-   used.</li>
+   This costs address space, not memory: nothing is allocated up front, and
+   pages are committed as they are used. A program with a three-element
+   list in its cage shows 4 GiB more under VIRT in <code>top</code> and 0.2 MiB more
+   under RES.</li>
 <li>Allocate the objects that point at each other inside that region (the
    <em>cage</em>).</li>
 <li>Store a pointer into the cage as its 32-bit offset from the start.
@@ -105,7 +107,7 @@ node* raw = head;                                     // and back to a plain poi
 </code></pre>
 <p>A <code>cptr::ptr&lt;T&gt;</code> converts to and from <code>T*</code>, so code that takes plain
 pointers keeps working. With 8-byte alignment the offset can be shifted,
-which stretches one cage to 32 GiB.</p>
+which stretches one cage to 32 GiB (64 GiB with 16-byte alignment).</p>
 <h2 id="what-it-buys">What it buys</h2>
 <p>Swapping the container is the whole migration:</p>
 <pre><code class="language-cpp">cptr::list&lt;int&gt; l;                    // was std::list&lt;int&gt;
@@ -161,10 +163,11 @@ loses:</p>
   <code>cptr::make</code>, the bundled containers, or <code>cptr::allocator</code>. Compressing a
   pointer from elsewhere is a bug; debug builds assert, and
   <code>CPTR_CHECKED</code> keeps the check in release builds.</li>
-<li><strong>One structure, one cage, at most 4 GiB</strong> (32 GiB with 8-byte
-  alignment). Several cages are fine, as each has its own type.</li>
+<li><strong>One structure, one cage, at most 4 GiB</strong> (up to 64 GiB with 8- or
+  16-byte alignment). Several cages are fine, as each has its own type.</li>
 <li><strong>Each Windows DLL gets its own cage.</strong> On Linux and macOS shared
-  libraries share one.</li>
+  libraries share one, as long as your own cage tags are marked
+  <code>CPTR_VISIBLE</code> and the libraries are not loaded with <code>RTLD_LOCAL</code>.</li>
 </ul>
 <p>If your data already lives in arrays and vectors, this library has little to
 offer you: there are no pointers to shrink.</p>
