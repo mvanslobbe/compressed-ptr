@@ -5,7 +5,8 @@
 //
 // Memory is the growth of the resident set while a container is built, so
 // it includes the allocator's own overhead. Times are the best of five
-// passes. Build in Release mode.
+// passes. Build in Release mode (with NDEBUG): debug assertions in the
+// containers make the cptr times meaningless.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>

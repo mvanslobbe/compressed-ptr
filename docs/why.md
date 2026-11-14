@@ -44,7 +44,7 @@ node* raw = head;                                     // and back to a plain poi
 
 A `cptr::ptr<T>` converts to and from `T*`, so code that takes plain
 pointers keeps working. With 8-byte alignment the offset can be shifted,
-which stretches one cage to 32 GiB.
+which stretches one cage to 32 GiB (64 GiB with 16-byte alignment).
 
 ## What it buys
 
@@ -84,10 +84,11 @@ loses:
   `cptr::make`, the bundled containers, or `cptr::allocator`. Compressing a
   pointer from elsewhere is a bug; debug builds assert, and
   `CPTR_CHECKED` keeps the check in release builds.
-- **One structure, one cage, at most 4 GiB** (32 GiB with 8-byte
-  alignment). Several cages are fine, as each has its own type.
+- **One structure, one cage, at most 4 GiB** (up to 64 GiB with 8- or
+  16-byte alignment). Several cages are fine, as each has its own type.
 - **Each Windows DLL gets its own cage.** On Linux and macOS shared
-  libraries share one.
+  libraries share one, as long as your own cage tags are marked
+  `CPTR_VISIBLE` and the libraries are not loaded with `RTLD_LOCAL`.
 
 If your data already lives in arrays and vectors, this library has little to
 offer you: there are no pointers to shrink.

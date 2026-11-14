@@ -21,10 +21,10 @@ container against its cptr counterpart.
 
 - **Memory:** the bundled containers use half the memory of the std ones.
 - **Speed:** against raw links in the same container, compressed links are
-  mostly equal or faster, most of all in the tail once a structure outgrows
-  the caches, because more nodes fit in each cache line and page. The
-  exceptions: `unordered_map` find, about 17% slower here, and pointer chases
-  that fit in L1 or L2.
+  mostly equal or faster once a structure outgrows the caches, because more
+  nodes fit in each cache line and page. The exceptions: `unordered_map`
+  find and erase, pointer chases that fit in L1 or L2, and the slowest
+  0.5% of list walks and shrinks. The tables below give every case.
 - **Where it costs:** a compressed pointer is decompressed with an add (and
   a conditional move for null). On a pointer chase that fits in L1, that
   shows; `nonnull_ptr` removes most of it. Pointer arithmetic over arrays
@@ -83,7 +83,7 @@ instead of 48-byte nodes for 4-byte keys and values.
 
 {{hash}}
 
-These keys are 0 to n − 1. `std::hash<uint32_t>` is the identity, so
+These keys are 0 to n − 1, inserted in random order. `std::hash<uint32_t>` is the identity, so
 `std::unordered_map` gives every such key a bucket of its own, which favours
 it at find. With keys spread over the 32-bit range (as in
 `example_expect_gains`), or with a mixing hash, `cptr::unordered_map` finds

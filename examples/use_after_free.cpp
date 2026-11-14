@@ -1,5 +1,6 @@
-// Built with -fsanitize=address, this reports a heap-use-after-free inside
-// the cage. Not run as a test.
+// Built with -fsanitize=address, this reports a use-after-poison inside the
+// cage: freed cage blocks are poisoned, as heap blocks are. Not run as a
+// test; CI builds it and checks for that report.
 #include <cstdio>
 
 #include "cptr/ptr.hpp"

@@ -35,7 +35,7 @@ Header-only; C++20 and a 64-bit target (Linux, macOS, Windows; GCC, Clang,
 MSVC). A complete project, `CMakeLists.txt`:
 
 ```cmake
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(hello CXX)
 set(CMAKE_CXX_STANDARD 20)
 
@@ -60,7 +60,7 @@ int main() {
   cptr::list<int> l{3, 1, 2};  // was std::list<int>
   l.sort();
   for (int v : l) std::printf("%d ", v);
-  std::printf("\n%zu bytes per element (std::list: 24 plus malloc's)\n",
+  std::printf("\nnode: %zu bytes (std::list's: 24)\n",
               cptr::list<int>::node_size);
 }
 ```
@@ -68,7 +68,7 @@ int main() {
 ```sh
 cmake -B build && cmake --build build && ./build/hello
 # 1 2 3
-# 12 bytes per element (std::list: 24 plus malloc's)
+# node: 12 bytes (std::list's: 24)
 ```
 
 No CMake? Copy [`single_include/cptr.hpp`](single_include/cptr.hpp), write
@@ -121,8 +121,8 @@ struct history {
   cptr::list<int, store> events;  // the list's nodes live in the file too
 };
 
-store::open("data.cage");
-auto* h = store::root<history>();  // nullptr in a new file
+if (!store::open("data.cage")) return 1;  // creates a sparse 4 GiB file
+auto* h = store::root<history>();          // nullptr in a new file
 if (!h) {
   h = cptr::make<history, store>().get();
   store::set_root(h);
@@ -153,17 +153,20 @@ int main() {
 ```
 
 Expect: plf::list at 12.1 instead of 24.1 bytes per element, walks 15%
-faster, sorts as fast
+faster, sorts as fast. This needs plf::list with
+[plf_tools#7](https://github.com/mattreecebentley/plf_tools/pull/7) and
+[plf_list#45](https://github.com/mattreecebentley/plf_list/pull/45), which
+are waiting to be merged
 ([`examples/plf_list_minimal.cpp`](examples/plf_list_minimal.cpp)).
 
 ## Is it for you?
 
 **Yes**, if you have many small heap objects linked by pointers (lists,
 trees, graphs, tries, object graphs) and any one structure stays under
-4 GiB, or 32 GiB with 8-byte alignment.
+4 GiB, or up to 64 GiB when its objects are 8- or 16-byte aligned.
 
 **No**, if your data already lives in arrays and vectors, or one structure
-needs more than 32 GiB.
+needs more than 64 GiB.
 
 **The costs, plainly:**
 

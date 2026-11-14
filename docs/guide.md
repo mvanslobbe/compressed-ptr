@@ -47,12 +47,14 @@ allocator, several independent cages, and containers. No V8 code is used.
   costs no memory. Pages are committed in 1 MiB steps as the allocator needs
   them.
 * **Compression.** A pointer is stored as `p - base`, truncated to 32 bits.
-* **Decompression.** `base + bits` is one add. `ptr` maps 0 to `nullptr`
-  with a conditional move. `nonnull_ptr` skips that check.
+* **Decompression.** `base + bits` is one add. `ptr` maps 0 to `nullptr`,
+  which compilers turn into a conditional move or a well-predicted branch.
+  `nonnull_ptr` skips that check.
 * **Allocator.** Every object a compressed pointer refers to must come from
   the cage. The cage has a built-in allocator: segregated free lists of
-  header-less blocks (8-byte classes up to 128 B), plus whole 64 KiB spans
-  for large blocks, which are decommitted on free. It also works as a
+  header-less blocks in size classes up to 32 KiB, plus whole 64 KiB spans
+  for larger blocks, which are decommitted on free. Alignments above 64 KiB
+  are not supported (`std::bad_alloc`). It also works as a
   standard allocator and as a `std::pmr::memory_resource`.
 * **Several cages.** Each cage is its own type with its own base, so a
   program can have several independent 4 GiB heaps:
@@ -91,13 +93,14 @@ pointer arithmetic, comparisons, `bits()` and `from_bits()`, and
 conversions that keep the address. Compressing and decompressing need the
 cage's base, which is only known at run time.
 
-Both containers keep a sentinel node in the cage, so an iterator is one
-8-byte pointer and `end()` stays valid as elements come and go. They are
-aliases of `cptr::detail::basic_list` and `cptr::detail::basic_ordered_map`,
-whose last template argument, `Compressed = false`, gives raw links with the
-same code and allocator. The benchmarks use those to separate the effect of
-compression from the effect of the allocator; they are not part of the
-public interface.
+`list` and `ordered_map` keep a sentinel node in the cage, so their
+iterators are one 8-byte pointer and `end()` stays valid as elements come
+and go. Each container is an alias of a `cptr::detail::basic_*` class (for
+example `cptr::detail::basic_list`), whose page in the API reference lists
+every member. Its last template argument, `Compressed = false`, gives raw
+links with the same code and allocator; the benchmarks use it to separate
+the effect of compression from the effect of the allocator. That raw form
+is not part of the public interface.
 
 The built-in allocator is fast, but you can supply your own. A
 `user_cage` reserves the region and compresses like `cage`; your allocator
@@ -212,8 +215,22 @@ the measurements.
   any `T*` compresses without notice, and `cond ? p : raw` with a `ptr`
   and a `T*` is ambiguous. `strict_ptr<T>` is the same type with an
   explicit `strict_ptr<T>(raw)` constructor and no assignment from `T*`;
-  it still converts to `T*` and to and from `ptr<T>` implicitly.
+  it still converts to `T*` and to `ptr<T>` implicitly, while a `ptr<T>`
+  becomes a `strict_ptr<T>` only explicitly.
 * **64-bit only.** A 32-bit target already has 4-byte pointers.
+* **Thread safety is that of the std containers.** Allocating and freeing in
+  a cage is thread-safe. A container may be read from several threads at
+  once, but any thread that modifies it needs exclusive access.
+* **A cage is a type.** `cptr::default_cage` serves everything that does not
+  name a cage. For a separate heap, declare a tag and a cage for it, either
+  `struct mesh_heap : cptr::cage<mesh_heap> {};` or
+  `struct mesh_tag {}; using mesh_heap = cptr::cage<mesh_tag>;`, and pass it
+  as the containers' and `ptr`'s `Cage` argument. Pointers from different
+  cages do not mix. Across shared libraries, mark your tag `CPTR_VISIBLE`
+  (see below).
+* **Freeing.** Free what `cptr::make` created with `cptr::destroy`; the
+  containers free their own nodes. LeakSanitizer cannot see cage memory, so
+  check `allocated_bytes()` on the cage if you suspect a leak.
 * **Standard library containers mostly ignore fancy pointers** for their
   internal links, so `cptr::fancy_allocator` does not shrink `std::list` or
   `std::map` nodes. Use the bundled containers or a container that honours
@@ -247,8 +264,13 @@ the measurements.
 * **The cage size is fixed when the cage is reserved.** The default is
   4 GiB. Allocation fails with `std::bad_alloc` when the cage is full.
 * **Misuse checks** use `CPTR_ASSERT(cond, msg)`, which defaults to
-  `assert`. Define it before including a cage header to log or throw
-  instead.
+  `assert`. Define it before including a cage header to log or count
+  misuse instead; it is called from `noexcept` functions, so throwing from
+  it ends in `std::terminate`. The checks that catch a pointer from outside
+  the cage go through `CPTR_CHECK`, which is `CPTR_ASSERT` unless
+  `CPTR_CHECKED` is defined and you have not defined your own
+  `CPTR_ASSERT`: then it stays active in release builds and aborts with a
+  message.
 * **AddressSanitizer** understands the cage: freed blocks are poisoned.
   LeakSanitizer does not see cage memory.
 
@@ -272,7 +294,9 @@ target_link_libraries(your_target PRIVATE compressed_ptr::compressed_ptr)
 Without CMake, `cmake --install` also installs `compressed_ptr.pc`
 (`pkg-config --cflags --libs compressed_ptr`) and the single header
 `cptr.hpp`, which is also committed as `single_include/cptr.hpp`
-(generated by `scripts/amalgamate.py`; CI checks it is current).
+(generated by `scripts/amalgamate.py`; CI checks it is current). It holds
+every header, including `user_cage.hpp` and `mapped_cage.hpp`, which
+`cptr/all.hpp` leaves out.
 
 There are no vcpkg or Conan recipes yet: both pin a tagged release by its
 archive hash, and there is no tagged release.
@@ -288,7 +312,8 @@ to gate on.
 the installed single header, and CI runs it on Linux, macOS and Windows. `cptr/version.hpp` defines `CPTR_VERSION`.
 Sources are formatted with clang-format 22 (`.clang-format`); CI checks it.
 CI also builds with warnings as errors (`-DCOMPRESSED_PTR_WERROR=ON`) and
-runs clang-tidy (`.clang-tidy`, `scripts/run_tidy.sh build`), failing on
+runs clang-tidy (`.clang-tidy`, `scripts/run_tidy.sh build`, on a build
+configured with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`), failing on
 any diagnostic in `include/cptr`.
 
 The fuzzers (`fuzz_allocator`, and `fuzz_containers`, which checks every
@@ -321,9 +346,10 @@ add_subdirectory(compressed-ptr)   # or FetchContent, or find_package(compressed
 target_link_libraries(app PRIVATE compressed_ptr::compressed_ptr)
 ```
 
-Supported platforms: Linux, macOS and Windows on x86-64 and arm64, with
-GCC 11+, Clang 16+ and MSVC 2022. CI runs the tests on all six, plus
-AddressSanitizer, UBSan, ThreadSanitizer and coverage on Linux.
+Supported platforms: Linux, macOS and Windows on x86-64 and arm64. CI
+tests GCC 14, Clang 18, Apple Clang and MSVC 2022 on all six, plus
+AddressSanitizer, UBSan, ThreadSanitizer and coverage on Linux. Other
+compilers with full C++20 support may work but are not tested.
 
 ## Using it in a larger code base
 
@@ -335,5 +361,6 @@ compressed pointers) cannot be done by a library. The parts that can are the
 ones here: the aligned reservation, the compress and decompress arithmetic,
 and the packing helpers, which keep the bit layout in one place. For a code
 base with its own allocator, the reservation and the arithmetic can be used
-on their own, with `cptr::detail::reserve_aligned` and the compress and
-decompress functions.
+on their own, with the compress and decompress functions of a cage type and
+`cptr::detail::reserve_aligned` (an implementation detail, so it may change
+between versions).
