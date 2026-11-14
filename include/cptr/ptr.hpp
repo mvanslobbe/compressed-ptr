@@ -138,11 +138,13 @@ class basic_ptr {
   explicit basic_ptr(U* p) noexcept
       : bits_(Cage::compress(static_cast<T*>(p))) {}
   /// The same explicit casts from another compressed pointer.
+  /// From `void` the offset is copied (and this is constexpr); base to
+  /// derived goes through a raw pointer, except for null.
   template <class U, bool S>
     requires(!std::is_convertible_v<U*, T*> &&
              requires(U* u) { static_cast<T*>(u); })
-  explicit basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
-      : basic_ptr(static_cast<T*>(other.get())) {}
+  constexpr explicit basic_ptr(const basic_ptr<U, Cage, S>& other) noexcept
+      : bits_(cast_bits(other)) {}
 
   /// Compresses `p`, which must be null or point into the cage. Not for
   /// strict_ptr, which needs an explicit `s = strict_ptr<T>(p)`. A literal
@@ -165,10 +167,17 @@ class basic_ptr {
 
   /// The raw pointer, or `nullptr`: an add plus the null check, which clang
   /// turns into a conditional move and GCC usually into a branch.
-  T* get() const noexcept { return static_cast<T*>(Cage::decompress(bits_)); }
+  /// Constant-evaluable when null, since that does not need the cage base.
+  constexpr T* get() const noexcept {
+    // Only in constant evaluation, so the run-time code stays the cage's.
+    if (std::is_constant_evaluated() && !bits_) {
+      return nullptr;
+    }
+    return static_cast<T*>(Cage::decompress(bits_));
+  }
   /// Converts implicitly to the raw pointer, so a `ptr` can be passed
   /// wherever a `T*` is expected.
-  operator T*() const noexcept { return get(); }
+  constexpr operator T*() const noexcept { return get(); }
   /// Member access: a single add. Dereferencing null is undefined, so this
   /// skips the null check: on a null ptr it returns the cage base, not
   /// `nullptr`, and an access through it faults because the cage's first
@@ -319,7 +328,8 @@ class basic_ptr {
   /// orders first and unrelated pointers get a total order.
   template <class U>
     requires std::is_convertible_v<U*, T*>
-  friend std::strong_ordering operator<=>(basic_ptr a, U* b) noexcept {
+  friend constexpr std::strong_ordering operator<=>(basic_ptr a,
+                                                    U* b) noexcept {
     return std::compare_three_way()(a.get(), static_cast<T*>(b));
   }
   /// Same address, between a ptr and a strict_ptr to the same type, which
@@ -342,7 +352,7 @@ class basic_ptr {
   template <class U>
     requires(!std::is_void_v<T> &&
              std::is_same_v<std::remove_cv_t<U>, std::remove_cv_t<T>>)
-  friend std::ptrdiff_t operator-(basic_ptr a, U* b) noexcept {
+  friend constexpr std::ptrdiff_t operator-(basic_ptr a, U* b) noexcept {
     return a.get() - b;
   }
   /// The number of elements between a raw pointer and this pointer into the
@@ -350,7 +360,7 @@ class basic_ptr {
   template <class U>
     requires(!std::is_void_v<T> &&
              std::is_same_v<std::remove_cv_t<U>, std::remove_cv_t<T>>)
-  friend std::ptrdiff_t operator-(U* a, basic_ptr b) noexcept {
+  friend constexpr std::ptrdiff_t operator-(U* a, basic_ptr b) noexcept {
     return a - b.get();
   }
 
@@ -369,6 +379,23 @@ class basic_ptr {
     if constexpr (same_address_v<U>) {
       return other.bits();
     } else {
+      // Null stays null without the cage base, so it is constexpr. Only in
+      // constant evaluation: at run time compress() checks for null anyway.
+      if (std::is_constant_evaluated() && !other.bits()) {
+        return 0;
+      }
+      return Cage::compress(static_cast<T*>(other.get()));
+    }
+  }
+  template <class U, bool S>
+  static constexpr std::uint32_t cast_bits(
+      const basic_ptr<U, Cage, S>& other) noexcept {
+    if constexpr (std::is_void_v<U>) {
+      return other.bits();  // static_cast from void* keeps the address
+    } else {
+      if (std::is_constant_evaluated() && !other.bits()) {
+        return 0;
+      }
       return Cage::compress(static_cast<T*>(other.get()));
     }
   }
@@ -627,16 +654,23 @@ struct std::pointer_traits<cptr::basic_ptr<T, Cage, Strict>> {
   static constexpr T* to_address(pointer p) noexcept { return p.get(); }
 };
 
+/// Hashes the compressed offset, as std::hash<std::uint32_t> does on the
+/// common standard libraries (the value itself), so it is constexpr.
 template <class T, class Cage, bool Strict>
 struct std::hash<cptr::basic_ptr<T, Cage, Strict>> {
-  std::size_t operator()(cptr::basic_ptr<T, Cage, Strict> p) const noexcept {
-    return std::hash<std::uint32_t>()(p.bits());
+  /// The hash of `p`.
+  constexpr std::size_t operator()(
+      cptr::basic_ptr<T, Cage, Strict> p) const noexcept {
+    return p.bits();
   }
 };
 
+/// Hashes the compressed offset, like std::hash of ptr.
 template <class T, class Cage>
 struct std::hash<cptr::nonnull_ptr<T, Cage>> {
-  std::size_t operator()(cptr::nonnull_ptr<T, Cage> p) const noexcept {
-    return std::hash<std::uint32_t>()(p.bits());
+  /// The hash of `p`.
+  constexpr std::size_t operator()(
+      cptr::nonnull_ptr<T, Cage> p) const noexcept {
+    return p.bits();
   }
 };

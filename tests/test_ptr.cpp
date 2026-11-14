@@ -735,3 +735,47 @@ TEST(allocator_rejects_more_than_the_cage) {
   }
   CHECK(threw);
 }
+
+// The null paths need no cage base, so they are constant-evaluable. get()
+// on null, null derived-to-base and void-to-T conversions, comparison with
+// a null T*, the packing types' getters on null, and std::hash used to
+// call the cage (or std::hash<std::uint32_t>) and were not constexpr.
+namespace {
+struct mi_left {
+  long l;
+};
+struct mi_right {
+  long r;
+};
+struct mi_both : mi_left, mi_right {};
+
+constexpr bool null_paths_are_constexpr() {
+  using p32 = cptr::ptr<std::uint32_t>;
+  p32 null;
+  cptr::ptr<mi_both> both;
+  cptr::ptr<mi_right> right = both;  // derived to base at an offset
+  cptr::ptr<mi_both> down(right);    // and back, explicitly
+  cptr::ptr<void> v = p32::from_bits(12);
+  p32 from_void(v);  // void to T copies the offset
+  cptr::ptr<const void> cv;
+  cptr::ptr<const int> from_cv(cv);
+  std::uint32_t* raw = null;
+  cptr::ptr_pair<int, long> pair;
+  cptr::ptr_with_payload<int> payload;
+  cptr::tagged_ptr<std::uint64_t, 2> tagged;
+  return null.get() == nullptr && raw == nullptr && !right &&
+         right.get() == nullptr && !down && from_void.bits() == 12 &&
+         !from_cv && null == static_cast<std::uint32_t*>(nullptr) &&
+         null == static_cast<const std::uint32_t*>(nullptr) &&
+         !(null != static_cast<std::uint32_t*>(nullptr)) &&
+         (null <=> static_cast<std::uint32_t*>(nullptr)) == 0 &&
+         pair.first() == nullptr && pair.second() == nullptr &&
+         payload.get() == nullptr && tagged.get() == nullptr &&
+         std::to_address(null) == nullptr &&
+         std::hash<p32>{}(p32::from_bits(8)) == 8 &&
+         std::hash<p32>{}(null) == 0 &&
+         std::hash<cptr::nonnull_ptr<int>>{}(
+             cptr::nonnull_ptr<int>::from_bits(4)) == 4;
+}
+static_assert(null_paths_are_constexpr());
+}  // namespace

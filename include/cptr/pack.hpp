@@ -9,10 +9,23 @@
 #include <bit>
 #include <cassert>
 #include <cstdint>
+#include <type_traits>
 
 #include "cptr/ptr.hpp"
 
 namespace cptr {
+
+namespace detail {
+/// Cage::decompress, but constant-evaluable for null: the check runs only in
+/// constant evaluation, so the run-time code is the cage's.
+template <class T, class Cage>
+constexpr T* decompress_as(std::uint32_t bits) noexcept {
+  if (std::is_constant_evaluated() && !bits) {
+    return nullptr;
+  }
+  return static_cast<T*>(Cage::decompress(bits));
+}
+}  // namespace detail
 
 /// Two compressed pointers in 8 bytes, e.g. a tree node's children or a list
 /// node's links.
@@ -26,13 +39,13 @@ class ptr_pair {
       : bits_(std::uint64_t(Cage::compress(a)) |
               std::uint64_t(Cage::compress(b)) << 32) {}
 
-  /// The first pointer, or `nullptr`.
-  A* first() const noexcept {
-    return static_cast<A*>(Cage::decompress(std::uint32_t(bits_)));
+  /// The first pointer, or `nullptr`. Constant-evaluable when null.
+  constexpr A* first() const noexcept {
+    return detail::decompress_as<A, Cage>(std::uint32_t(bits_));
   }
-  /// The second pointer, or `nullptr`.
-  B* second() const noexcept {
-    return static_cast<B*>(Cage::decompress(std::uint32_t(bits_ >> 32)));
+  /// The second pointer, or `nullptr`. Constant-evaluable when null.
+  constexpr B* second() const noexcept {
+    return detail::decompress_as<B, Cage>(std::uint32_t(bits_ >> 32));
   }
   /// Replaces the first pointer (null or in the cage), keeping the second.
   void set_first(A* a) noexcept {
@@ -63,9 +76,9 @@ class ptr_with_payload {
       : bits_(std::uint64_t(Cage::compress(p)) | std::uint64_t(payload) << 32) {
   }
 
-  /// The pointer, or `nullptr`.
-  T* get() const noexcept {
-    return static_cast<T*>(Cage::decompress(std::uint32_t(bits_)));
+  /// The pointer, or `nullptr`. Constant-evaluable when null.
+  constexpr T* get() const noexcept {
+    return detail::decompress_as<T, Cage>(std::uint32_t(bits_));
   }
   /// The payload.
   constexpr std::uint32_t payload() const noexcept {
@@ -101,10 +114,10 @@ class tagged_ptr {
   /// As set(p, tag).
   tagged_ptr(T* p, std::uint32_t tag) noexcept { set(p, tag); }
 
-  /// The pointer without the tag, or `nullptr`.
-  T* get() const noexcept {
-    std::uint32_t bits = bits_ & ~kTagMask;
-    return static_cast<T*>(Cage::decompress(bits));
+  /// The pointer without the tag, or `nullptr`. Constant-evaluable when
+  /// null.
+  constexpr T* get() const noexcept {
+    return detail::decompress_as<T, Cage>(bits_ & ~kTagMask);
   }
   /// The tag, below 2^TagBits.
   constexpr std::uint32_t tag() const noexcept { return bits_ & kTagMask; }
