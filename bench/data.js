@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794662066524,
+  "lastUpdate": 1794662068644,
   "repoUrl": "https://github.com/mvanslobbe/compressed-ptr",
   "entries": {
     "compressed as % of raw pointers": [
@@ -5535,6 +5535,400 @@ window.BENCHMARK_DATA = {
           {
             "name": "Pointer chasing: 4194304 nodes, nonnull_ptr",
             "value": 169.1211,
+            "unit": "ns (p95)"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michiel.van.slobbe@gmail.com",
+            "name": "Michiel van Slobbe",
+            "username": "mvanslobbe"
+          },
+          "committer": {
+            "email": "michiel.van.slobbe@gmail.com",
+            "name": "Michiel van Slobbe",
+            "username": "mvanslobbe"
+          },
+          "distinct": true,
+          "id": "cf7ba2b7ddde3814ea13c1eef5d01a8fd4d4f7af",
+          "message": "Allow for the runner's CPU in the in-cache list walk limit\n\nThe benchmark gate failed on a documentation-only commit: the in-cache\nlist walk measured +82% and +87% against raw links, where the same code\nhad passed at +30% or less a few hours earlier. GitHub's hosted runners\ndiffer in CPU model, and a pointer chase that fits in cache shows the\ndecompression add more on some than on others. The limit is now +120%,\nwhich still catches a gross regression such as a check on every hop.",
+          "timestamp": "2026-11-14T14:11:47+01:00",
+          "tree_id": "a2954c23b211fe7b4ad3dd92c5b99c7eba5fa26b",
+          "url": "https://github.com/mvanslobbe/compressed-ptr/commit/cf7ba2b7ddde3814ea13c1eef5d01a8fd4d4f7af"
+        },
+        "date": 1794662068054,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "list of uint32_t: grow: cptr::list raw links",
+            "value": 18.7988,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "list of uint32_t: grow: cptr::list compressed",
+            "value": 16.1953,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "list of uint32_t: grow: std::list",
+            "value": 33.957,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "list of uint32_t: walk: cptr::list raw links",
+            "value": 1.2324,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "list of uint32_t: walk: cptr::list compressed",
+            "value": 1.4402,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "list of uint32_t: walk: std::list",
+            "value": 1.2419,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "list of uint32_t: shrink: cptr::list raw links",
+            "value": 6.5918,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "list of uint32_t: shrink: cptr::list compressed",
+            "value": 6.6113,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "list of uint32_t: shrink: std::list",
+            "value": 9.9746,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: grow: cptr::ordered_map raw links",
+            "value": 414.4512,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: grow: cptr::ordered_map compressed",
+            "value": 347.7871,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: grow: std::map",
+            "value": 499.6758,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: find: cptr::ordered_map raw links",
+            "value": 334.7793,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: find: cptr::ordered_map compressed",
+            "value": 297.3223,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: find: std::map",
+            "value": 360.2285,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: walk: cptr::ordered_map raw links",
+            "value": 71.9417,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: walk: cptr::ordered_map compressed",
+            "value": 50.6987,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: walk: std::map",
+            "value": 78.3684,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: shrink: cptr::ordered_map raw links",
+            "value": 530.4473,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: shrink: cptr::ordered_map compressed",
+            "value": 421.5918,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "map uint32_t -> uint32_t: shrink: std::map",
+            "value": 506.0156,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: grow: cptr::unordered_map raw links",
+            "value": 48.5293,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: grow: cptr::unordered_map compressed",
+            "value": 23.0625,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: grow: std::unordered_map",
+            "value": 48.002,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: find: cptr::unordered_map raw links",
+            "value": 14.5723,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: find: cptr::unordered_map compressed",
+            "value": 12.7344,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: find: std::unordered_map",
+            "value": 18.7793,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: walk: cptr::unordered_map raw links",
+            "value": 24.7615,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: walk: cptr::unordered_map compressed",
+            "value": 22.71,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: walk: std::unordered_map",
+            "value": 19.8931,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: shrink: cptr::unordered_map raw links",
+            "value": 41.9785,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: shrink: cptr::unordered_map compressed",
+            "value": 35.0332,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "hash map uint32_t -> uint32_t: shrink: std::unordered_map",
+            "value": 89.6465,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer arithmetic: ++p over an array of uint32_t: 65536 elements, raw T*",
+            "value": 0.144,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer arithmetic: ++p over an array of uint32_t: 65536 elements, ptr",
+            "value": 0.4182,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer arithmetic: ++p over an array of uint32_t: 4194304 elements, raw T*",
+            "value": 0.1787,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer arithmetic: ++p over an array of uint32_t: 4194304 elements, ptr",
+            "value": 0.4182,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Conversion of 4: copy to ptr<int>",
+            "value": 0.1443,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Conversion of 4: to ptr<const int>",
+            "value": 0.1443,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Conversion of 4: to ptr<void>",
+            "value": 0.1443,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator: free a random block of 65: malloc / free",
+            "value": 29.125,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator: free a random block of 65: cage allocate / deallocate",
+            "value": 18.0723,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator churn on several threads: 1 threads, malloc / free",
+            "value": 17.8789,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator churn on several threads: 1 threads, cage",
+            "value": 12.3633,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator churn on several threads: 2 threads, malloc / free",
+            "value": 17.5254,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator churn on several threads: 2 threads, cage",
+            "value": 11.4824,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator churn on several threads: 4 threads, malloc / free",
+            "value": 29.5156,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator churn on several threads: 4 threads, cage",
+            "value": 18.2676,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator churn on several threads: 8 threads, malloc / free",
+            "value": 42.0703,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Allocator churn on several threads: 8 threads, cage",
+            "value": 18.6387,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 1024 nodes, raw T*",
+            "value": 1.3984,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 1024 nodes, ptr",
+            "value": 1.8389,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 1024 nodes, nonnull_ptr",
+            "value": 1.5645,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 16384 nodes, raw T*",
+            "value": 4.04,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 16384 nodes, ptr",
+            "value": 4.0488,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 16384 nodes, nonnull_ptr",
+            "value": 3.7656,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 262144 nodes, raw T*",
+            "value": 23.874,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 262144 nodes, ptr",
+            "value": 21.3604,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 262144 nodes, nonnull_ptr",
+            "value": 19.874,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 4194304 nodes, raw T*",
+            "value": 145.9219,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 4194304 nodes, ptr",
+            "value": 132.6211,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 4194304 nodes, nonnull_ptr",
+            "value": 131.917,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 1024 nodes, raw T*",
+            "value": 3.8633,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 1024 nodes, ptr",
+            "value": 4.2646,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 1024 nodes, nonnull_ptr",
+            "value": 3.9805,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 16384 nodes, raw T*",
+            "value": 15.7266,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 16384 nodes, ptr",
+            "value": 16.1475,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 16384 nodes, nonnull_ptr",
+            "value": 15.834,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 262144 nodes, raw T*",
+            "value": 112.3467,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 262144 nodes, ptr",
+            "value": 107.8965,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 262144 nodes, nonnull_ptr",
+            "value": 105.8721,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 4194304 nodes, raw T*",
+            "value": 160.7979,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 4194304 nodes, ptr",
+            "value": 160.9736,
+            "unit": "ns (p95)"
+          },
+          {
+            "name": "Pointer chasing: 4194304 nodes, nonnull_ptr",
+            "value": 161.1689,
             "unit": "ns (p95)"
           }
         ]
