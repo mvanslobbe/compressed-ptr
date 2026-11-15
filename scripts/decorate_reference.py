@@ -3,7 +3,7 @@
 
 Usage: scripts/decorate_reference.py build-docs/site
 
-Adds the site's navigation bar to the top of every reference page, and
+Adds the site's navigation bar and icon to every reference page, and
 replaces index.html (MrDocs' "Global namespace" page) with a redirect to
 cptr.html, whose description is the reference's start page.
 """
@@ -13,7 +13,9 @@ import sys
 NAV = """<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
   padding: 10px 16px; border-bottom: 1px solid #d1d9e0; background: #fff;">
   <a href="{root}index.html" style="margin-right: 16px; text-decoration: none;
-    color: #0969da;"><strong>compressed-ptr</strong></a>
+    color: #0969da; display: inline-flex; align-items: center; gap: 6px;
+    vertical-align: middle;"><img src="{root}assets/logo.svg" alt=""
+    width="24" height="24"><strong>compressed-ptr</strong></a>
   <a href="{root}why.html" style="margin-right: 16px; color: #0969da;
     text-decoration: none;">Why</a>
   <a href="{root}guide.html" style="margin-right: 16px; color: #0969da;
@@ -28,6 +30,8 @@ NAV = """<nav style="font: 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-s
     text-decoration: none;">GitHub</a>
 </nav>
 """
+
+ICON = '<link rel="icon" href="{root}assets/logo.svg" type="image/svg+xml">'
 
 REDIRECT = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -52,6 +56,7 @@ def main():
             text = open(path, encoding="utf-8").read()
             if "<body>" in text and "compressed-ptr</strong></a>" not in text:
                 text = text.replace("<body>", "<body>\n" + NAV.format(root=root), 1)
+                text = text.replace("</head>", ICON.format(root=root) + "\n</head>", 1)
                 open(path, "w", encoding="utf-8").write(text)
                 count += 1
     open(os.path.join(site, "index.html"), "w", encoding="utf-8").write(REDIRECT)

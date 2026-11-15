@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="compressed-ptr: an asterisk squeezed in a vice">
+  <title>compressed-ptr</title>
+  <style>
+    .vice { fill: #59636e; }
+    .screw { stroke: #59636e; stroke-width: 3; stroke-linecap: round; fill: none; }
+    .star { stroke: #0969da; stroke-width: 4; stroke-linecap: round; fill: none; }
+    @media (prefers-color-scheme: dark) {
+      .vice { fill: #9198a1; }
+      .screw { stroke: #9198a1; }
+      .star { stroke: #4493f8; }
+    }
+  </style>
+  <!-- bench -->
+  <rect class="vice" x="4" y="51" width="56" height="5" rx="1.5"/>
+  <!-- fixed jaw and its lip -->
+  <rect class="vice" x="8" y="22" width="8" height="29" rx="1.5"/>
+  <rect class="vice" x="8" y="18" width="12" height="7" rx="1.5"/>
+  <!-- moving jaw and its lip -->
+  <rect class="vice" x="40" y="22" width="8" height="29" rx="1.5"/>
+  <rect class="vice" x="36" y="18" width="12" height="7" rx="1.5"/>
+  <!-- screw and handle -->
+  <path class="screw" d="M48 37h8M56 29v16"/>
+  <!-- the pointer: an asterisk squeezed between the jaws -->
+  <path class="star" d="M28 8v38M22 14l12 28M34 14l-12 28"/>
+</svg>

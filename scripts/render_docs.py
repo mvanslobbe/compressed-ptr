@@ -27,6 +27,7 @@ TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>compressed-ptr: {title}</title>
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
 <meta name="description" content="4-byte pointers and drop-in containers for 64-bit C++: half the memory for lists, maps and trees. Header-only C++20.">
 <style>
   :root {{ --bg: #fff; --fg: #1f2328; --muted: #59636e; --link: #0969da;
@@ -39,6 +40,7 @@ TEMPLATE = """<!doctype html>
          font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }}
   nav {{ border-bottom: 1px solid var(--line); padding: 12px 16px; }}
   nav a {{ margin-right: 16px; }}
+  nav a.brand {{ display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }}
   main {{ max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }}
   a {{ color: var(--link); text-decoration: none; }}
   a:hover {{ text-decoration: underline; }}
@@ -80,7 +82,7 @@ TEMPLATE = """<!doctype html>
 </head>
 <body>
 <nav>
-  <a href="index.html"><strong>compressed-ptr</strong></a>
+  <a class="brand" href="index.html"><img src="assets/logo.svg" alt="" width="24" height="24"><strong>compressed-ptr</strong></a>
   <a href="why.html">Why</a>
   <a href="guide.html">Guide</a>
   <a href="benchmarks.html">Benchmarks</a>
