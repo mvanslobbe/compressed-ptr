@@ -71,7 +71,7 @@ if(COMPRESSED_PTR_BUILD_TESTS)
 
   # Without exceptions. MSVC cannot drop /EHsc cleanly from a target, so
   # there CPTR_NO_EXCEPTIONS selects the same code.
-  add_executable(compressed_ptr_no_exceptions_tests tests/test_main.cpp
+  add_executable(compressed_ptr_no_exceptions_tests
     tests/test_no_exceptions.cpp)
   target_link_libraries(compressed_ptr_no_exceptions_tests PRIVATE
     compressed_ptr)
@@ -84,6 +84,16 @@ if(COMPRESSED_PTR_BUILD_TESTS)
   endif()
   add_test(NAME compressed_ptr_no_exceptions_tests
     COMMAND compressed_ptr_no_exceptions_tests)
+  # Each failure runs in its own process: the failure hook exits.
+  foreach(failure ordered_map_at unordered_map_at allocate)
+    add_test(NAME compressed_ptr_no_exceptions_${failure}
+      COMMAND compressed_ptr_no_exceptions_tests ${failure})
+  endforeach()
+  set_tests_properties(compressed_ptr_no_exceptions_ordered_map_at
+    compressed_ptr_no_exceptions_unordered_map_at PROPERTIES
+    PASS_REGULAR_EXPRESSION "cptr failure: [^\n]*no such key")
+  set_tests_properties(compressed_ptr_no_exceptions_allocate PROPERTIES
+    PASS_REGULAR_EXPRESSION "cptr failure: out of memory")
   if(MSVC)
     target_compile_options(compressed_ptr_failure_tests PRIVATE /wd4127 /wd4324)
     target_compile_options(compressed_ptr_checked_tests PRIVATE /wd4127 /wd4324)

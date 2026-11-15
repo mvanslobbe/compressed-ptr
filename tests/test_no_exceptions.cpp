@@ -1,34 +1,23 @@
 // The library in a build without exceptions (-fno-exceptions; on MSVC,
 // CPTR_NO_EXCEPTIONS). Everything works as usual, and where the library
-// would throw it calls CPTR_ON_FAILURE, which this test catches with
-// longjmp so that it can check the message and carry on.
-#include <csetjmp>
+// would throw it calls CPTR_ON_FAILURE instead, which must not return.
+//
+// Run without arguments, this checks that the containers work. Run with the
+// name of a failure, it triggers that failure; the hook below prints the
+// message and exits, and CTest checks the message. A separate process per
+// failure keeps the test portable: longjmp out of the hook trips MSVC's
+// C4611 and, under clang-cl, an unwinding error at run time.
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
-namespace {
-std::jmp_buf failure_jump;
-const char* failure_what = nullptr;
-}  // namespace
-
 #define CPTR_ON_FAILURE(what) \
-  (failure_what = (what), std::longjmp(failure_jump, 1))
+  (std::printf("cptr failure: %s\n", what), std::fflush(stdout), std::_Exit(0))
 
 #include "check.hpp"
 #include "cptr/all.hpp"
 
 static_assert(CPTR_EXCEPTIONS == 0);
-
-namespace {
-// Runs |f| and returns the message it failed with, or nullptr.
-template <class F>
-const char* failure_of(F f) {
-  failure_what = nullptr;
-  if (setjmp(failure_jump) == 0) {
-    f();
-  }
-  return failure_what;
-}
-}  // namespace
 
 TEST(containers_work_without_exceptions) {
   cptr::list<int> l{3, 1, 2};
@@ -49,21 +38,20 @@ TEST(containers_work_without_exceptions) {
   cptr::destroy(p);
 }
 
-TEST(at_reports_a_missing_key) {
-  cptr::ordered_map<int, int> m{{1, 1}};
-  cptr::unordered_map<int, int> h{{1, 1}};
-  const char* what = failure_of([&] { (void)m.at(2); });
-  CHECK(what && std::strstr(what, "no such key"));
-  what = failure_of([&] { (void)h.at(2); });
-  CHECK(what && std::strstr(what, "no such key"));
-}
-
-TEST(allocation_failure_is_reported) {
-  const char* what = failure_of(
-      [] { (void)cptr::default_cage::allocate(std::size_t(1) << 40); });
-  CHECK(what && std::strstr(what, "out of memory"));
-  // The cage still works afterwards.
-  void* q = cptr::default_cage::allocate(64);
-  CHECK(q != nullptr);
-  cptr::default_cage::deallocate(q);
+int main(int argc, char** argv) {
+  if (argc < 2) return check::run_all();
+  if (std::strcmp(argv[1], "ordered_map_at") == 0) {
+    cptr::ordered_map<int, int> m{{1, 1}};
+    (void)m.at(2);
+  } else if (std::strcmp(argv[1], "unordered_map_at") == 0) {
+    cptr::unordered_map<int, int> h{{1, 1}};
+    (void)h.at(2);
+  } else if (std::strcmp(argv[1], "allocate") == 0) {
+    (void)cptr::default_cage::allocate(std::size_t(1) << 40);
+  } else {
+    std::printf("unknown failure %s\n", argv[1]);
+    return EXIT_FAILURE;
+  }
+  std::printf("no failure reported\n");
+  return EXIT_FAILURE;
 }
