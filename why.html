@@ -175,7 +175,7 @@ payload shrinks by 4%, which no benchmark will notice.</p>
 loses:</p>
 <ul>
 <li><strong>Decompression is an add, plus a null check.</strong> When a pointer chase fits
-  in L1, that add is visible: up to 54% slower than raw pointers at the
+  in L1, that add is visible: up to 55% slower than raw pointers at the
   median. <code>cptr::nonnull_ptr</code> drops the null check and the gap to about
   16%. From L3 outwards the smaller nodes win.</li>
 <li><strong>Everything you compress must live in the cage.</strong> Allocate with
