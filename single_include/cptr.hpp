@@ -72,12 +72,21 @@ namespace cptr::detail {
 #    define CPTR_ON_FAILURE(what) \
       (std::fprintf(stderr, "cptr: %s\n", what), std::abort())
 #  endif
+// The abort is unreachable when the hook does not return, which MSVC
+// reports as C4702.
+#  if defined(_MSC_VER)
+#    pragma warning(push)
+#    pragma warning(disable : 4702)
+#  endif
 namespace cptr::detail {
 [[noreturn]] inline void failed(const char* what) noexcept {
   CPTR_ON_FAILURE(what);
   std::abort();  // in case a handler returns
 }
 }  // namespace cptr::detail
+#  if defined(_MSC_VER)
+#    pragma warning(pop)
+#  endif
 #  define CPTR_TRY if (true)
 #  define CPTR_CATCH_ALL else
 #  define CPTR_RETHROW ::cptr::detail::failed("unreachable")
