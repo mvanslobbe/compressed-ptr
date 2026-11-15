@@ -17,7 +17,7 @@
 <p align="center"><img src="docs/assets/hero.svg" width="720"
   alt="Bytes per element for 1,000,000 uint32_t: list 32.1 to 16.0, map 48.0 to 24.0, unordered_map 43.6 to 20.3"></p>
 
-| 1,000,000 `uint32_t` elements | `std::` | `cptr::` | memory | speed |
+| 1,000,000 `uint32_t` elements | `std::` | `cptr::` | memory | time |
 |---|---:|---:|---:|---:|
 | `list`, walk | 32.1 B · 1.9 ns | **16.0 B · 1.3 ns** | **−50%** | **−28%** |
 | `map` / `ordered_map`, find | 48.0 B · 404 ns | **24.0 B · 268 ns** | **−50%** | **−35%** |
