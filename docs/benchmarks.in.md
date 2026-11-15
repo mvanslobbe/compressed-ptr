@@ -10,6 +10,15 @@ Measured on {{machine}}, {{date}}. Release build (`-O2`), one pinned core
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
 ./build/bench_rss 2000000
 ./build/bench_runtime 4194304 10000 list     # or map, hash, arithmetic, ...
+```
+
+The plf::list results need a [plf_list](https://github.com/mattreecebentley/plf_list)
+checkout (7.6.50 or later):
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCOMPRESSED_PTR_PLF_LIST_DIR=/path/to/plf_list && cmake --build build
+./build/bench_runtime 4194304 10000 plf
 scripts/make_bench_page.py runtime.md rss.txt > docs/benchmarks.md
 ```
 
@@ -71,6 +80,27 @@ The compressed list grows faster than the raw one because it commits and
 touches half as much memory, and walks faster because twice as many nodes
 fit in a cache line. `std::list` pops faster: glibc's `free` is cheaper
 than the cage allocator's `deallocate`.
+
+## plf::list with cptr::fancy_allocator
+
+[plf::list](https://github.com/mattreecebentley/plf_list) takes its node
+pointer type from its allocator, so `cptr::fancy_allocator` gives it 4-byte
+links with no change to its code. The reference here is plain `plf::list`
+with `std::allocator`; the compressed list object lives in the cage, as it
+must (see the [guide](guide.md#with-plflist-fancy-pointers)).
+
+{{plf}}
+
+{{plf_sort}}
+
+Each sort epoch first overwrites the list's values with fresh random ones,
+in list order, and the time includes that walk. plf::list sorts by copying
+node pointers into an array, sorting the array and relinking, so the link
+size matters less there than in a walk. With only about a hundred sort
+epochs, its p99 and p99.5 are a single slow epoch and move a lot between
+runs. The same goes for the slowest 0.5% of pops, which ranged from
+50% faster to 48% slower over two runs; up to p95 they agree within a few
+percent. The memory table above has its bytes per element.
 
 ## Ordered map
 

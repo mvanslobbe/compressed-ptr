@@ -8,7 +8,7 @@ RUNTIME.md is the output of bench_runtime (one or more sections, in any
 order); RSS.txt is the output of bench_rss. The page's prose comes from
 docs/benchmarks.in.md, whose {{name}} placeholders are replaced by the
 tables: list, map, hash, arithmetic, conversion, allocator, threads, chase,
-chase_big and rss; {{versus}}, the chart and table of the representative
+chase_big, plf, plf_sort and rss; {{versus}}, the chart and table of the representative
 benchmarks in scripts/bench_reps.py; and {{machine}} and {{date}}.
 """
 import argparse
@@ -27,6 +27,10 @@ TEMPLATE = os.path.join(HERE, "..", "docs", "benchmarks.in.md")
 
 def classify(title):
     t = title.lower()
+    if t.startswith("plf::list `sort()`"):
+        return "plf_sort"
+    if t.startswith("plf::list of"):
+        return "plf"
     if t.startswith("list of"):
         return "list"
     if t.startswith("map "):
@@ -91,14 +95,16 @@ def rss_table(path):
             data.setdefault(m.group(1), {})[m.group(2)] = float(m.group(4))
     names = {"list": "list of `uint32_t`", "map": "map `uint32_t → uint32_t`",
              "hash": "hash map `uint32_t → uint32_t`",
-             "graph16": "graph, 16 edges per vertex"}
+             "graph16": "graph, 16 edges per vertex",
+             "plf_list": "`plf::list` of `uint32_t` (std column: plain "
+                         "`plf::list`)"}
     out = ["| Structure | std | cage, raw links | cage, compressed | "
            "compressed vs std |", "|---|---:|---:|---:|---:|"]
     for key, label in names.items():
         d = data.get(key)
         if not d:
             continue
-        std = d.get("std", d.get("raw"))
+        std = d.get("std", d.get("raw", d.get("plain")))
         raw = d.get("cage-raw")
         comp = d.get("cage-compressed", d.get("compressed"))
         change = f"−{100 * (1 - comp / std):.0f}%" if std and comp else ""

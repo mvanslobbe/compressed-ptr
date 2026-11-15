@@ -10,6 +10,15 @@ Measured on 12th Gen Intel Core i7-12700H, Linux, GCC 15.2, 2026-11-15. Release 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
 ./build/bench_rss 2000000
 ./build/bench_runtime 4194304 10000 list     # or map, hash, arithmetic, ...
+```
+
+The plf::list results need a [plf_list](https://github.com/mattreecebentley/plf_list)
+checkout (7.6.50 or later):
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCOMPRESSED_PTR_PLF_LIST_DIR=/path/to/plf_list && cmake --build build
+./build/bench_runtime 4194304 10000 plf
 scripts/make_bench_page.py runtime.md rss.txt > docs/benchmarks.md
 ```
 
@@ -69,6 +78,7 @@ effect of compression from the effect of the header-less allocator.
 | map `uint32_t → uint32_t` | 48.0 B | 40.1 B | **24.1 B** | −50% |
 | hash map `uint32_t → uint32_t` | 43.8 B | 32.6 B | **20.4 B** | −53% |
 | graph, 16 edges per vertex | 168.0 B | — | **88.1 B** | −48% |
+| `plf::list` of `uint32_t` (std column: plain `plf::list`) | 24.1 B | — | **12.2 B** | −49% |
 
 ## How the time is measured
 
@@ -103,6 +113,45 @@ The compressed list grows faster than the raw one because it commits and
 touches half as much memory, and walks faster because twice as many nodes
 fit in a cache line. `std::list` pops faster: glibc's `free` is cheaper
 than the cage allocator's `deallocate`.
+
+## plf::list with cptr::fancy_allocator
+
+[plf::list](https://github.com/mattreecebentley/plf_list) takes its node
+pointer type from its allocator, so `cptr::fancy_allocator` gives it 4-byte
+links with no change to its code. The reference here is plain `plf::list`
+with `std::allocator`; the compressed list object lives in the cage, as it
+must (see the [guide](guide.md#with-plflist-fancy-pointers)).
+
+*plf::list of `uint32_t`, 4194304 elements, ns per element (chunks of 512, walk 4096)*
+
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| grow: `plf::list` | 8 | 39.5 | ref | ref | ref | ref | ref |
+| grow: `plf::list` with `cptr::fancy_allocator` | 5.09 | 25.6 | −36% | −44% | −32% | −37% | −35% |
+| grow: `std::list` | 19.3 | 67.3 | +141% | +109% | +109% | +186% | +71% |
+| walk: `plf::list` | 1.71 | 2.55 | ref | ref | ref | ref | ref |
+| walk: `plf::list` with `cptr::fancy_allocator` | 1.49 | 2.28 | −13% | −15% | −18% | −15% | −10% |
+| walk: `std::list` | 2.06 | 3.05 | +20% | +22% | +25% | +23% | +20% |
+| shrink: `plf::list` | 2.6 | 24.1 | ref | ref | ref | ref | ref |
+| shrink: `plf::list` with `cptr::fancy_allocator` | 2.17 | 35.7 | −17% | −31% | −32% | −3% | +48% |
+| shrink: `std::list` | 5.41 | 33.2 | +108% | +43% | +41% | +43% | +37% |
+
+*plf::list `sort()` of 262144 random `uint32_t`, ns per element*
+
+|  | p50 ns | p99.5 ns | Δp50 | Δp90 | Δp95 | Δp99 | Δp99.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `plf::list` | 83.9 | 107 | ref | ref | ref | ref | ref |
+| `plf::list` with `cptr::fancy_allocator` | 80.1 | 99.2 | −4% | −10% | −9% | −7% | −7% |
+| `std::list` | 188 | 275 | +125% | +138% | +164% | +157% | +157% |
+
+Each sort epoch first overwrites the list's values with fresh random ones,
+in list order, and the time includes that walk. plf::list sorts by copying
+node pointers into an array, sorting the array and relinking, so the link
+size matters less there than in a walk. With only about a hundred sort
+epochs, its p99 and p99.5 are a single slow epoch and move a lot between
+runs. The same goes for the slowest 0.5% of pops, which ranged from
+50% faster to 48% slower over two runs; up to p95 they agree within a few
+percent. The memory table above has its bytes per element.
 
 ## Ordered map
 
