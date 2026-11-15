@@ -42,60 +42,67 @@ cases.
 
 ```
  address space
- ┌──────────────────────────────── cage: 4 GiB, aligned to 4 GiB ───────────────────────────────┐
- │ span 0 (never used,  │ slabs of 8, 16, 24 ... byte blocks │ large blocks │ ... reserved only ... │
- │ so offset 0 = null)  │                                    │              │                      │
- └──────────────────────────────────────────────────────────────────────────────────────────────┘
- ^ base                    ^ base + 0x00012340
-                           cptr::ptr stores 0x00012340
+ ┌───────────────────────────────── cage: 4 GiB, aligned to 4 GiB ─────────────────────────────────┐
+ │ span 0 (never used, │ slabs of 8, 16, 24 ... byte blocks │ large blocks │ ... reserved only ... │
+ │ so offset 0 = null) │                                    │              │                       │
+ └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ^ base                 ^ base + 0x00012340
+                        cptr::ptr stores 0x00012340
 ```
 
-* **Cage.** At first use, a cage reserves 4 GiB of address space aligned to
-  4 GiB (`mmap(PROT_NONE)` or `VirtualAlloc(MEM_RESERVE)`). **Nothing is
-  allocated at that point.** Reserved space costs no memory and no swap;
-  it is a range of addresses that nothing else in the process will be given.
-  Pages are committed in 1 MiB steps as the allocator needs them, and given
-  back to the OS when they are free again (see `trim()` below).
+**Cage.** At first use, a cage reserves 4 GiB of address space aligned to
+4 GiB (`mmap(PROT_NONE)` or `VirtualAlloc(MEM_RESERVE)`). **Nothing is
+allocated at that point.** Reserved space costs no memory and no swap;
+it is a range of addresses that nothing else in the process will be given.
+Pages are committed in 1 MiB steps as the allocator needs them, and given
+back to the OS when they are free again (see `trim()` below).
 
-  What that looks like from outside, measured on Linux with one list:
+What that looks like from outside, measured on Linux with one list:
 
-  | | virtual size (VIRT, `VmSize`) | resident (RES, `VmRSS`) |
-  |---|---:|---:|
-  | before the first allocation | 6.4 MiB | 3.3 MiB |
-  | after three elements | 4.0 GiB | 3.6 MiB |
-  | after a million elements | 4.0 GiB | 18.8 MiB |
+| | virtual size (VIRT, `VmSize`) | resident (RES, `VmRSS`) |
+|---|---:|---:|
+| before the first allocation | 6.4 MiB | 3.3 MiB |
+| after three elements | 4.0 GiB | 3.6 MiB |
+| after a million elements | 4.0 GiB | 18.8 MiB |
 
-  Tools that show virtual size (VIRT in `top`, VSZ in `ps`) count the
-  reservation; memory accounting (RES, cgroup and container limits, the
-  OOM killer) counts only resident pages. The one limit that sees the
-  reservation is a cap on virtual memory (`ulimit -v`, `RLIMIT_AS`): allow
-  4 GiB per cage, or make the cage smaller with `SizeLog2`. Linux's
-  overcommit setting does not matter, because the reservation is not
-  writable until pages are committed.
-* **Compression.** A pointer is stored as `p - base`, truncated to 32 bits.
-* **Decompression.** `base + bits` is one add. `ptr` maps 0 to `nullptr`,
-  which compilers turn into a conditional move or a well-predicted branch.
-  `nonnull_ptr` skips that check.
-* **Allocator.** Every object a compressed pointer refers to must come from
-  the cage. The cage has a built-in allocator: segregated free lists of
-  header-less blocks in size classes up to 32 KiB, plus whole 64 KiB spans
-  for larger blocks, which are decommitted on free. Alignments above 64 KiB
-  are not supported (`std::bad_alloc`). It also works as a
-  standard allocator and as a `std::pmr::memory_resource`.
-* **Several cages.** Each cage is its own type with its own base, so a
-  program can have several independent 4 GiB heaps:
+Tools that show virtual size (VIRT in `top`, VSZ in `ps`) count the
+reservation; memory accounting (RES, cgroup and container limits, the
+OOM killer) counts only resident pages. The one limit that sees the
+reservation is a cap on virtual memory (`ulimit -v`, `RLIMIT_AS`): allow
+4 GiB per cage, or make the cage smaller with `SizeLog2`. Linux's
+overcommit setting does not matter, because the reservation is not
+writable until pages are committed.
 
-  ```cpp
-  struct mesh_heap : cptr::cage<mesh_heap> {};
-  cptr::ptr<vertex, mesh_heap> v = cptr::make<vertex, mesh_heap>();
-  ```
-* **More than 4 GiB.** If every object is 8-byte aligned, a cage can be
-  32 GiB with the pointer still 4 bytes. Pointers are stored shifted right
-  by 3, which is the JVM's "compressed oops" trick:
+**Compression.** A pointer is stored as `p - base` in 32 bits. The cage is
+aligned to its own size, so that is the pointer's low bits: a mask and a
+shift.
 
-  ```cpp
-  struct big_heap : cptr::cage<big_heap, 35, 3> {};  // 2^35 = 32 GiB
-  ```
+**Decompression.** `base + bits` is one add. `ptr` maps 0 to `nullptr`,
+which compilers turn into a conditional move or a well-predicted branch.
+`nonnull_ptr` skips that check.
+
+**Allocator.** Every object a compressed pointer refers to must come from
+the cage. The cage has a built-in allocator: segregated free lists of
+header-less blocks in size classes up to 32 KiB, plus whole 64 KiB spans
+for larger blocks, which are decommitted on free. Alignments above 64 KiB
+are not supported (`std::bad_alloc`). It also works as a
+standard allocator and as a `std::pmr::memory_resource`.
+
+**Several cages.** Each cage is its own type with its own base, so a
+program can have several independent 4 GiB heaps:
+
+```cpp
+struct mesh_heap : cptr::cage<mesh_heap> {};
+cptr::ptr<vertex, mesh_heap> v = cptr::make<vertex, mesh_heap>();
+```
+
+**More than 4 GiB.** If every object is 8-byte aligned, a cage can be
+32 GiB with the pointer still 4 bytes. Pointers are stored shifted right
+by 3, which is the JVM's "compressed oops" trick:
+
+```cpp
+struct big_heap : cptr::cage<big_heap, 35, 3> {};  // 2^35 = 32 GiB
+```
 
 ## What is in the box
 
