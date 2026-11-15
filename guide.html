@@ -105,21 +105,19 @@ graphs. <a href="why.html#where-it-helps-and-where-it-does-not">Why</a> lists ty
 cases.</p>
 <h2 id="how-it-works">How it works</h2>
 <pre><code> address space
- ┌──────────────────────────────── cage: 4 GiB, aligned to 4 GiB ───────────────────────────────┐
- │ span 0 (never used,  │ slabs of 8, 16, 24 ... byte blocks │ large blocks │ ... reserved only ... │
- │ so offset 0 = null)  │                                    │              │                      │
- └──────────────────────────────────────────────────────────────────────────────────────────────┘
- ^ base                    ^ base + 0x00012340
-                           cptr::ptr stores 0x00012340
+ ┌───────────────────────────────── cage: 4 GiB, aligned to 4 GiB ─────────────────────────────────┐
+ │ span 0 (never used, │ slabs of 8, 16, 24 ... byte blocks │ large blocks │ ... reserved only ... │
+ │ so offset 0 = null) │                                    │              │                       │
+ └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ^ base                 ^ base + 0x00012340
+                        cptr::ptr stores 0x00012340
 </code></pre>
-<ul>
-<li><strong>Cage.</strong> At first use, a cage reserves 4 GiB of address space aligned to
-  4 GiB (<code>mmap(PROT_NONE)</code> or <code>VirtualAlloc(MEM_RESERVE)</code>). <strong>Nothing is
-  allocated at that point.</strong> Reserved space costs no memory and no swap;
-  it is a range of addresses that nothing else in the process will be given.
-  Pages are committed in 1 MiB steps as the allocator needs them, and given
-  back to the OS when they are free again (see <code>trim()</code> below).</li>
-</ul>
+<p><strong>Cage.</strong> At first use, a cage reserves 4 GiB of address space aligned to
+4 GiB (<code>mmap(PROT_NONE)</code> or <code>VirtualAlloc(MEM_RESERVE)</code>). <strong>Nothing is
+allocated at that point.</strong> Reserved space costs no memory and no swap;
+it is a range of addresses that nothing else in the process will be given.
+Pages are committed in 1 MiB steps as the allocator needs them, and given
+back to the OS when they are free again (see <code>trim()</code> below).</p>
 <p>What that looks like from outside, measured on Linux with one list:</p>
 <table>
 <thead>
@@ -148,32 +146,34 @@ cases.</p>
 </tbody>
 </table>
 <p>Tools that show virtual size (VIRT in <code>top</code>, VSZ in <code>ps</code>) count the
-  reservation; memory accounting (RES, cgroup and container limits, the
-  OOM killer) counts only resident pages. The one limit that sees the
-  reservation is a cap on virtual memory (<code>ulimit -v</code>, <code>RLIMIT_AS</code>): allow
-  4 GiB per cage, or make the cage smaller with <code>SizeLog2</code>. Linux's
-  overcommit setting does not matter, because the reservation is not
-  writable until pages are committed.
-* <strong>Compression.</strong> A pointer is stored as <code>p - base</code>, truncated to 32 bits.
-* <strong>Decompression.</strong> <code>base + bits</code> is one add. <code>ptr</code> maps 0 to <code>nullptr</code>,
-  which compilers turn into a conditional move or a well-predicted branch.
-  <code>nonnull_ptr</code> skips that check.
-* <strong>Allocator.</strong> Every object a compressed pointer refers to must come from
-  the cage. The cage has a built-in allocator: segregated free lists of
-  header-less blocks in size classes up to 32 KiB, plus whole 64 KiB spans
-  for larger blocks, which are decommitted on free. Alignments above 64 KiB
-  are not supported (<code>std::bad_alloc</code>). It also works as a
-  standard allocator and as a <code>std::pmr::memory_resource</code>.
-* <strong>Several cages.</strong> Each cage is its own type with its own base, so a
-  program can have several independent 4 GiB heaps:</p>
-<p><code>cpp
-  struct mesh_heap : cptr::cage&lt;mesh_heap&gt; {};
-  cptr::ptr&lt;vertex, mesh_heap&gt; v = cptr::make&lt;vertex, mesh_heap&gt;();</code>
-* <strong>More than 4 GiB.</strong> If every object is 8-byte aligned, a cage can be
-  32 GiB with the pointer still 4 bytes. Pointers are stored shifted right
-  by 3, which is the JVM's "compressed oops" trick:</p>
-<p><code>cpp
-  struct big_heap : cptr::cage&lt;big_heap, 35, 3&gt; {};  // 2^35 = 32 GiB</code></p>
+reservation; memory accounting (RES, cgroup and container limits, the
+OOM killer) counts only resident pages. The one limit that sees the
+reservation is a cap on virtual memory (<code>ulimit -v</code>, <code>RLIMIT_AS</code>): allow
+4 GiB per cage, or make the cage smaller with <code>SizeLog2</code>. Linux's
+overcommit setting does not matter, because the reservation is not
+writable until pages are committed.</p>
+<p><strong>Compression.</strong> A pointer is stored as <code>p - base</code> in 32 bits. The cage is
+aligned to its own size, so that is the pointer's low bits: a mask and a
+shift.</p>
+<p><strong>Decompression.</strong> <code>base + bits</code> is one add. <code>ptr</code> maps 0 to <code>nullptr</code>,
+which compilers turn into a conditional move or a well-predicted branch.
+<code>nonnull_ptr</code> skips that check.</p>
+<p><strong>Allocator.</strong> Every object a compressed pointer refers to must come from
+the cage. The cage has a built-in allocator: segregated free lists of
+header-less blocks in size classes up to 32 KiB, plus whole 64 KiB spans
+for larger blocks, which are decommitted on free. Alignments above 64 KiB
+are not supported (<code>std::bad_alloc</code>). It also works as a
+standard allocator and as a <code>std::pmr::memory_resource</code>.</p>
+<p><strong>Several cages.</strong> Each cage is its own type with its own base, so a
+program can have several independent 4 GiB heaps:</p>
+<pre><code class="language-cpp">struct mesh_heap : cptr::cage&lt;mesh_heap&gt; {};
+cptr::ptr&lt;vertex, mesh_heap&gt; v = cptr::make&lt;vertex, mesh_heap&gt;();
+</code></pre>
+<p><strong>More than 4 GiB.</strong> If every object is 8-byte aligned, a cage can be
+32 GiB with the pointer still 4 bytes. Pointers are stored shifted right
+by 3, which is the JVM's "compressed oops" trick:</p>
+<pre><code class="language-cpp">struct big_heap : cptr::cage&lt;big_heap, 35, 3&gt; {};  // 2^35 = 32 GiB
+</code></pre>
 <h2 id="what-is-in-the-box">What is in the box</h2>
 <table>
 <thead>
