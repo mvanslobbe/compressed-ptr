@@ -30,6 +30,14 @@ garbage collector and JIT. This library offers the same addressing trick
 for ordinary C++ code: plain pointers with a null value, a malloc-style
 allocator, several independent cages, and containers. No V8 code is used.
 
+It is not a magic bullet. Each compressed pointer saves 4 bytes, so the
+gain depends on how much of each object is pointers: a list node holding an
+`int` halves, a node with two pointers and 200 bytes of payload shrinks by
+4%. It pays for many small linked objects: linked lists, trees and ordered
+indexes, chained hash tables, graphs, tries, syntax trees and object
+graphs. [Why](why.md#where-it-helps-and-where-it-does-not) lists typical
+cases.
+
 ## How it works
 
 ```

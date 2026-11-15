@@ -86,6 +86,12 @@ cmake --build build-fuzz --target fuzz_allocator
   on Windows yet), say so in the README and keep the others building.
 - **Commit messages** explain why as well as what, in full sentences.
   British spelling is used in the documentation; please match it.
+- **AI assistance is welcome.** Use whatever tools help you write code,
+  tests or documentation. You remain the author: understand every line you
+  send, be able to explain why it is correct, and answer review questions
+  yourself. Run the tests and benchmarks you report; do not paste numbers
+  or sanitizer output a tool predicted. A change you cannot explain will be
+  sent back, however good it looks.
 
 By contributing, you agree that your contribution is licensed under the
 project's [MIT licence](LICENSE).

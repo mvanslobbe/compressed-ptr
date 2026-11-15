@@ -1,4 +1,4 @@
-# compressed-ptr
+# <img src="docs/assets/logo.svg" width="40" height="40" alt="" align="top"> compressed-ptr
 
 [![CI](https://github.com/mvanslobbe/compressed-ptr/actions/workflows/ci.yml/badge.svg)](https://github.com/mvanslobbe/compressed-ptr/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://mvanslobbe.github.io/compressed-ptr/coverage/badge.json)](https://mvanslobbe.github.io/compressed-ptr/coverage/)
@@ -169,13 +169,32 @@ are waiting to be merged
 
 ## Is it for you?
 
-**Yes**, if you have many small heap objects linked by pointers (lists,
-trees, graphs, tries, object graphs) and any one structure stays under
-4 GiB, or up to 64 GiB when its objects are 8- or 16-byte aligned. The
-cage only reserves that range: memory is used as objects are allocated.
+**It is not a magic bullet.** A compressed pointer saves 4 bytes, so it
+pays only where pointers are a large share of what you store: many small
+objects, each holding one or more pointers. A `std::list<int>` node is
+mostly pointers and halves. A node with two pointers and 200 bytes of
+payload shrinks by 4%, and you will not measure the difference. A rough
+guide: the saving is 4 bytes × pointers per object, divided by the
+object's size.
 
-**No**, if your data already lives in arrays and vectors, or one structure
-needs more than 64 GiB.
+**Yes**, if you have many small heap objects linked by pointers and any one
+structure stays under 4 GiB (up to 64 GiB when its objects are 8- or
+16-byte aligned). Typical cases:
+
+- LRU caches, free lists and work queues built on linked lists;
+- ordered indexes: order books, symbol tables, interval and range trees;
+- hash tables with chained nodes, such as `std::unordered_map`;
+- graphs: dependency, call and road graphs stored as adjacency lists;
+- syntax trees, compiler IR, scene graphs and other trees of small nodes;
+- tries and radix trees for prefix search and routing tables;
+- object graphs in interpreters and game engines;
+- any of these kept in a file with `mapped_cage`.
+
+The cage only reserves its range: memory is used as objects are allocated.
+
+**No**, if your data already lives in arrays and vectors, your objects are
+large next to their pointers, the structure is small enough to stay in L1
+(where the extra add shows), or one structure needs more than 64 GiB.
 
 **The costs, plainly:**
 

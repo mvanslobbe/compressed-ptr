@@ -73,6 +73,25 @@ fewer misses. You can check this on your own machine with one program,
 `examples/expect_gains.cpp`, or in the browser on
 [Compiler Explorer](https://godbolt.org/z/cTz9KfczY).
 
+## Where it helps, and where it does not
+
+This is not a magic bullet. A compressed pointer saves 4 bytes, and that
+matters only when pointers are a large part of each object. The saving per
+object is roughly 4 bytes × its pointers, divided by its size: a list node
+holding an `int` halves, but a node with two pointers and 200 bytes of
+payload shrinks by 4%, which no benchmark will notice.
+
+The structures that gain are the ones made of many small nodes:
+
+- LRU caches, free lists and work queues on linked lists;
+- ordered indexes such as order books, symbol tables and interval trees;
+- hash tables with chained nodes;
+- graphs stored as adjacency lists: dependencies, call graphs, road
+  networks;
+- syntax trees, compiler IR and scene graphs;
+- tries and radix trees for prefix search and routing;
+- object graphs in interpreters and game engines.
+
 ## What it costs
 
 Nothing here is free, and the [benchmarks page](benchmarks.md) says where it
