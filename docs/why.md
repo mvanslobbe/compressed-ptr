@@ -98,7 +98,7 @@ Nothing here is free, and the [benchmarks page](benchmarks.md) says where it
 loses:
 
 - **Decompression is an add, plus a null check.** When a pointer chase fits
-  in L1, that add is visible: up to 54% slower than raw pointers at the
+  in L1, that add is visible: up to 55% slower than raw pointers at the
   median. `cptr::nonnull_ptr` drops the null check and the gap to about
   16%. From L3 outwards the smaller nodes win.
 - **Everything you compress must live in the cage.** Allocate with

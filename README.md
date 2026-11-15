@@ -202,7 +202,7 @@ large next to their pointers, the structure is small enough to stay in L1
   containers, `cptr::allocator`). Compressing any other pointer is a bug,
   caught by assertions in debug builds.
 - Decompression is one add. On a pointer chase that fits in L1 it costs
-  up to 54% (16% with `nonnull_ptr`); from L3 on, compressed is faster.
+  up to 55% (16% with `nonnull_ptr`); from L3 on, compressed is faster.
 - Pointer arithmetic on `ptr` does not vectorise. Convert to `T*` once
   for hot loops over arrays.
 - Each Windows DLL gets its own cage; keep a cage's users in one module.
