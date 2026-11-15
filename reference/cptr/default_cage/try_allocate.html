@@ -455,7 +455,7 @@ window.MathJax = {
 </div><!-- /header -->
 <div class="synopsis">
 <h2>Synopsis</h2>
-<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L279">cptr/cage.hpp</a>&gt;</code></p>
+<p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/cage.hpp#L283">cptr/cage.hpp</a>&gt;</code></p>
 <pre><code class="source-code cpp">static
 void*
 try_allocate(
@@ -463,6 +463,10 @@ try_allocate(
     std::size_t align = alignof(
                                                    std::max_align_t)) noexcept;</code></pre>
 </div><!-- /synopsis -->
+<div class="description">
+<h2>Description</h2>
+<p>The common case, a small block from this thread&#x27;s cache, is kept small enough for compilers to inline; everything else is out of line.</p>
+</div><!-- /description -->
 </div><!-- /symbol -->
 
 </div>
