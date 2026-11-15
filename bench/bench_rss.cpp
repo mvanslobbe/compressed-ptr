@@ -12,6 +12,11 @@
 #include "common.hpp"
 #include "cptr/all.hpp"
 
+#if defined(CPTR_BENCH_PLF_LIST)
+#  include "cptr/fancy_allocator.hpp"
+#  include "plf_list.h"
+#endif
+
 namespace {
 
 template <class List>
@@ -64,6 +69,22 @@ std::size_t fill_graph(std::uint32_t n) {
   return after - before;
 }
 
+#if defined(CPTR_BENCH_PLF_LIST)
+// With cptr::fancy_allocator the list object must live in the cage too:
+// see bench_runtime.cpp.
+std::size_t fill_plf_compressed(std::uint32_t n) {
+  using list = plf::list<std::uint32_t, cptr::fancy_allocator<std::uint32_t>>;
+  std::size_t before = bench::current_rss();
+  cptr::ptr<list> l = cptr::make<list>();
+  for (std::uint32_t i = 0; i < n; i++) {
+    l->push_back(i);
+  }
+  std::size_t after = bench::current_rss();
+  bench::keep(l.get());
+  return after - before;
+}
+#endif
+
 struct config {
   const char* name;
   std::size_t (*run)(std::uint32_t);
@@ -91,6 +112,10 @@ const config kConfigs[] = {
     {"hash/std", fill_map<std::unordered_map<std::uint32_t, std::uint32_t>>},
     {"graph16/compressed", fill_graph<graph_vertex_c>},
     {"graph16/raw", fill_graph<graph_vertex_r>},
+#if defined(CPTR_BENCH_PLF_LIST)
+    {"plf_list/compressed", fill_plf_compressed},
+    {"plf_list/plain", fill_list<plf::list<std::uint32_t>>},
+#endif
 };
 
 }  // namespace

@@ -98,11 +98,21 @@ if(COMPRESSED_PTR_BUILD_TESTS)
   endif()
 endif()
 
+set(COMPRESSED_PTR_PLF_LIST_DIR "" CACHE PATH
+  "plf_list checkout, to build the plf::list example and benchmarks")
+
 if(COMPRESSED_PTR_BUILD_BENCHMARKS)
   add_executable(bench_runtime bench/bench_runtime.cpp)
   target_link_libraries(bench_runtime PRIVATE compressed_ptr)
   add_executable(bench_rss bench/bench_rss.cpp)
   target_link_libraries(bench_rss PRIVATE compressed_ptr)
+  if(COMPRESSED_PTR_PLF_LIST_DIR)
+    foreach(bench bench_runtime bench_rss)
+      target_include_directories(${bench} SYSTEM PRIVATE
+        ${COMPRESSED_PTR_PLF_LIST_DIR})
+      target_compile_definitions(${bench} PRIVATE CPTR_BENCH_PLF_LIST)
+    endforeach()
+  endif()
   if(WIN32)
     target_link_libraries(bench_rss PRIVATE psapi)
     target_link_libraries(bench_runtime PRIVATE psapi)
@@ -131,8 +141,6 @@ if(COMPRESSED_PTR_BUILD_EXAMPLES)
   endforeach()
 endif()
 
-set(COMPRESSED_PTR_PLF_LIST_DIR "" CACHE PATH
-  "plf_list checkout, to build the plf::list example")
 if(COMPRESSED_PTR_BUILD_EXAMPLES AND COMPRESSED_PTR_PLF_LIST_DIR)
   add_executable(example_plf_list examples/plf_list.cpp)
   target_include_directories(example_plf_list PRIVATE

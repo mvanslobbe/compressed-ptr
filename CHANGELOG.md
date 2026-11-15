@@ -27,6 +27,9 @@ First public version.
 - `allocator<T>` and `fancy_allocator<T>`.
 - `CPTR_CHECKED` to keep the misuse checks in release builds.
 - CMake package with `find_package(compressed_ptr)`, `cptr/version.hpp`.
+- A `plf` benchmark section comparing `plf::list` with and without
+  `cptr::fancy_allocator`, built when CMake is given
+  `COMPRESSED_PTR_PLF_LIST_DIR`.
 - A Compiler Explorer example, an introductory article (`docs/why.md`) and
   a comparison with the alternatives in the README.
 - `cptr::deleter<T, Cage>` for `std::unique_ptr` (4 bytes), and

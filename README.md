@@ -160,11 +160,9 @@ int main() {
 }
 ```
 
-Expect: plf::list at 12.1 instead of 24.1 bytes per element, walks 15%
-faster, sorts as fast. This needs plf::list with
-[plf_tools#7](https://github.com/mattreecebentley/plf_tools/pull/7) and
-[plf_list#45](https://github.com/mattreecebentley/plf_list/pull/45), which
-are waiting to be merged
+Expect: plf::list at 12.2 instead of 24.1 bytes per element, push_back
+16 to 36% faster, walks 13 to 19% faster, sorts 4% faster. This needs
+plf::list 7.6.50 or later
 ([`examples/plf_list_minimal.cpp`](examples/plf_list_minimal.cpp)).
 
 ## Is it for you?

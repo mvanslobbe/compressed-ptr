@@ -216,12 +216,22 @@ l->push_back(1);
 The list object must live in the cage (see above). No other change is
 needed: plf::list takes its node pointer type from the allocator.
 
-4,000,000 random `uint32_t`, GCC 15 `-O2`, i7-12700H, best of 3:
+This needs plf::list 7.6.50 or later (plf_tools 1.0.17), the first
+releases that accept a fancy pointer for their end node.
 
-| | bytes/element | push_back | 10 walks | sort |
-|---|---:|---:|---:|---:|
-| `plf::list` | 24.1 | 29 ms | 67 ms | 543 ms |
-| `plf::list` with `cptr::fancy_allocator` | **12.1** | 25 ms | 57 ms | 530 ms |
+Measured with `bench_runtime ... plf` (4,194,304 `uint32_t`, sort of
+262,144 random values per epoch) and `bench_rss` (2,000,000), on an
+i7-12700H; ns per element at p50, change against plain `plf::list`:
+
+| | bytes/element | push_back | walk | pop_front | sort |
+|---|---:|---:|---:|---:|---:|
+| `plf::list`, GCC 15 | 24.1 | 8.00 | 1.71 | 2.60 | 83.9 |
+| with `cptr::fancy_allocator`, GCC 15 | **12.2** | 5.09 (−36%) | 1.49 (−13%) | 2.17 (−17%) | 80.1 (−4%) |
+| `plf::list`, Clang 22 | 24.1 | 7.58 | 1.90 | 3.22 | 85.0 |
+| with `cptr::fancy_allocator`, Clang 22 | **12.2** | 6.37 (−16%) | 1.54 (−19%) | 2.57 (−20%) | 81.9 (−4%) |
+
+For comparison, `std::list` takes 32.0 bytes per element and 19.4, 2.1,
+5.4 and 188 ns for the same four operations (GCC).
 
 Build it with `-DCOMPRESSED_PTR_PLF_LIST_DIR=/path/to/plf_list`; see
 [`examples/plf_list_minimal.cpp`](../examples/plf_list_minimal.cpp) for the

@@ -14,7 +14,11 @@
 // of them alike.
 //
 // Usage: bench_runtime [elements] [epochs]
-// [list|map|hash|arithmetic|conversion|allocator|threads|chase]
+// [list|map|hash|arithmetic|conversion|allocator|threads|chase|plf]
+//
+// The plf section compares plf::list with and without
+// cptr::fancy_allocator; CMake builds it when given
+// -DCOMPRESSED_PTR_PLF_LIST_DIR=/path/to/plf_list.
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include "third_party/nanobench.h"
 
@@ -34,6 +38,13 @@
 
 #include "common.hpp"
 #include "cptr/all.hpp"
+
+#if defined(CPTR_BENCH_PLF_LIST)
+#  include <new>
+
+#  include "cptr/fancy_allocator.hpp"
+#  include "plf_list.h"
+#endif
 
 namespace {
 
@@ -529,6 +540,88 @@ void bench_conversion(std::size_t epochs) {
   }
 }
 
+#if defined(CPTR_BENCH_PLF_LIST)
+// An object constructed in the cage. plf::list keeps its end node inside
+// the list object, and with 4-byte links every node must be able to point
+// at it, so a plf::list with cptr::fancy_allocator has to live in the cage.
+template <class T>
+struct cage_object {
+  T* p;
+  template <class... Args>
+  explicit cage_object(Args&&... args)
+      : p(::new (cptr::default_cage::allocate(sizeof(T), alignof(T)))
+              T(std::forward<Args>(args)...)) {}
+  ~cage_object() {
+    p->~T();
+    cptr::default_cage::deallocate(p);
+  }
+  cage_object(const cage_object&) = delete;
+  cage_object& operator=(const cage_object&) = delete;
+};
+
+// Sorting a list of kSortN elements. Each call first overwrites the
+// elements, in list order, with the next kSortN values of a random
+// sequence, so that every sort sees unsorted input; the time includes that
+// walk.
+template <class List>
+struct sort_variant {
+  static constexpr std::uint32_t kSortN = 1 << 18;
+  const std::vector<std::uint32_t>& values;
+  List l;
+  std::size_t pos = 0;
+
+  explicit sort_variant(const std::vector<std::uint32_t>& v) : values(v) {
+    for (std::uint32_t i = 0; i < kSortN; i++) {
+      l.push_back(i);
+    }
+  }
+  void operator()() {
+    for (std::uint32_t& x : l) {
+      x = values[pos];
+      pos = pos + 1 == values.size() ? 0 : pos + 1;
+    }
+    l.sort();
+    doNotOptimizeAway(l.front());
+  }
+};
+
+void bench_plf(std::uint32_t n, std::size_t epochs) {
+  using plain = plf::list<std::uint32_t>;
+  using compressed =
+      plf::list<std::uint32_t, cptr::fancy_allocator<std::uint32_t>>;
+  const char* names[] = {
+      "`plf::list`", "`plf::list` with `cptr::fancy_allocator`", "`std::list`"};
+  char title[160];
+  std::snprintf(title, sizeof title,
+                "plf::list of `uint32_t`, %u elements, ns per element "
+                "(chunks of %zu, walk %zu)",
+                n, kChunk, kWalk);
+  print_header(title);
+  {
+    list_variant<plain> r;
+    cage_object<list_variant<compressed>> c;
+    list_variant<std::list<std::uint32_t>> s;
+    bench_containers(names, {&r, c.p, &s}, n, epochs, false);
+  }
+
+  std::snprintf(title, sizeof title,
+                "plf::list `sort()` of %u random `uint32_t`, ns per element",
+                sort_variant<plain>::kSortN);
+  print_header(title);
+  auto values = bench::random_permutation(1 << 22, 4);
+  sort_variant<plain> r(values);
+  cage_object<sort_variant<compressed>> c(values);
+  sort_variant<std::list<std::uint32_t>> s(values);
+  std::size_t sort_epochs =
+      std::max<std::size_t>(epochs / 100 / kBurst, 4) * kBurst;
+  auto d = measure(sort_epochs, sort_variant<plain>::kSortN,
+                   {[&] { r(); }, [&] { (*c.p)(); }, [&] { s(); }});
+  for (std::size_t v = 0; v < 3; v++) {
+    print_row(names[v], d[v], v == 0 ? nullptr : &d[0]);
+  }
+}
+#endif
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -617,4 +710,9 @@ int main(int argc, char** argv) {
     bench_chase<4>(epochs);
     bench_chase<56>(epochs);
   }
+#if defined(CPTR_BENCH_PLF_LIST)
+  if (wanted("plf")) {
+    bench_plf(n, epochs);
+  }
+#endif
 }
