@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>compressed-ptr: Half your pointers are wasted</title>
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
 <meta name="description" content="4-byte pointers and drop-in containers for 64-bit C++: half the memory for lists, maps and trees. Header-only C++20.">
 <style>
   :root { --bg: #fff; --fg: #1f2328; --muted: #59636e; --link: #0969da;
@@ -16,6 +17,7 @@
          font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
   nav { border-bottom: 1px solid var(--line); padding: 12px 16px; }
   nav a { margin-right: 16px; }
+  nav a.brand { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
   main { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
   a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -57,7 +59,7 @@
 </head>
 <body>
 <nav>
-  <a href="index.html"><strong>compressed-ptr</strong></a>
+  <a class="brand" href="index.html"><img src="assets/logo.svg" alt="" width="24" height="24"><strong>compressed-ptr</strong></a>
   <a href="why.html">Why</a>
   <a href="guide.html">Guide</a>
   <a href="benchmarks.html">Benchmarks</a>
@@ -151,6 +153,23 @@ caches, a walk is a chain of cache misses, and fewer bytes per node means
 fewer misses. You can check this on your own machine with one program,
 <code>examples/expect_gains.cpp</code>, or in the browser on
 <a href="https://godbolt.org/z/cTz9KfczY">Compiler Explorer</a>.</p>
+<h2 id="where-it-helps-and-where-it-does-not">Where it helps, and where it does not</h2>
+<p>This is not a magic bullet. A compressed pointer saves 4 bytes, and that
+matters only when pointers are a large part of each object. The saving per
+object is roughly 4 bytes × its pointers, divided by its size: a list node
+holding an <code>int</code> halves, but a node with two pointers and 200 bytes of
+payload shrinks by 4%, which no benchmark will notice.</p>
+<p>The structures that gain are the ones made of many small nodes:</p>
+<ul>
+<li>LRU caches, free lists and work queues on linked lists;</li>
+<li>ordered indexes such as order books, symbol tables and interval trees;</li>
+<li>hash tables with chained nodes;</li>
+<li>graphs stored as adjacency lists: dependencies, call graphs, road
+  networks;</li>
+<li>syntax trees, compiler IR and scene graphs;</li>
+<li>tries and radix trees for prefix search and routing;</li>
+<li>object graphs in interpreters and game engines.</li>
+</ul>
 <h2 id="what-it-costs">What it costs</h2>
 <p>Nothing here is free, and the <a href="benchmarks.html">benchmarks page</a> says where it
 loses:</p>
