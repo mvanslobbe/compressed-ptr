@@ -18,6 +18,7 @@
 #include <atomic>
 #include <bit>
 #include <cerrno>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -374,11 +375,37 @@ class CPTR_VISIBLE mapped_cage {
     if (fresh) {
       format(h);
     }
-    if (!valid(h)) {
+    if (h->magic != kMagic || h->version != kVersion ||
+        h->size_log2 != SizeLog2) {
       return false;
     }
-    previous_base_ = h->base;
-    h->base = reinterpret_cast<std::uintptr_t>(p);
+    // Processes that already have the file open allocate under the header's
+    // spin lock, not the flock, so the allocator state is checked under the
+    // spin lock too; otherwise a half-made allocation looks like a corrupt
+    // file. A lock still held after a second, by a process that died
+    // holding it, fails the open.
+    if (!lock_for_a_second(h->lock)) {
+      return false;
+    }
+    bool ok = valid(h);
+    if (ok) {
+      previous_base_ = h->base;
+      h->base = reinterpret_cast<std::uintptr_t>(p);
+    }
+    h->lock.store(0, std::memory_order_release);
+    return ok;
+  }
+
+  static bool lock_for_a_second(std::atomic<std::uint32_t>& lock) noexcept {
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (lock.exchange(1, std::memory_order_acquire)) {
+      while (lock.load(std::memory_order_relaxed)) {
+        if (std::chrono::steady_clock::now() > deadline) {
+          return false;
+        }
+        std::this_thread::yield();
+      }
+    }
     return true;
   }
 
