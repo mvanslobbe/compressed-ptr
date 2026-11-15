@@ -456,6 +456,15 @@ window.MathJax = {
 <div class="synopsis">
 <h2>Synopses</h2>
 <p>Declared in <code>&lt;<a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/include/cptr/allocator.hpp#L65">cptr/allocator.hpp</a>&gt;</code></p>
+<p>Always true: memory from one allocator for a cage can be freed by any other for the same cage.</p>
+<pre><code class="source-code cpp">template&lt;class U&gt;
+constexpr
+bool
+<a href="./operator_eq-00.html">operator&#x3D;&#x3D;</a>(
+    <a href="./allocator.html">allocator</a> const& lhs,
+    <a href="./allocator.html">allocator&lt;U, Cage&gt;</a> const& rhs) noexcept;</code></pre>
+<span class="small"><a href="./operator_eq-00.html"><em>» more...</em></a></span>
+
 <p>Same address, between a ptr and a strict_ptr to the same type, which would otherwise be ambiguous: each converts to the other.</p>
 <pre><code class="source-code cpp">template&lt;bool S&gt;
 requires (S !&#x3D; Strict)
@@ -509,15 +518,6 @@ bool
     <a href="./nonnull_ptr.html">nonnull_ptr</a> a,
     <a href="./nonnull_ptr.html">nonnull_ptr</a> b) noexcept;</code></pre>
 <span class="small"><a href="./operator_eq-05.html"><em>» more...</em></a></span>
-
-<p>Always true: memory from one allocator for a cage can be freed by any other for the same cage.</p>
-<pre><code class="source-code cpp">template&lt;class U&gt;
-constexpr
-bool
-<a href="./operator_eq-00.html">operator&#x3D;&#x3D;</a>(
-    <a href="./allocator.html">allocator</a> const& lhs,
-    <a href="./allocator.html">allocator&lt;U, Cage&gt;</a> const& rhs) noexcept;</code></pre>
-<span class="small"><a href="./operator_eq-00.html"><em>» more...</em></a></span>
 
 <p>Always true: memory from one fancy_allocator for a cage can be freed by any other for the same cage.</p>
 <pre><code class="source-code cpp">template&lt;class U&gt;
