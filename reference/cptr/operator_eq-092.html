@@ -510,15 +510,6 @@ bool
     <a href="./nonnull_ptr.html">nonnull_ptr</a> b) noexcept;</code></pre>
 <span class="small"><a href="./operator_eq-05.html"><em>» more...</em></a></span>
 
-<p>Always true: memory from one allocator for a cage can be freed by any other for the same cage.</p>
-<pre><code class="source-code cpp">template&lt;class U&gt;
-constexpr
-bool
-<a href="./operator_eq-00.html">operator&#x3D;&#x3D;</a>(
-    <a href="./allocator.html">allocator</a> const& lhs,
-    <a href="./allocator.html">allocator&lt;U, Cage&gt;</a> const& rhs) noexcept;</code></pre>
-<span class="small"><a href="./operator_eq-00.html"><em>» more...</em></a></span>
-
 <p>Always true: memory from one fancy_allocator for a cage can be freed by any other for the same cage.</p>
 <pre><code class="source-code cpp">template&lt;class U&gt;
 constexpr
@@ -527,6 +518,15 @@ bool
     <a href="./fancy_allocator.html">fancy_allocator</a> const& lhs,
     <a href="./fancy_allocator.html">fancy_allocator&lt;U, Cage&gt;</a> const& rhs) noexcept;</code></pre>
 <span class="small"><a href="./operator_eq-0d.html"><em>» more...</em></a></span>
+
+<p>Always true: memory from one allocator for a cage can be freed by any other for the same cage.</p>
+<pre><code class="source-code cpp">template&lt;class U&gt;
+constexpr
+bool
+<a href="./operator_eq-00.html">operator&#x3D;&#x3D;</a>(
+    <a href="./allocator.html">allocator</a> const& lhs,
+    <a href="./allocator.html">allocator&lt;U, Cage&gt;</a> const& rhs) noexcept;</code></pre>
+<span class="small"><a href="./operator_eq-00.html"><em>» more...</em></a></span>
 
 <p>Both pointers equal.</p>
 <pre><code class="source-code cpp">constexpr
