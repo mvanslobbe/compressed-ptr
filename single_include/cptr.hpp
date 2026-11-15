@@ -418,6 +418,7 @@ class CPTR_VISIBLE cage {
       st->bump = span_size;
       st->commit_end = span_size;
       base_ = detail::base_address(reinterpret_cast<std::uintptr_t>(p));
+      span_table_ = st->span_class.raw;
       ready_.store(true, std::memory_order_release);
     }
     return true;
@@ -475,78 +476,47 @@ class CPTR_VISIBLE cage {
   }
 
   /// As allocate(), but returns nullptr on failure.
+  ///
+  /// The common case, a small block from this thread's cache, is kept small
+  /// enough for compilers to inline; everything else is out of line.
   static void* try_allocate(std::size_t bytes, std::size_t align = alignof(
                                                    std::max_align_t)) noexcept {
     CPTR_ASSERT(std::has_single_bit(align), "alignment must be a power of two");
-    if (!init()) {
-      return nullptr;
-    }
-    if (bytes == 0) {
-      bytes = 1;
-    }
-    if (align < granularity) {
-      align = granularity;
-    }
-    int cls = size_class(bytes, align);
-    if (cls >= 0) {
-      // Small blocks come from this thread's cache, which is refilled from
-      // the slabs a batch at a time.
-      thread_cache* tcp = cache();
-      if (!tcp) [[unlikely]] {
-        return allocate_uncached(cls, bytes);
+    // A thread has a cache only once the cage is initialised. Up to 64-byte
+    // alignment the size class is closed-form.
+    thread_cache* tc = tls_.cache;
+    if (tc && bytes - 1 < detail::kMaxSmall && align <= 64) [[likely]] {
+      int cls =
+          detail::size_class(bytes, align < granularity ? granularity : align);
+      std::uint32_t& n = tc->count[cls];
+      if (n != 0) [[likely]] {
+        return pop_cached(*tc, cls, n, bytes);
       }
-      thread_cache& tc = *tcp;
-      std::uint32_t& n = tc.count[cls];
-      if (n == 0 && !refill(tc, cls)) {
-        return nullptr;
-      }
-      std::uint32_t block_size = detail::kClassSizes[cls];
-      void* p = decompress_nonnull(tc.blocks[cls][--n]);
-      // Only the bytes asked for, so that overflows into the rest of the
-      // block are reported too.
-      CPTR_UNPOISON(p, bytes);
-      tc.cached.store(tc.cached.load(std::memory_order_relaxed) - block_size,
-                      std::memory_order_relaxed);
-      return p;
     }
-    return allocate_large_locked(bytes, align);
+    return try_allocate_slow(bytes, align);
   }
 
   /// Free memory from allocate(). The size is not needed: the span table
   /// records how every span is used.
+  ///
+  /// As with try_allocate(), the common case, a small block going back to
+  /// this thread's cache, is inline and the rest out of line.
   static void deallocate(void* p) noexcept {
     if (!p) {
       return;
     }
     CPTR_CHECK(contains(p), "pointer was not allocated from this cage");
-    state_type& st = state();
     std::size_t offset = reinterpret_cast<std::uintptr_t>(p) - base();
-    std::uint32_t span = static_cast<std::uint32_t>(offset / span_size);
     // A live block's span entry does not change, so it can be read without
     // the lock.
-    std::uint8_t cls = st.span_class[span];
-    if (cls < detail::kClassSizes.size()) {
-      thread_cache* tcp = cache();
-      if (!tcp) [[unlikely]] {
-        free_uncached(p, cls);
-        return;
-      }
-      thread_cache& tc = *tcp;
-      if (tc.count[cls] == cache_capacity(cls)) {
-        flush(tc, cls, cache_capacity(cls) / 2);
-      }
-      std::uint32_t block_size = detail::kClassSizes[cls];
-      CPTR_POISON(p, block_size);
-      tc.blocks[cls][tc.count[cls]++] =
-          static_cast<std::uint32_t>(offset >> Shift);
-      tc.cached.store(tc.cached.load(std::memory_order_relaxed) + block_size,
-                      std::memory_order_relaxed);
+    std::uint8_t cls = span_table_[offset / span_size] ^ kUnusedSpan;
+    thread_cache* tc = tls_.cache;
+    if (tc && cls < detail::kClassSizes.size() &&
+        tc->count[cls] != cache_capacity(cls)) [[likely]] {
+      push_cached(*tc, cls, p, offset);
       return;
     }
-    detail::lock_guard g(st.lock);
-    CPTR_ASSERT(cls == kLargeSpan && offset % span_size == 0,
-                "pointer is not the start of a live allocation");
-    free_large(span);
+    deallocate_slow(p, offset, cls);
   }
 
   static void deallocate(void* p, std::size_t, std::size_t = 0) noexcept {
@@ -816,6 +786,79 @@ class CPTR_VISIBLE cage {
     CPTR_POISON(p, detail::kClassSizes[cls]);
     return_to_slab(p, cls);
     state().allocated -= detail::kClassSizes[cls];
+  }
+
+  static void* pop_cached(thread_cache& tc, int cls, std::uint32_t& n,
+                          std::size_t bytes) noexcept {
+    std::uint32_t block_size = detail::kClassSizes[cls];
+    void* p = decompress_nonnull(tc.blocks[cls][--n]);
+    // Only the bytes asked for, so that overflows into the rest of the
+    // block are reported too.
+    CPTR_UNPOISON(p, bytes);
+    tc.cached.store(tc.cached.load(std::memory_order_relaxed) - block_size,
+                    std::memory_order_relaxed);
+    return p;
+  }
+
+  static void push_cached(thread_cache& tc, int cls, void* p,
+                          std::size_t offset) noexcept {
+    std::uint32_t block_size = detail::kClassSizes[cls];
+    CPTR_POISON(p, block_size);
+    tc.blocks[cls][tc.count[cls]++] =
+        static_cast<std::uint32_t>(offset >> Shift);
+    tc.cached.store(tc.cached.load(std::memory_order_relaxed) + block_size,
+                    std::memory_order_relaxed);
+  }
+
+  CPTR_NOINLINE static void* try_allocate_slow(std::size_t bytes,
+                                               std::size_t align) noexcept {
+    if (!init()) {
+      return nullptr;
+    }
+    if (bytes == 0) {
+      bytes = 1;
+    }
+    if (align < granularity) {
+      align = granularity;
+    }
+    int cls = size_class(bytes, align);
+    if (cls >= 0) {
+      // Small blocks come from this thread's cache, which is refilled from
+      // the slabs a batch at a time.
+      thread_cache* tcp = cache();
+      if (!tcp) [[unlikely]] {
+        return allocate_uncached(cls, bytes);
+      }
+      thread_cache& tc = *tcp;
+      std::uint32_t& n = tc.count[cls];
+      if (n == 0 && !refill(tc, cls)) {
+        return nullptr;
+      }
+      return pop_cached(tc, cls, n, bytes);
+    }
+    return allocate_large_locked(bytes, align);
+  }
+
+  CPTR_NOINLINE static void deallocate_slow(void* p, std::size_t offset,
+                                            std::uint8_t cls) noexcept {
+    state_type& st = state();
+    if (cls < detail::kClassSizes.size()) {
+      thread_cache* tcp = cache();
+      if (!tcp) [[unlikely]] {
+        free_uncached(p, cls);
+        return;
+      }
+      thread_cache& tc = *tcp;
+      if (tc.count[cls] == cache_capacity(cls)) {
+        flush(tc, cls, cache_capacity(cls) / 2);
+      }
+      push_cached(tc, cls, p, offset);
+      return;
+    }
+    detail::lock_guard g(st.lock);
+    CPTR_ASSERT(cls == kLargeSpan && offset % span_size == 0,
+                "pointer is not the start of a live allocation");
+    free_large(static_cast<std::uint32_t>(offset / span_size));
   }
 
   /// Blocks a thread keeps per class: up to kRecent, and up to 32 KiB of
@@ -1224,6 +1267,9 @@ class CPTR_VISIBLE cage {
 
   inline static detail::base_address base_{};
   inline static std::atomic<bool> ready_{false};
+  /// state().span_class's table, set before ready_ like base_ and read
+  /// without atomics for the same reason.
+  inline static const std::uint8_t* span_table_ = nullptr;
 };
 
 /// The default cage: 4 GiB, byte granularity.

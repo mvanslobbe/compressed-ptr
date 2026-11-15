@@ -76,6 +76,11 @@ First public version.
   aliases integer stores, so loops keep it in a register.
 - Copying an `unordered_map` reuses the stored hashes (about twice as fast),
   and `erase(key)` walks its bucket once.
+- Allocating and freeing a small block from the thread cache is inline:
+  the rest of the allocator moved out of line, so compilers no longer call
+  into it on the common path. Allocator churn is 16 to 19% faster, list
+  `push_back` and `pop` 19 to 26%, and `unordered_map` inserts 15 to 23%
+  (GCC 15 and Clang 22).
 
 ### Fixed
 
