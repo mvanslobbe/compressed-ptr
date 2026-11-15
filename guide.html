@@ -491,7 +491,21 @@ the measurements.</p>
   message.</li>
 <li><strong>AddressSanitizer</strong> understands the cage: freed blocks are poisoned.
   LeakSanitizer does not see cage memory.</li>
+<li><strong>Builds without exceptions</strong> (<code>-fno-exceptions</code>, or MSVC without
+  <code>/EH</code>) are supported. Where the library would throw (<code>std::bad_alloc</code>
+  when a cage is full, <code>std::out_of_range</code> from <code>at()</code>,
+  <code>std::length_error</code> for too many buckets) it calls
+  <code>CPTR_ON_FAILURE(what)</code> instead, which prints <code>what</code> and aborts. Define
+  <code>CPTR_ON_FAILURE</code> before including any cptr header to report the failure
+  your own way; it must not return. The containers' rollback code, which
+  only runs when an element's constructor or comparator throws, compiles
+  away. Define <code>CPTR_NO_EXCEPTIONS</code> to get this behaviour in a build that
+  has exceptions.</li>
 </ul>
+<p><code>cpp
+  // Before any cptr header: use the project's own fatal-error path.
+  #define CPTR_ON_FAILURE(what) my_fatal_error("cptr", what)
+  #include "cptr/all.hpp"</code></p>
 <h2 id="building">Building</h2>
 <pre><code class="language-sh">cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
@@ -536,7 +550,8 @@ cmake --build build-fuzz
 <p>The tests cover 95% of the header lines, 99% of the functions and 88% of
 the branches. A second test executable overrides <code>CPTR_ASSERT</code> to check
 misuse detection, injects commit failures with <code>CPTR_FAULT_INJECTION</code>, and
-runs out of address space under <code>RLIMIT_AS</code>. The remaining gaps are
+runs out of address space under <code>RLIMIT_AS</code>. A third is built with <code>-fno-exceptions</code> and checks
+that failures reach <code>CPTR_ON_FAILURE</code>. The remaining gaps are
 assertion branches that cannot be taken safely (such as freeing a pointer
 from outside the cage), the compile-time size-class table, and out-of-memory
 inside the allocator's own bookkeeping.</p>
