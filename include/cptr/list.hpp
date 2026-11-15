@@ -373,7 +373,7 @@ class basic_list {
     node_base* a = sentinel()->next;
     node_base* b = other.sentinel()->next;
     size_type moved = 0;
-    try {
+    CPTR_TRY {
       while (a != sentinel() && b != other.sentinel()) {
         if (comp(value_of(b), value_of(a))) {
           node_base* next = b->next;
@@ -385,10 +385,11 @@ class basic_list {
           a = a->next;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       size_ += moved;
       other.size_ -= moved;
-      throw;
+      CPTR_RETHROW;
     }
     if (b != other.sentinel()) {
       transfer(sentinel(), b, other.sentinel());
@@ -412,11 +413,10 @@ class basic_list {
     // Detach the nodes as a null-terminated chain through |next|.
     node_base* chain = sentinel()->next;
     sentinel()->prev->next = nullptr;
-    try {
-      chain = sort_chain(chain, comp);
-    } catch (...) {
+    CPTR_TRY { chain = sort_chain(chain, comp); }
+    CPTR_CATCH_ALL {
       relink(chain);
-      throw;
+      CPTR_RETHROW;
     }
     relink(chain);
   }
@@ -461,7 +461,7 @@ class basic_list {
     size_type removed = 0;
     node_base* kept = sentinel()->next;
     node_base* n = kept->next;
-    try {
+    CPTR_TRY {
       while (n != sentinel()) {
         node_base* next = n->next;
         if (pred(value_of(kept), value_of(n))) {
@@ -474,10 +474,11 @@ class basic_list {
         }
         n = next;
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_chain(doomed);
       size_ -= removed;
-      throw;
+      CPTR_RETHROW;
     }
     destroy_chain(doomed);
     size_ -= removed;
@@ -521,11 +522,12 @@ class basic_list {
   template <class... Args>
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
-    try {
+    CPTR_TRY {
       return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       Cage::deallocate(mem);
-      throw;
+      CPTR_RETHROW;
     }
   }
 
@@ -583,7 +585,7 @@ class basic_list {
   static node_base* merge_runs(node_base*& a, node_base*& b, Compare& comp) {
     node_base head;
     node_base* tail = &head;
-    try {
+    CPTR_TRY {
       while (a && b) {
         if (comp(value_of(b), value_of(a))) {
           tail->next = b;
@@ -595,10 +597,11 @@ class basic_list {
           a = a->next;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       tail->next = a;
       a = head.next;
-      throw;
+      CPTR_RETHROW;
     }
     tail->next = a ? a : b;
     return head.next;
@@ -628,7 +631,7 @@ class basic_list {
     node_base* input = chain;
     node_base* run = nullptr;    // the run being merged into
     node_base* other = nullptr;  // the run merged with it
-    try {
+    CPTR_TRY {
       while (input) {
         run = input;
         input = input->next;
@@ -648,13 +651,14 @@ class basic_list {
           other = nullptr;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       node_base* all = concat(other, run);
       for (node_base* bin : bins) {
         all = concat(bin, all);
       }
       chain = concat(all, input);
-      throw;
+      CPTR_RETHROW;
     }
     return run;
   }
@@ -679,7 +683,7 @@ class basic_list {
     node_base* at = position(pos);
     node_base* first = at;
     size_type added = 0;
-    try {
+    CPTR_TRY {
       produce([&](auto&& v) {
         node* n = new_node(std::forward<decltype(v)>(v));
         link_before(at, n);
@@ -687,14 +691,15 @@ class basic_list {
           first = n;
         }
       });
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       for (node_base* n = first; added; added--) {
         node_base* next = n->next;
         unlink(n);
         delete_node(n);
         n = next;
       }
-      throw;
+      CPTR_RETHROW;
     }
     size_ += added;
     return iterator(first);
@@ -718,7 +723,7 @@ class basic_list {
     node_base* doomed = nullptr;
     size_type removed = 0;
     node_base* n = sentinel()->next;
-    try {
+    CPTR_TRY {
       while (n != sentinel()) {
         node_base* next = n->next;
         if (pred(value_of(n))) {
@@ -729,10 +734,11 @@ class basic_list {
         }
         n = next;
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_chain(doomed);
       size_ -= removed;
-      throw;
+      CPTR_RETHROW;
     }
     destroy_chain(doomed);
     size_ -= removed;

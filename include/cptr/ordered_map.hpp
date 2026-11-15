@@ -312,7 +312,8 @@ class basic_ordered_map {
   V& at(const K& key) {
     node_base* n = find_node(key);
     if (n == header()) {
-      throw std::out_of_range("cptr::ordered_map::at: no such key");
+      CPTR_THROW(std::out_of_range("cptr::ordered_map::at: no such key"),
+                 "cptr::ordered_map::at: no such key");
     }
     return static_cast<node*>(n)->kv.second;
   }
@@ -333,11 +334,10 @@ class basic_ordered_map {
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
     slot s;
-    try {
-      s = find_slot(n->kv.first);
-    } catch (...) {
+    CPTR_TRY { s = find_slot(n->kv.first); }
+    CPTR_CATCH_ALL {
       delete_node(n);
-      throw;
+      CPTR_RETHROW;
     }
     if (s.existing) {
       delete_node(n);
@@ -577,11 +577,12 @@ class basic_ordered_map {
   template <class... Args>
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
-    try {
+    CPTR_TRY {
       return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       Cage::deallocate(mem);
-      throw;
+      CPTR_RETHROW;
     }
   }
 
@@ -902,16 +903,17 @@ class basic_ordered_map {
     node* copy = new_node(static_cast<node*>(n)->kv);
     copy->color = n->color;
     copy->parent = parent;
-    try {
+    CPTR_TRY {
       if (n->left) {
         copy->left = clone(n->left, copy);
       }
       if (n->right) {
         copy->right = clone(n->right, copy);
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_subtree(copy);
-      throw;
+      CPTR_RETHROW;
     }
     return copy;
   }

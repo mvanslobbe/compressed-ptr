@@ -242,11 +242,10 @@ class basic_unordered_map {
       return;
     }
     float old = std::exchange(max_load_, f);
-    try {
-      reserve(size_);
-    } catch (...) {
+    CPTR_TRY { reserve(size_); }
+    CPTR_CATCH_ALL {
       max_load_ = old;
-      throw;
+      CPTR_RETHROW;
     }
   }
   hasher hash_function() const { return hash_; }
@@ -272,7 +271,8 @@ class basic_unordered_map {
       return;
     }
     if (need > max_bucket_count()) {
-      throw std::length_error("cptr::unordered_map: too many buckets");
+      CPTR_THROW(std::length_error("cptr::unordered_map: too many buckets"),
+                 "cptr::unordered_map: too many buckets");
     }
     unsigned log2 = unsigned(std::bit_width(need - 1));
     log2 = std::max(log2, 3u);
@@ -362,7 +362,8 @@ class basic_unordered_map {
   V& at(const K& key) {
     node* n = find_node(key);
     if (!n) {
-      throw std::out_of_range("cptr::unordered_map::at: no such key");
+      CPTR_THROW(std::out_of_range("cptr::unordered_map::at: no such key"),
+                 "cptr::unordered_map::at: no such key");
     }
     return n->kv.second;
   }
@@ -382,7 +383,7 @@ class basic_unordered_map {
     requires std::constructible_from<value_type, Args...>
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
-    try {
+    CPTR_TRY {
       std::uint32_t h = hash_of(n->kv.first);
       if (node* existing = find_node(n->kv.first, h)) {
         delete_node(n);
@@ -390,9 +391,10 @@ class basic_unordered_map {
       }
       n->hash = h;
       link_node(n);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       delete_node(n);
-      throw;
+      CPTR_RETHROW;
     }
     return {make_iterator(n), true};
   }
@@ -693,11 +695,10 @@ class basic_unordered_map {
                        std::forward_as_tuple(std::forward<Key>(key)),
                        std::forward_as_tuple(std::forward<Args>(args)...));
     n->hash = h;
-    try {
-      link_node(n);
-    } catch (...) {
+    CPTR_TRY { link_node(n); }
+    CPTR_CATCH_ALL {
       delete_node(n);
-      throw;
+      CPTR_RETHROW;
     }
     return {make_iterator(n), true};
   }
@@ -705,11 +706,12 @@ class basic_unordered_map {
   template <class... Args>
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
-    try {
+    CPTR_TRY {
       return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       Cage::deallocate(mem);
-      throw;
+      CPTR_RETHROW;
     }
   }
 

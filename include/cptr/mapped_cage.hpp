@@ -177,7 +177,8 @@ class CPTR_VISIBLE mapped_cage {
     if (void* p = try_allocate(bytes, align)) {
       return p;
     }
-    throw std::bad_alloc();
+    CPTR_THROW(std::bad_alloc(),
+               "out of memory: the cage is full or cannot be reserved");
   }
 
   /// Returns nullptr when the cage is full, no file is open, or `align` is

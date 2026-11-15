@@ -191,11 +191,8 @@ class CPTR_VISIBLE cage {
       return true;
     }
     state_type* st;
-    try {
-      st = &state();
-    } catch (...) {
-      return false;
-    }
+    CPTR_TRY { st = &state(); }
+    CPTR_CATCH_ALL { return false; }
     {
       detail::lock_guard g(st->lock);
       if (ready_.load(std::memory_order_relaxed)) {
@@ -273,7 +270,8 @@ class CPTR_VISIBLE cage {
     if (void* p = try_allocate(bytes, align)) {
       return p;
     }
-    throw std::bad_alloc();
+    CPTR_THROW(std::bad_alloc(),
+               "out of memory: the cage is full or cannot be reserved");
   }
 
   /// As allocate(), but returns nullptr on failure.
@@ -434,7 +432,8 @@ class CPTR_VISIBLE cage {
     bytes = (bytes + 65535) / 65536 * 65536;
     void* p = detail::reserve_aligned(bytes, 65536);
     if (!p || !detail::commit(p, bytes)) {
-      throw std::bad_alloc();
+      CPTR_THROW(std::bad_alloc(),
+                 "out of memory: the cage is full or cannot be reserved");
     }
     return static_cast<T*>(p);
   }
@@ -774,9 +773,8 @@ class CPTR_VISIBLE cage {
   static void remember_free_run(std::uint32_t first,
                                 std::uint32_t count) noexcept {
     set_run(first, count, kFreeSpan);
-    try {
-      state().free_runs.emplace(count, first);
-    } catch (...) {  // NOLINT(bugprone-empty-catch): leaking is the plan
+    CPTR_TRY { state().free_runs.emplace(count, first); }
+    CPTR_CATCH_ALL {  // NOLINT(bugprone-empty-catch): leaking is the plan
     }
   }
 
@@ -814,10 +812,11 @@ class CPTR_VISIBLE cage {
     state_type& st = state();
     st.span_class.fill(first, count, kEmptySlab);
     std::int64_t now = now_ms();
-    try {
+    CPTR_TRY {
       st.empty.push_back({first, count, now});
       st.empty_bytes += std::size_t(count) * span_size;
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       st.committed -= std::size_t(count) * span_size;
       release_run(first, count, true);
     }

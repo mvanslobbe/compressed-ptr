@@ -48,6 +48,42 @@ namespace cptr::detail {
 #  endif
 #endif
 
+// Builds without exceptions (-fno-exceptions, or MSVC without /EH). Where
+// the library would throw (std::bad_alloc when a cage is full,
+// std::out_of_range from at(), ...) it calls CPTR_ON_FAILURE(what) instead,
+// which by default prints what to stderr and aborts. Define CPTR_ON_FAILURE
+// before including any cptr header to handle it yourself; it must not
+// return. The library's try/catch blocks, which only undo a half-done
+// operation before rethrowing, compile away. CPTR_NO_EXCEPTIONS forces this
+// mode in a build that has exceptions.
+#if !defined(CPTR_NO_EXCEPTIONS) &&                        \
+    (defined(__cpp_exceptions) || defined(__EXCEPTIONS) || \
+     defined(_CPPUNWIND))
+#  define CPTR_EXCEPTIONS 1
+#  define CPTR_TRY try
+#  define CPTR_CATCH_ALL catch (...)
+#  define CPTR_RETHROW throw
+#  define CPTR_THROW(exception, what) throw exception
+#else
+#  define CPTR_EXCEPTIONS 0
+#  include <cstdio>
+#  include <cstdlib>
+#  ifndef CPTR_ON_FAILURE
+#    define CPTR_ON_FAILURE(what) \
+      (std::fprintf(stderr, "cptr: %s\n", what), std::abort())
+#  endif
+namespace cptr::detail {
+[[noreturn]] inline void failed(const char* what) noexcept {
+  CPTR_ON_FAILURE(what);
+  std::abort();  // in case a handler returns
+}
+}  // namespace cptr::detail
+#  define CPTR_TRY if (true)
+#  define CPTR_CATCH_ALL else
+#  define CPTR_RETHROW ::cptr::detail::failed("unreachable")
+#  define CPTR_THROW(exception, what) ::cptr::detail::failed(what)
+#endif
+
 #if defined(_MSC_VER) && !defined(__clang__)
 #  define CPTR_NOINLINE __declspec(noinline)
 #else
@@ -390,11 +426,8 @@ class CPTR_VISIBLE cage {
       return true;
     }
     state_type* st;
-    try {
-      st = &state();
-    } catch (...) {
-      return false;
-    }
+    CPTR_TRY { st = &state(); }
+    CPTR_CATCH_ALL { return false; }
     {
       detail::lock_guard g(st->lock);
       if (ready_.load(std::memory_order_relaxed)) {
@@ -472,7 +505,8 @@ class CPTR_VISIBLE cage {
     if (void* p = try_allocate(bytes, align)) {
       return p;
     }
-    throw std::bad_alloc();
+    CPTR_THROW(std::bad_alloc(),
+               "out of memory: the cage is full or cannot be reserved");
   }
 
   /// As allocate(), but returns nullptr on failure.
@@ -633,7 +667,8 @@ class CPTR_VISIBLE cage {
     bytes = (bytes + 65535) / 65536 * 65536;
     void* p = detail::reserve_aligned(bytes, 65536);
     if (!p || !detail::commit(p, bytes)) {
-      throw std::bad_alloc();
+      CPTR_THROW(std::bad_alloc(),
+                 "out of memory: the cage is full or cannot be reserved");
     }
     return static_cast<T*>(p);
   }
@@ -973,9 +1008,8 @@ class CPTR_VISIBLE cage {
   static void remember_free_run(std::uint32_t first,
                                 std::uint32_t count) noexcept {
     set_run(first, count, kFreeSpan);
-    try {
-      state().free_runs.emplace(count, first);
-    } catch (...) {  // NOLINT(bugprone-empty-catch): leaking is the plan
+    CPTR_TRY { state().free_runs.emplace(count, first); }
+    CPTR_CATCH_ALL {  // NOLINT(bugprone-empty-catch): leaking is the plan
     }
   }
 
@@ -1013,10 +1047,11 @@ class CPTR_VISIBLE cage {
     state_type& st = state();
     st.span_class.fill(first, count, kEmptySlab);
     std::int64_t now = now_ms();
-    try {
+    CPTR_TRY {
       st.empty.push_back({first, count, now});
       st.empty_bytes += std::size_t(count) * span_size;
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       st.committed -= std::size_t(count) * span_size;
       release_run(first, count, true);
     }
@@ -1323,7 +1358,7 @@ class allocator {
   /// when the cage is full.
   T* allocate(std::size_t n) {
     if (n > max_size()) {
-      throw std::bad_array_new_length();
+      CPTR_THROW(std::bad_array_new_length(), "array length too large");
     }
     return static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T)));
   }
@@ -1874,11 +1909,10 @@ static_assert(std::is_trivially_copyable_v<ptr<int>>);
 template <class T, class Cage = default_cage, class... Args>
 ptr<T, Cage> make(Args&&... args) {
   void* mem = Cage::allocate(sizeof(T), alignof(T));
-  try {
-    return ptr<T, Cage>(::new (mem) T(std::forward<Args>(args)...));
-  } catch (...) {
+  CPTR_TRY { return ptr<T, Cage>(::new (mem) T(std::forward<Args>(args)...)); }
+  CPTR_CATCH_ALL {
     Cage::deallocate(mem);
-    throw;
+    CPTR_RETHROW;
   }
 }
 
@@ -1948,14 +1982,13 @@ template <class T, class Cage = default_cage>
 ptr<T, Cage> make_array(std::size_t n) {
   static_assert(!std::is_array_v<T> && !std::is_void_v<T>);
   if (n > std::size_t(-1) / sizeof(T)) {
-    throw std::bad_array_new_length();
+    CPTR_THROW(std::bad_array_new_length(), "array length too large");
   }
   T* first = static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T)));
-  try {
-    std::uninitialized_value_construct_n(first, n);
-  } catch (...) {
+  CPTR_TRY { std::uninitialized_value_construct_n(first, n); }
+  CPTR_CATCH_ALL {
     Cage::deallocate(first);
-    throw;
+    CPTR_RETHROW;
   }
   return ptr<T, Cage>(first);
 }
@@ -2081,7 +2114,7 @@ class fancy_allocator {
   /// when the cage is full.
   pointer allocate(std::size_t n) {
     if (n > max_size()) {
-      throw std::bad_array_new_length();
+      CPTR_THROW(std::bad_array_new_length(), "array length too large");
     }
     return pointer(static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T))));
   }
@@ -2459,12 +2492,11 @@ class basic_forward_list {
     }
     node_base* a = head_.next;
     node_base* b = other.head_.next;
-    try {
-      head_.next = merge_runs(a, b, comp);
-    } catch (...) {
+    CPTR_TRY { head_.next = merge_runs(a, b, comp); }
+    CPTR_CATCH_ALL {
       head_.next = a;
       other.head_.next = b;
-      throw;
+      CPTR_RETHROW;
     }
     other.head_.next = nullptr;
   }
@@ -2479,11 +2511,10 @@ class basic_forward_list {
   template <class Compare = std::less<>>
   void sort(Compare comp = Compare()) {
     node_base* chain = head_.next;
-    try {
-      head_.next = sort_chain(chain, comp);
-    } catch (...) {
+    CPTR_TRY { head_.next = sort_chain(chain, comp); }
+    CPTR_CATCH_ALL {
       head_.next = chain;
-      throw;
+      CPTR_RETHROW;
     }
   }
 
@@ -2514,7 +2545,7 @@ class basic_forward_list {
     node_base* doomed = nullptr;
     size_type removed = 0;
     node_base* prev = &head_;
-    try {
+    CPTR_TRY {
       while (node_base* n = prev->next) {
         if (pred(value_of(n))) {
           prev->next = n->next;
@@ -2525,9 +2556,10 @@ class basic_forward_list {
           prev = n;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_chain(doomed);
-      throw;
+      CPTR_RETHROW;
     }
     destroy_chain(doomed);
     return removed;
@@ -2543,7 +2575,7 @@ class basic_forward_list {
     if (!kept) {
       return 0;
     }
-    try {
+    CPTR_TRY {
       while (node_base* n = kept->next) {
         if (pred(value_of(kept), value_of(n))) {
           kept->next = n->next;
@@ -2554,9 +2586,10 @@ class basic_forward_list {
           kept = n;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_chain(doomed);
-      throw;
+      CPTR_RETHROW;
     }
     destroy_chain(doomed);
     return removed;
@@ -2583,11 +2616,12 @@ class basic_forward_list {
   template <class... Args>
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
-    try {
+    CPTR_TRY {
       return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       Cage::deallocate(mem);
-      throw;
+      CPTR_RETHROW;
     }
   }
   static void delete_node(node_base* n) noexcept {
@@ -2617,7 +2651,7 @@ class basic_forward_list {
   static node_base* merge_runs(node_base*& a, node_base*& b, Compare& comp) {
     node_base head;
     node_base* tail = &head;
-    try {
+    CPTR_TRY {
       while (a && b) {
         if (comp(value_of(b), value_of(a))) {
           tail->next = b;
@@ -2629,10 +2663,11 @@ class basic_forward_list {
           a = a->next;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       tail->next = a;
       a = head.next;
-      throw;
+      CPTR_RETHROW;
     }
     tail->next = a ? a : b;
     return head.next;
@@ -2662,7 +2697,7 @@ class basic_forward_list {
     node_base* input = chain;
     node_base* run = nullptr;    // the run being merged into
     node_base* other = nullptr;  // the run merged with it
-    try {
+    CPTR_TRY {
       while (input) {
         run = input;
         input = input->next;
@@ -2682,13 +2717,14 @@ class basic_forward_list {
           other = nullptr;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       node_base* all = concat(other, run);
       for (node_base* bin : bins) {
         all = concat(bin, all);
       }
       chain = concat(all, input);
-      throw;
+      CPTR_RETHROW;
     }
     return run;
   }
@@ -2697,15 +2733,16 @@ class basic_forward_list {
   iterator insert_each(const_iterator pos, Produce produce) {
     node_base* at = pos.node_;
     node_base* first_after = at->next;
-    try {
+    CPTR_TRY {
       produce([&](auto&& v) {
         node* n = new_node(std::forward<decltype(v)>(v));
         link_after(at, n);
         at = n;
       });
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       erase_after(pos, const_iterator(first_after));
-      throw;
+      CPTR_RETHROW;
     }
     return iterator(at);
   }
@@ -3126,7 +3163,7 @@ class basic_list {
     node_base* a = sentinel()->next;
     node_base* b = other.sentinel()->next;
     size_type moved = 0;
-    try {
+    CPTR_TRY {
       while (a != sentinel() && b != other.sentinel()) {
         if (comp(value_of(b), value_of(a))) {
           node_base* next = b->next;
@@ -3138,10 +3175,11 @@ class basic_list {
           a = a->next;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       size_ += moved;
       other.size_ -= moved;
-      throw;
+      CPTR_RETHROW;
     }
     if (b != other.sentinel()) {
       transfer(sentinel(), b, other.sentinel());
@@ -3165,11 +3203,10 @@ class basic_list {
     // Detach the nodes as a null-terminated chain through |next|.
     node_base* chain = sentinel()->next;
     sentinel()->prev->next = nullptr;
-    try {
-      chain = sort_chain(chain, comp);
-    } catch (...) {
+    CPTR_TRY { chain = sort_chain(chain, comp); }
+    CPTR_CATCH_ALL {
       relink(chain);
-      throw;
+      CPTR_RETHROW;
     }
     relink(chain);
   }
@@ -3214,7 +3251,7 @@ class basic_list {
     size_type removed = 0;
     node_base* kept = sentinel()->next;
     node_base* n = kept->next;
-    try {
+    CPTR_TRY {
       while (n != sentinel()) {
         node_base* next = n->next;
         if (pred(value_of(kept), value_of(n))) {
@@ -3227,10 +3264,11 @@ class basic_list {
         }
         n = next;
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_chain(doomed);
       size_ -= removed;
-      throw;
+      CPTR_RETHROW;
     }
     destroy_chain(doomed);
     size_ -= removed;
@@ -3274,11 +3312,12 @@ class basic_list {
   template <class... Args>
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
-    try {
+    CPTR_TRY {
       return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       Cage::deallocate(mem);
-      throw;
+      CPTR_RETHROW;
     }
   }
 
@@ -3336,7 +3375,7 @@ class basic_list {
   static node_base* merge_runs(node_base*& a, node_base*& b, Compare& comp) {
     node_base head;
     node_base* tail = &head;
-    try {
+    CPTR_TRY {
       while (a && b) {
         if (comp(value_of(b), value_of(a))) {
           tail->next = b;
@@ -3348,10 +3387,11 @@ class basic_list {
           a = a->next;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       tail->next = a;
       a = head.next;
-      throw;
+      CPTR_RETHROW;
     }
     tail->next = a ? a : b;
     return head.next;
@@ -3381,7 +3421,7 @@ class basic_list {
     node_base* input = chain;
     node_base* run = nullptr;    // the run being merged into
     node_base* other = nullptr;  // the run merged with it
-    try {
+    CPTR_TRY {
       while (input) {
         run = input;
         input = input->next;
@@ -3401,13 +3441,14 @@ class basic_list {
           other = nullptr;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       node_base* all = concat(other, run);
       for (node_base* bin : bins) {
         all = concat(bin, all);
       }
       chain = concat(all, input);
-      throw;
+      CPTR_RETHROW;
     }
     return run;
   }
@@ -3432,7 +3473,7 @@ class basic_list {
     node_base* at = position(pos);
     node_base* first = at;
     size_type added = 0;
-    try {
+    CPTR_TRY {
       produce([&](auto&& v) {
         node* n = new_node(std::forward<decltype(v)>(v));
         link_before(at, n);
@@ -3440,14 +3481,15 @@ class basic_list {
           first = n;
         }
       });
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       for (node_base* n = first; added; added--) {
         node_base* next = n->next;
         unlink(n);
         delete_node(n);
         n = next;
       }
-      throw;
+      CPTR_RETHROW;
     }
     size_ += added;
     return iterator(first);
@@ -3471,7 +3513,7 @@ class basic_list {
     node_base* doomed = nullptr;
     size_type removed = 0;
     node_base* n = sentinel()->next;
-    try {
+    CPTR_TRY {
       while (n != sentinel()) {
         node_base* next = n->next;
         if (pred(value_of(n))) {
@@ -3482,10 +3524,11 @@ class basic_list {
         }
         n = next;
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_chain(doomed);
       size_ -= removed;
-      throw;
+      CPTR_RETHROW;
     }
     destroy_chain(doomed);
     size_ -= removed;
@@ -3842,7 +3885,8 @@ class basic_ordered_map {
   V& at(const K& key) {
     node_base* n = find_node(key);
     if (n == header()) {
-      throw std::out_of_range("cptr::ordered_map::at: no such key");
+      CPTR_THROW(std::out_of_range("cptr::ordered_map::at: no such key"),
+                 "cptr::ordered_map::at: no such key");
     }
     return static_cast<node*>(n)->kv.second;
   }
@@ -3863,11 +3907,10 @@ class basic_ordered_map {
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
     slot s;
-    try {
-      s = find_slot(n->kv.first);
-    } catch (...) {
+    CPTR_TRY { s = find_slot(n->kv.first); }
+    CPTR_CATCH_ALL {
       delete_node(n);
-      throw;
+      CPTR_RETHROW;
     }
     if (s.existing) {
       delete_node(n);
@@ -4107,11 +4150,12 @@ class basic_ordered_map {
   template <class... Args>
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
-    try {
+    CPTR_TRY {
       return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       Cage::deallocate(mem);
-      throw;
+      CPTR_RETHROW;
     }
   }
 
@@ -4432,16 +4476,17 @@ class basic_ordered_map {
     node* copy = new_node(static_cast<node*>(n)->kv);
     copy->color = n->color;
     copy->parent = parent;
-    try {
+    CPTR_TRY {
       if (n->left) {
         copy->left = clone(n->left, copy);
       }
       if (n->right) {
         copy->right = clone(n->right, copy);
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_subtree(copy);
-      throw;
+      CPTR_RETHROW;
     }
     return copy;
   }
@@ -5064,11 +5109,10 @@ class basic_unordered_map {
       return;
     }
     float old = std::exchange(max_load_, f);
-    try {
-      reserve(size_);
-    } catch (...) {
+    CPTR_TRY { reserve(size_); }
+    CPTR_CATCH_ALL {
       max_load_ = old;
-      throw;
+      CPTR_RETHROW;
     }
   }
   hasher hash_function() const { return hash_; }
@@ -5094,7 +5138,8 @@ class basic_unordered_map {
       return;
     }
     if (need > max_bucket_count()) {
-      throw std::length_error("cptr::unordered_map: too many buckets");
+      CPTR_THROW(std::length_error("cptr::unordered_map: too many buckets"),
+                 "cptr::unordered_map: too many buckets");
     }
     unsigned log2 = unsigned(std::bit_width(need - 1));
     log2 = std::max(log2, 3u);
@@ -5184,7 +5229,8 @@ class basic_unordered_map {
   V& at(const K& key) {
     node* n = find_node(key);
     if (!n) {
-      throw std::out_of_range("cptr::unordered_map::at: no such key");
+      CPTR_THROW(std::out_of_range("cptr::unordered_map::at: no such key"),
+                 "cptr::unordered_map::at: no such key");
     }
     return n->kv.second;
   }
@@ -5204,7 +5250,7 @@ class basic_unordered_map {
     requires std::constructible_from<value_type, Args...>
   std::pair<iterator, bool> emplace(Args&&... args) {
     node* n = new_node(std::forward<Args>(args)...);
-    try {
+    CPTR_TRY {
       std::uint32_t h = hash_of(n->kv.first);
       if (node* existing = find_node(n->kv.first, h)) {
         delete_node(n);
@@ -5212,9 +5258,10 @@ class basic_unordered_map {
       }
       n->hash = h;
       link_node(n);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       delete_node(n);
-      throw;
+      CPTR_RETHROW;
     }
     return {make_iterator(n), true};
   }
@@ -5515,11 +5562,10 @@ class basic_unordered_map {
                        std::forward_as_tuple(std::forward<Key>(key)),
                        std::forward_as_tuple(std::forward<Args>(args)...));
     n->hash = h;
-    try {
-      link_node(n);
-    } catch (...) {
+    CPTR_TRY { link_node(n); }
+    CPTR_CATCH_ALL {
       delete_node(n);
-      throw;
+      CPTR_RETHROW;
     }
     return {make_iterator(n), true};
   }
@@ -5527,11 +5573,12 @@ class basic_unordered_map {
   template <class... Args>
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
-    try {
+    CPTR_TRY {
       return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       Cage::deallocate(mem);
-      throw;
+      CPTR_RETHROW;
     }
   }
 
@@ -5696,10 +5743,11 @@ class CPTR_VISIBLE user_cage {
       return false;
     }
     auto* first = static_cast<std::byte*>(p) + span_size;
-    try {
+    CPTR_TRY {
       ::new (static_cast<void*>(storage_))
           Allocator(std::span<std::byte>(first, usable_end - span_size));
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       detail::release(p, size);
       return false;
     }
@@ -5759,7 +5807,8 @@ class CPTR_VISIBLE user_cage {
     if (void* p = try_allocate(bytes, align)) {
       return p;
     }
-    throw std::bad_alloc();
+    CPTR_THROW(std::bad_alloc(),
+               "out of memory: the cage is full or cannot be reserved");
   }
 
   /// As allocate(), but returns nullptr on failure. A request for zero
@@ -6102,7 +6151,8 @@ class CPTR_VISIBLE mapped_cage {
     if (void* p = try_allocate(bytes, align)) {
       return p;
     }
-    throw std::bad_alloc();
+    CPTR_THROW(std::bad_alloc(),
+               "out of memory: the cage is full or cannot be reserved");
   }
 
   /// Returns nullptr when the cage is full, no file is open, or `align` is

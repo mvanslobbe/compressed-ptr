@@ -41,6 +41,42 @@ namespace cptr::detail {
 #  endif
 #endif
 
+// Builds without exceptions (-fno-exceptions, or MSVC without /EH). Where
+// the library would throw (std::bad_alloc when a cage is full,
+// std::out_of_range from at(), ...) it calls CPTR_ON_FAILURE(what) instead,
+// which by default prints what to stderr and aborts. Define CPTR_ON_FAILURE
+// before including any cptr header to handle it yourself; it must not
+// return. The library's try/catch blocks, which only undo a half-done
+// operation before rethrowing, compile away. CPTR_NO_EXCEPTIONS forces this
+// mode in a build that has exceptions.
+#if !defined(CPTR_NO_EXCEPTIONS) &&                        \
+    (defined(__cpp_exceptions) || defined(__EXCEPTIONS) || \
+     defined(_CPPUNWIND))
+#  define CPTR_EXCEPTIONS 1
+#  define CPTR_TRY try
+#  define CPTR_CATCH_ALL catch (...)
+#  define CPTR_RETHROW throw
+#  define CPTR_THROW(exception, what) throw exception
+#else
+#  define CPTR_EXCEPTIONS 0
+#  include <cstdio>
+#  include <cstdlib>
+#  ifndef CPTR_ON_FAILURE
+#    define CPTR_ON_FAILURE(what) \
+      (std::fprintf(stderr, "cptr: %s\n", what), std::abort())
+#  endif
+namespace cptr::detail {
+[[noreturn]] inline void failed(const char* what) noexcept {
+  CPTR_ON_FAILURE(what);
+  std::abort();  // in case a handler returns
+}
+}  // namespace cptr::detail
+#  define CPTR_TRY if (true)
+#  define CPTR_CATCH_ALL else
+#  define CPTR_RETHROW ::cptr::detail::failed("unreachable")
+#  define CPTR_THROW(exception, what) ::cptr::detail::failed(what)
+#endif
+
 #if defined(_MSC_VER) && !defined(__clang__)
 #  define CPTR_NOINLINE __declspec(noinline)
 #else

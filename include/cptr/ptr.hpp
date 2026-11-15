@@ -526,11 +526,10 @@ static_assert(std::is_trivially_copyable_v<ptr<int>>);
 template <class T, class Cage = default_cage, class... Args>
 ptr<T, Cage> make(Args&&... args) {
   void* mem = Cage::allocate(sizeof(T), alignof(T));
-  try {
-    return ptr<T, Cage>(::new (mem) T(std::forward<Args>(args)...));
-  } catch (...) {
+  CPTR_TRY { return ptr<T, Cage>(::new (mem) T(std::forward<Args>(args)...)); }
+  CPTR_CATCH_ALL {
     Cage::deallocate(mem);
-    throw;
+    CPTR_RETHROW;
   }
 }
 
@@ -600,14 +599,13 @@ template <class T, class Cage = default_cage>
 ptr<T, Cage> make_array(std::size_t n) {
   static_assert(!std::is_array_v<T> && !std::is_void_v<T>);
   if (n > std::size_t(-1) / sizeof(T)) {
-    throw std::bad_array_new_length();
+    CPTR_THROW(std::bad_array_new_length(), "array length too large");
   }
   T* first = static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T)));
-  try {
-    std::uninitialized_value_construct_n(first, n);
-  } catch (...) {
+  CPTR_TRY { std::uninitialized_value_construct_n(first, n); }
+  CPTR_CATCH_ALL {
     Cage::deallocate(first);
-    throw;
+    CPTR_RETHROW;
   }
   return ptr<T, Cage>(first);
 }

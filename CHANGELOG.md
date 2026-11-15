@@ -26,6 +26,9 @@ First public version.
   `forward_list`, `ordered_map` (red-black tree) and `unordered_map`.
 - `allocator<T>` and `fancy_allocator<T>`.
 - `CPTR_CHECKED` to keep the misuse checks in release builds.
+- Builds without exceptions: failures that would throw call
+  `CPTR_ON_FAILURE(what)`, which aborts with a message by default;
+  `CPTR_NO_EXCEPTIONS` selects this in a build with exceptions.
 - CMake package with `find_package(compressed_ptr)`, `cptr/version.hpp`.
 - A `plf` benchmark section comparing `plf::list` with and without
   `cptr::fancy_allocator`, built when CMake is given

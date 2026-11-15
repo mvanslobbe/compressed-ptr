@@ -58,7 +58,7 @@ class fancy_allocator {
   /// when the cage is full.
   pointer allocate(std::size_t n) {
     if (n > max_size()) {
-      throw std::bad_array_new_length();
+      CPTR_THROW(std::bad_array_new_length(), "array length too large");
     }
     return pointer(static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T))));
   }

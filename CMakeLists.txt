@@ -68,9 +68,27 @@ if(COMPRESSED_PTR_BUILD_TESTS)
     tests/test_checked.cpp)
   target_link_libraries(compressed_ptr_checked_tests PRIVATE compressed_ptr)
   add_test(NAME compressed_ptr_checked_tests COMMAND compressed_ptr_checked_tests)
+
+  # Without exceptions. MSVC cannot drop /EHsc cleanly from a target, so
+  # there CPTR_NO_EXCEPTIONS selects the same code.
+  add_executable(compressed_ptr_no_exceptions_tests tests/test_main.cpp
+    tests/test_no_exceptions.cpp)
+  target_link_libraries(compressed_ptr_no_exceptions_tests PRIVATE
+    compressed_ptr)
+  if(MSVC)
+    target_compile_definitions(compressed_ptr_no_exceptions_tests PRIVATE
+      CPTR_NO_EXCEPTIONS)
+  else()
+    target_compile_options(compressed_ptr_no_exceptions_tests PRIVATE
+      -fno-exceptions)
+  endif()
+  add_test(NAME compressed_ptr_no_exceptions_tests
+    COMMAND compressed_ptr_no_exceptions_tests)
   if(MSVC)
     target_compile_options(compressed_ptr_failure_tests PRIVATE /wd4127 /wd4324)
     target_compile_options(compressed_ptr_checked_tests PRIVATE /wd4127 /wd4324)
+    target_compile_options(compressed_ptr_no_exceptions_tests PRIVATE
+      /wd4127 /wd4324)
   endif()
 
   # The amalgamated single header, on its own.

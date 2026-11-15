@@ -103,10 +103,11 @@ class CPTR_VISIBLE user_cage {
       return false;
     }
     auto* first = static_cast<std::byte*>(p) + span_size;
-    try {
+    CPTR_TRY {
       ::new (static_cast<void*>(storage_))
           Allocator(std::span<std::byte>(first, usable_end - span_size));
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       detail::release(p, size);
       return false;
     }
@@ -166,7 +167,8 @@ class CPTR_VISIBLE user_cage {
     if (void* p = try_allocate(bytes, align)) {
       return p;
     }
-    throw std::bad_alloc();
+    CPTR_THROW(std::bad_alloc(),
+               "out of memory: the cage is full or cannot be reserved");
   }
 
   /// As allocate(), but returns nullptr on failure. A request for zero

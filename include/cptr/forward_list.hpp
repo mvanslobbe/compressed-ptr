@@ -317,12 +317,11 @@ class basic_forward_list {
     }
     node_base* a = head_.next;
     node_base* b = other.head_.next;
-    try {
-      head_.next = merge_runs(a, b, comp);
-    } catch (...) {
+    CPTR_TRY { head_.next = merge_runs(a, b, comp); }
+    CPTR_CATCH_ALL {
       head_.next = a;
       other.head_.next = b;
-      throw;
+      CPTR_RETHROW;
     }
     other.head_.next = nullptr;
   }
@@ -337,11 +336,10 @@ class basic_forward_list {
   template <class Compare = std::less<>>
   void sort(Compare comp = Compare()) {
     node_base* chain = head_.next;
-    try {
-      head_.next = sort_chain(chain, comp);
-    } catch (...) {
+    CPTR_TRY { head_.next = sort_chain(chain, comp); }
+    CPTR_CATCH_ALL {
       head_.next = chain;
-      throw;
+      CPTR_RETHROW;
     }
   }
 
@@ -372,7 +370,7 @@ class basic_forward_list {
     node_base* doomed = nullptr;
     size_type removed = 0;
     node_base* prev = &head_;
-    try {
+    CPTR_TRY {
       while (node_base* n = prev->next) {
         if (pred(value_of(n))) {
           prev->next = n->next;
@@ -383,9 +381,10 @@ class basic_forward_list {
           prev = n;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_chain(doomed);
-      throw;
+      CPTR_RETHROW;
     }
     destroy_chain(doomed);
     return removed;
@@ -401,7 +400,7 @@ class basic_forward_list {
     if (!kept) {
       return 0;
     }
-    try {
+    CPTR_TRY {
       while (node_base* n = kept->next) {
         if (pred(value_of(kept), value_of(n))) {
           kept->next = n->next;
@@ -412,9 +411,10 @@ class basic_forward_list {
           kept = n;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       destroy_chain(doomed);
-      throw;
+      CPTR_RETHROW;
     }
     destroy_chain(doomed);
     return removed;
@@ -441,11 +441,12 @@ class basic_forward_list {
   template <class... Args>
   static node* new_node(Args&&... args) {
     void* mem = Cage::allocate(sizeof(node), alignof(node));
-    try {
+    CPTR_TRY {
       return ::new (mem) node(std::in_place, std::forward<Args>(args)...);
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       Cage::deallocate(mem);
-      throw;
+      CPTR_RETHROW;
     }
   }
   static void delete_node(node_base* n) noexcept {
@@ -475,7 +476,7 @@ class basic_forward_list {
   static node_base* merge_runs(node_base*& a, node_base*& b, Compare& comp) {
     node_base head;
     node_base* tail = &head;
-    try {
+    CPTR_TRY {
       while (a && b) {
         if (comp(value_of(b), value_of(a))) {
           tail->next = b;
@@ -487,10 +488,11 @@ class basic_forward_list {
           a = a->next;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       tail->next = a;
       a = head.next;
-      throw;
+      CPTR_RETHROW;
     }
     tail->next = a ? a : b;
     return head.next;
@@ -520,7 +522,7 @@ class basic_forward_list {
     node_base* input = chain;
     node_base* run = nullptr;    // the run being merged into
     node_base* other = nullptr;  // the run merged with it
-    try {
+    CPTR_TRY {
       while (input) {
         run = input;
         input = input->next;
@@ -540,13 +542,14 @@ class basic_forward_list {
           other = nullptr;
         }
       }
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       node_base* all = concat(other, run);
       for (node_base* bin : bins) {
         all = concat(bin, all);
       }
       chain = concat(all, input);
-      throw;
+      CPTR_RETHROW;
     }
     return run;
   }
@@ -555,15 +558,16 @@ class basic_forward_list {
   iterator insert_each(const_iterator pos, Produce produce) {
     node_base* at = pos.node_;
     node_base* first_after = at->next;
-    try {
+    CPTR_TRY {
       produce([&](auto&& v) {
         node* n = new_node(std::forward<decltype(v)>(v));
         link_after(at, n);
         at = n;
       });
-    } catch (...) {
+    }
+    CPTR_CATCH_ALL {
       erase_after(pos, const_iterator(first_after));
-      throw;
+      CPTR_RETHROW;
     }
     return iterator(at);
   }

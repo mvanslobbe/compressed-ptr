@@ -323,6 +323,22 @@ the measurements.
   message.
 * **AddressSanitizer** understands the cage: freed blocks are poisoned.
   LeakSanitizer does not see cage memory.
+* **Builds without exceptions** (`-fno-exceptions`, or MSVC without
+  `/EH`) are supported. Where the library would throw (`std::bad_alloc`
+  when a cage is full, `std::out_of_range` from `at()`,
+  `std::length_error` for too many buckets) it calls
+  `CPTR_ON_FAILURE(what)` instead, which prints `what` and aborts. Define
+  `CPTR_ON_FAILURE` before including any cptr header to report the failure
+  your own way; it must not return. The containers' rollback code, which
+  only runs when an element's constructor or comparator throws, compiles
+  away. Define `CPTR_NO_EXCEPTIONS` to get this behaviour in a build that
+  has exceptions.
+
+  ```cpp
+  // Before any cptr header: use the project's own fatal-error path.
+  #define CPTR_ON_FAILURE(what) my_fatal_error("cptr", what)
+  #include "cptr/all.hpp"
+  ```
 
 ## Building
 
@@ -384,7 +400,8 @@ scripts/coverage.sh            # LLVM_SUFFIX=-18 for versioned tool names
 The tests cover 95% of the header lines, 99% of the functions and 88% of
 the branches. A second test executable overrides `CPTR_ASSERT` to check
 misuse detection, injects commit failures with `CPTR_FAULT_INJECTION`, and
-runs out of address space under `RLIMIT_AS`. The remaining gaps are
+runs out of address space under `RLIMIT_AS`. A third is built with `-fno-exceptions` and checks
+that failures reach `CPTR_ON_FAILURE`. The remaining gaps are
 assertion branches that cannot be taken safely (such as freeing a pointer
 from outside the cage), the compile-time size-class table, and out-of-memory
 inside the allocator's own bookkeeping.

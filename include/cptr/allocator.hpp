@@ -46,7 +46,7 @@ class allocator {
   /// when the cage is full.
   T* allocate(std::size_t n) {
     if (n > max_size()) {
-      throw std::bad_array_new_length();
+      CPTR_THROW(std::bad_array_new_length(), "array length too large");
     }
     return static_cast<T*>(Cage::allocate(n * sizeof(T), alignof(T)));
   }
