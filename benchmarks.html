@@ -78,6 +78,12 @@
 <pre><code class="language-sh">cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build
 ./build/bench_rss 2000000
 ./build/bench_runtime 4194304 10000 list     # or map, hash, arithmetic, ...
+</code></pre>
+<p>The plf::list results need a <a href="https://github.com/mattreecebentley/plf_list">plf_list</a>
+checkout (7.6.50 or later):</p>
+<pre><code class="language-sh">cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCOMPRESSED_PTR_PLF_LIST_DIR=/path/to/plf_list &amp;&amp; cmake --build build
+./build/bench_runtime 4194304 10000 plf
 scripts/make_bench_page.py runtime.md rss.txt &gt; docs/benchmarks.md
 </code></pre>
 <p>For a quick check on your own machine, run <code>./build/example_expect_gains</code>:
@@ -262,6 +268,13 @@ effect of compression from the effect of the header-less allocator.</p>
 <td style="text-align: right;"><strong>88.1 B</strong></td>
 <td style="text-align: right;">−48%</td>
 </tr>
+<tr>
+<td><code>plf::list</code> of <code>uint32_t</code> (std column: plain <code>plf::list</code>)</td>
+<td style="text-align: right;">24.1 B</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;"><strong>12.2 B</strong></td>
+<td style="text-align: right;">−49%</td>
+</tr>
 </tbody>
 </table>
 <h2 id="how-the-time-is-measured">How the time is measured</h2>
@@ -387,6 +400,174 @@ p99 two runs agree within a few percent; p99.5 is the 50th-slowest of
 touches half as much memory, and walks faster because twice as many nodes
 fit in a cache line. <code>std::list</code> pops faster: glibc's <code>free</code> is cheaper
 than the cage allocator's <code>deallocate</code>.</p>
+<h2 id="plflist-with-cptrfancy_allocator">plf::list with cptr::fancy_allocator</h2>
+<p><a href="https://github.com/mattreecebentley/plf_list">plf::list</a> takes its node
+pointer type from its allocator, so <code>cptr::fancy_allocator</code> gives it 4-byte
+links with no change to its code. The reference here is plain <code>plf::list</code>
+with <code>std::allocator</code>; the compressed list object lives in the cage, as it
+must (see the <a href="guide.html#with-plflist-fancy-pointers">guide</a>).</p>
+<p><em>plf::list of <code>uint32_t</code>, 4194304 elements, ns per element (chunks of 512, walk 4096)</em></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">p50 ns</th>
+<th style="text-align: right;">p99.5 ns</th>
+<th style="text-align: right;">Δp50</th>
+<th style="text-align: right;">Δp90</th>
+<th style="text-align: right;">Δp95</th>
+<th style="text-align: right;">Δp99</th>
+<th style="text-align: right;">Δp99.5</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>grow: <code>plf::list</code></td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">39.5</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+</tr>
+<tr>
+<td>grow: <code>plf::list</code> with <code>cptr::fancy_allocator</code></td>
+<td style="text-align: right;">5.09</td>
+<td style="text-align: right;">25.6</td>
+<td style="text-align: right;">−36%</td>
+<td style="text-align: right;">−44%</td>
+<td style="text-align: right;">−32%</td>
+<td style="text-align: right;">−37%</td>
+<td style="text-align: right;">−35%</td>
+</tr>
+<tr>
+<td>grow: <code>std::list</code></td>
+<td style="text-align: right;">19.3</td>
+<td style="text-align: right;">67.3</td>
+<td style="text-align: right;">+141%</td>
+<td style="text-align: right;">+109%</td>
+<td style="text-align: right;">+109%</td>
+<td style="text-align: right;">+186%</td>
+<td style="text-align: right;">+71%</td>
+</tr>
+<tr>
+<td>walk: <code>plf::list</code></td>
+<td style="text-align: right;">1.71</td>
+<td style="text-align: right;">2.55</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+</tr>
+<tr>
+<td>walk: <code>plf::list</code> with <code>cptr::fancy_allocator</code></td>
+<td style="text-align: right;">1.49</td>
+<td style="text-align: right;">2.28</td>
+<td style="text-align: right;">−13%</td>
+<td style="text-align: right;">−15%</td>
+<td style="text-align: right;">−18%</td>
+<td style="text-align: right;">−15%</td>
+<td style="text-align: right;">−10%</td>
+</tr>
+<tr>
+<td>walk: <code>std::list</code></td>
+<td style="text-align: right;">2.06</td>
+<td style="text-align: right;">3.05</td>
+<td style="text-align: right;">+20%</td>
+<td style="text-align: right;">+22%</td>
+<td style="text-align: right;">+25%</td>
+<td style="text-align: right;">+23%</td>
+<td style="text-align: right;">+20%</td>
+</tr>
+<tr>
+<td>shrink: <code>plf::list</code></td>
+<td style="text-align: right;">2.6</td>
+<td style="text-align: right;">24.1</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+</tr>
+<tr>
+<td>shrink: <code>plf::list</code> with <code>cptr::fancy_allocator</code></td>
+<td style="text-align: right;">2.17</td>
+<td style="text-align: right;">35.7</td>
+<td style="text-align: right;">−17%</td>
+<td style="text-align: right;">−31%</td>
+<td style="text-align: right;">−32%</td>
+<td style="text-align: right;">−3%</td>
+<td style="text-align: right;">+48%</td>
+</tr>
+<tr>
+<td>shrink: <code>std::list</code></td>
+<td style="text-align: right;">5.41</td>
+<td style="text-align: right;">33.2</td>
+<td style="text-align: right;">+108%</td>
+<td style="text-align: right;">+43%</td>
+<td style="text-align: right;">+41%</td>
+<td style="text-align: right;">+43%</td>
+<td style="text-align: right;">+37%</td>
+</tr>
+</tbody>
+</table>
+<p><em>plf::list <code>sort()</code> of 262144 random <code>uint32_t</code>, ns per element</em></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">p50 ns</th>
+<th style="text-align: right;">p99.5 ns</th>
+<th style="text-align: right;">Δp50</th>
+<th style="text-align: right;">Δp90</th>
+<th style="text-align: right;">Δp95</th>
+<th style="text-align: right;">Δp99</th>
+<th style="text-align: right;">Δp99.5</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plf::list</code></td>
+<td style="text-align: right;">83.9</td>
+<td style="text-align: right;">107</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+<td style="text-align: right;">ref</td>
+</tr>
+<tr>
+<td><code>plf::list</code> with <code>cptr::fancy_allocator</code></td>
+<td style="text-align: right;">80.1</td>
+<td style="text-align: right;">99.2</td>
+<td style="text-align: right;">−4%</td>
+<td style="text-align: right;">−10%</td>
+<td style="text-align: right;">−9%</td>
+<td style="text-align: right;">−7%</td>
+<td style="text-align: right;">−7%</td>
+</tr>
+<tr>
+<td><code>std::list</code></td>
+<td style="text-align: right;">188</td>
+<td style="text-align: right;">275</td>
+<td style="text-align: right;">+125%</td>
+<td style="text-align: right;">+138%</td>
+<td style="text-align: right;">+164%</td>
+<td style="text-align: right;">+157%</td>
+<td style="text-align: right;">+157%</td>
+</tr>
+</tbody>
+</table>
+<p>Each sort epoch first overwrites the list's values with fresh random ones,
+in list order, and the time includes that walk. plf::list sorts by copying
+node pointers into an array, sorting the array and relinking, so the link
+size matters less there than in a walk. With only about a hundred sort
+epochs, its p99 and p99.5 are a single slow epoch and move a lot between
+runs. The same goes for the slowest 0.5% of pops, which ranged from
+50% faster to 48% slower over two runs; up to p95 they agree within a few
+percent. The memory table above has its bytes per element.</p>
 <h2 id="ordered-map">Ordered map</h2>
 <p><em>map <code>uint32_t -&gt; uint32_t</code>, 4194304 random keys, ns per element</em></p>
 <table>
