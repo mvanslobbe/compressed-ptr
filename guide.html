@@ -356,34 +356,59 @@ l-&gt;push_back(1);
 </code></pre>
 <p>The list object must live in the cage (see above). No other change is
 needed: plf::list takes its node pointer type from the allocator.</p>
-<p>4,000,000 random <code>uint32_t</code>, GCC 15 <code>-O2</code>, i7-12700H, best of 3:</p>
+<p>This needs plf::list 7.6.50 or later (plf_tools 1.0.17), the first
+releases that accept a fancy pointer for their end node.</p>
+<p>Measured with <code>bench_runtime ... plf</code> (4,194,304 <code>uint32_t</code>, sort of
+262,144 random values per epoch) and <code>bench_rss</code> (2,000,000), on an
+i7-12700H; ns per element at p50, change against plain <code>plf::list</code>:</p>
 <table>
 <thead>
 <tr>
 <th></th>
 <th style="text-align: right;">bytes/element</th>
 <th style="text-align: right;">push_back</th>
-<th style="text-align: right;">10 walks</th>
+<th style="text-align: right;">walk</th>
+<th style="text-align: right;">pop_front</th>
 <th style="text-align: right;">sort</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>plf::list</code></td>
+<td><code>plf::list</code>, GCC 15</td>
 <td style="text-align: right;">24.1</td>
-<td style="text-align: right;">29 ms</td>
-<td style="text-align: right;">67 ms</td>
-<td style="text-align: right;">543 ms</td>
+<td style="text-align: right;">8.00</td>
+<td style="text-align: right;">1.71</td>
+<td style="text-align: right;">2.60</td>
+<td style="text-align: right;">83.9</td>
 </tr>
 <tr>
-<td><code>plf::list</code> with <code>cptr::fancy_allocator</code></td>
-<td style="text-align: right;"><strong>12.1</strong></td>
-<td style="text-align: right;">25 ms</td>
-<td style="text-align: right;">57 ms</td>
-<td style="text-align: right;">530 ms</td>
+<td>with <code>cptr::fancy_allocator</code>, GCC 15</td>
+<td style="text-align: right;"><strong>12.2</strong></td>
+<td style="text-align: right;">5.09 (−36%)</td>
+<td style="text-align: right;">1.49 (−13%)</td>
+<td style="text-align: right;">2.17 (−17%)</td>
+<td style="text-align: right;">80.1 (−4%)</td>
+</tr>
+<tr>
+<td><code>plf::list</code>, Clang 22</td>
+<td style="text-align: right;">24.1</td>
+<td style="text-align: right;">7.58</td>
+<td style="text-align: right;">1.90</td>
+<td style="text-align: right;">3.22</td>
+<td style="text-align: right;">85.0</td>
+</tr>
+<tr>
+<td>with <code>cptr::fancy_allocator</code>, Clang 22</td>
+<td style="text-align: right;"><strong>12.2</strong></td>
+<td style="text-align: right;">6.37 (−16%)</td>
+<td style="text-align: right;">1.54 (−19%)</td>
+<td style="text-align: right;">2.57 (−20%)</td>
+<td style="text-align: right;">81.9 (−4%)</td>
 </tr>
 </tbody>
 </table>
+<p>For comparison, <code>std::list</code> takes 32.0 bytes per element and 19.4, 2.1,
+5.4 and 188 ns for the same four operations (GCC).</p>
 <p>Build it with <code>-DCOMPRESSED_PTR_PLF_LIST_DIR=/path/to/plf_list</code>; see
 <a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/plf_list_minimal.cpp"><code>examples/plf_list_minimal.cpp</code></a> for the
 smallest program and <a href="https://github.com/mvanslobbe/compressed-ptr/blob/main/examples/plf_list.cpp"><code>examples/plf_list.cpp</code></a> for
